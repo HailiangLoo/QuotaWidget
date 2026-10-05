@@ -47,7 +47,7 @@ public sealed class RateChart : FrameworkElement
         Height = 180;
         Focusable = true;
         FocusVisualStyle = null;
-        Cursor = Cursors.Cross;
+        Cursor = Cursors.Arrow;
         SnapsToDevicePixels = true;
         RefreshLanguage();
     }
@@ -81,6 +81,7 @@ public sealed class RateChart : FrameworkElement
                 if (_displayStart >= v.End) _displayStart = v.Start;
             }
             if (!ValidInspect(_hover)) _hover = null;
+            Cursor = _hover is null ? Cursors.Arrow : Cursors.Cross;
             if (!ValidInspect(_pinned)) _pinned = null;
             Height = PanelCount == 0 ? 72 : Enumerable.Range(0,PanelCount).Sum(PanelExtent);
             InvalidateInspect();
@@ -97,7 +98,7 @@ public sealed class RateChart : FrameworkElement
     int? InspectPanel(InspectPoint? point) => point is not null && _lanes.FirstOrDefault(l => (l.Name == "Codex") == point.Codex) is { } lane && !Collapsed(lane.Panel) ? lane.Panel : null;
     bool ValidInspect(InspectPoint? point) => _view is { } v && point is not null && point.Time >= _displayStart && point.Time <= v.End && InspectPanel(point) is not null;
     void InvalidateInspect() { InvalidateVisual(); _inspectOverlay?.InvalidateVisual(); }
-    public void ClearInspect() { _pinned = _hover = null; InvalidateInspect(); }
+    public void ClearInspect() { _pinned = _hover = null; Cursor=Cursors.Arrow; InvalidateInspect(); }
     public void PinInspect(DateTimeOffset time, bool codex) { _hover = null; _pinned = new(time, codex); InvalidateInspect(); }
     InspectPoint? InspectAt(Point p)
     {
@@ -105,7 +106,7 @@ public sealed class RateChart : FrameworkElement
         var lane = _lanes.FirstOrDefault(l => !Collapsed(l.Panel) && p.Y >= PlotTop(l.Panel) && p.Y <= PlotBottom(l.Panel));
         return lane is null ? null : new(T(p.X), lane.Name == "Codex");
     }
-    void HoverAt(Point p) { _hover = InspectAt(p); InvalidateInspect(); }
+    void HoverAt(Point p) { _hover = InspectAt(p); Cursor=_hover is null?Cursors.Arrow:Cursors.Cross; InvalidateInspect(); }
     double X(DateTimeOffset t) => _left + (t - _displayStart).TotalSeconds / Math.Max(1, (_view!.End - _displayStart).TotalSeconds) * (PlotRight - _left);
     DateTimeOffset T(double x) => _displayStart + TimeSpan.FromSeconds(Math.Clamp((x - _left) / Math.Max(1, PlotRight - _left), 0, 1) * (_view!.End - _displayStart).TotalSeconds);
 
@@ -113,13 +114,13 @@ public sealed class RateChart : FrameworkElement
     {
         HoverAt(e.GetPosition(this));
     }
-    protected override void OnMouseLeave(MouseEventArgs e) { _hover = null; InvalidateInspect(); }
+    protected override void OnMouseLeave(MouseEventArgs e) { _hover = null; Cursor=Cursors.Arrow; InvalidateInspect(); }
     protected override void OnMouseLeftButtonUp(MouseButtonEventArgs e)
     {
-        Focus();
         if (_view is null) return;
         var point = InspectAt(e.GetPosition(this));
         if (point is null) return;
+        Focus();
         if (_pinned is not null) _pinned = null;
         else _pinned = point;
         InvalidateInspect();

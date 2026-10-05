@@ -21,6 +21,8 @@ public partial class App
     readonly Dictionary<ChatPlatform,DateTimeOffset> _verifyAfter=new();
     public ConnectionStatus Connection(ChatPlatform platform)
     {
+        if(_opts.Demo&&_model.Settings.SetupCompleted)
+            return new(Loc.T("演示"),Loc.T("仅显示合成数据，未连接真实账号。"),"Muted");
         var latest=(platform==ChatPlatform.Claude?_model:_codex).LastEnvelope;
         if(latest is not null&&Statuses.HasSnapshot(latest.Status)&&_dependencyCheckedAt.TryGetValue(platform,out var checkedAt)&&latest.AttemptedAt>checkedAt)
             _dependencies[platform]=true;

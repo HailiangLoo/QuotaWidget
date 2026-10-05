@@ -65,6 +65,20 @@ public static class FableDisplay
         return result;
     }
 
+    /// <summary>Cumulative values retain earlier non-Fable consumption. Omitting only local
+    /// Fable fragments would punch holes at a different vertical baseline. Share a cumulative
+    /// stroke only when every recorded interval in the viewport is covered by that evidence.</summary>
+    public static bool CoversCumulativeRange(SeriesData total, SeriesData fable,
+        IReadOnlyList<ChartSpan> spans, DateTimeOffset start, DateTimeOffset end)
+    {
+        var visible=total.Segments.Concat(fable.Segments)
+            .Where(s=>s.Valid&&s.Start>=start&&s.End<=end).ToArray();
+        if(visible.Length==0||spans.Count==0)return false;
+        if(Math.Abs(RateEngine.SumRange(total,start,end).Delta-RateEngine.SumRange(fable,start,end).Delta)>1.5)return false;
+        var merged=Merge(spans);
+        return visible.All(s=>merged.Any(span=>span.Start<=s.Start&&span.End>=s.End));
+    }
+
     public static List<IReadOnlyList<TrendPoint>> Omit(IEnumerable<IReadOnlyList<TrendPoint>> runs,IReadOnlyList<ChartSpan> spans)
     {
         var result=new List<IReadOnlyList<TrendPoint>>();

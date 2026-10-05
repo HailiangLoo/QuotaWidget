@@ -78,6 +78,7 @@ static class ChartInspectProbe
         Hover(50,35);Verify(false,["Claude","Fable"]);
         Set(View(collapseClaude:true));Check(Card() is null,"collapsed hovered graph retains card");
         Hover(50,10);Check(Card() is null,"header triggers chart inspection");
+        Check(chart.Cursor==System.Windows.Input.Cursors.Arrow,"header shows plot crosshair");
         Set(View(fable:false));Hover(50,35);Verify(false,["Claude"]);
         var solo=View();solo.FableOnlySpans=[new(now.AddMinutes(-90),now.AddMinutes(-30))];Set(solo);
         Hover(chart.ActualWidth/2,35);Verify(false,["Fable"]);
@@ -87,7 +88,12 @@ static class ChartInspectProbe
         Check(paths.Count==2&&paths[0][^1].Time<=now.AddMinutes(-90)&&paths[1][0].Time>=now.AddMinutes(-30),"Claude stroke still crosses the Fable-only fragment");
         Hover(5,35);Verify(false,["Claude","Fable"]);
         var cumulativeView=View(cumulative:true);cumulativeView.FableOnlySpans=solo.FableOnlySpans;Set(cumulativeView);
-        Hover(chart.ActualWidth/2,35);Verify(false,["Fable"]);
+        Hover(chart.ActualWidth/2,35);Verify(false,["Claude","Fable"]);
+        Check(chart.Cursor==System.Windows.Input.Cursors.Cross,"plot inspection cursor missing");
+        var cumulativeLane=((IEnumerable)typeof(RateChart).GetField("_lanes",Private)!.GetValue(chart)!).Cast<object>().Single(l=>Field<string>(l,"Name")=="Claude");
+        var cumulativePaths=(List<IReadOnlyList<TrendPoint>>)typeof(RateChart).GetMethod("Points",BindingFlags.Static|BindingFlags.NonPublic)!.Invoke(null,[cumulativeLane,cumulativeView])!;
+        Check(cumulativePaths.Count==1&&cumulativePaths[0][0].Time==now.AddHours(-2)&&cumulativePaths[0][^1].Time==now,"partial Fable evidence cut cumulative Claude into fragments");
+        Hover(chart.ActualWidth-40,10);Check(chart.Cursor==System.Windows.Input.Cursors.Arrow&&Card() is null,"Fable header retains crosshair/card");
         var origin=now.AddHours(-12); var edge=origin.AddHours(3).AddMinutes(37).AddMilliseconds(408);
         SeriesData boundedSource = new() { Key=SeriesKey.Total, Segments=Enumerable.Range(0,144)
             .Select(i=>new RateSegment{Start=origin.AddMinutes(i*5),End=origin.AddMinutes((i+1)*5),Delta=i==48?1:0}).ToList() };

@@ -52,8 +52,11 @@ public sealed class ChartView
     public bool CodexCollapsed { get; init; }
     public List<GapRegion> ClaudeGaps { get; init; } = [];
     public List<GapRegion> CodexGaps { get; init; } = [];
-    public IReadOnlyList<ChartSpan> FableOnlySpans {get;set;}=[];
-    public bool MergesFable => TotalVisible&&FableDrawable&&FableToClaudeFactor is not null&&FableOnlySpans.Count>0;
+    IReadOnlyList<ChartSpan> _fableOnlySpans=[];
+    bool? _cumulativeFableCoverage;
+    public IReadOnlyList<ChartSpan> FableOnlySpans {get=>_fableOnlySpans;set{_fableOnlySpans=value;_cumulativeFableCoverage=null;}}
+    public bool MergesFable => TotalVisible&&FableDrawable&&FableToClaudeFactor is not null&&FableOnlySpans.Count>0&&
+        (!ClaudeCumulativeMode||(_cumulativeFableCoverage??=FableDisplay.CoversCumulativeRange(Total,Fable,FableOnlySpans,Start,End)));
     public bool FableOnlyAt(DateTimeOffset time)=>MergesFable&&FableOnlySpans.Any(s=>time>=s.Start&&time<s.End);
 
     // A zero-consumption Fable baseline adds clutter and covers other providers' zero lines.

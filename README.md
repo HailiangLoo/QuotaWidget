@@ -26,6 +26,21 @@ Each chart chooses Rate or Total independently. The numbers in its header remain
 <img src="docs/images/both-compact-en.png" width="264" alt="Compact mode with Claude and Codex" />
 <img src="docs/images/codex-compact-en.png" width="264" alt="Compact mode with Codex only" />
 
+### Local usage details
+
+Hover a provider's token row or usage heading, then click the card to pin it. Each provider has its own movable window showing input, cached-input and output tokens, grouped by model and by chat/model. Confirmed subagent usage is grouped under its parent chat. Refresh updates the pinned snapshot; its range follows the entry point used to open it.
+
+<img src="docs/images/claude-usage-en.png" width="660" alt="Synthetic Claude usage grouped by model and chat" />
+<img src="docs/images/codex-usage-en.png" width="660" alt="Synthetic Codex usage grouped by model and chat" />
+
+These are local records, not a bill or an estimate of each chat's weekly quota. All names, projects and numbers shown here are synthetic.
+
+### Settings
+
+<img src="docs/images/settings-en.png" width="324" alt="Demo settings with provider connections, sampling and smoothing preferences" />
+
+The gear is available in full and compact modes. Settings includes language, provider connections, display units, polling, smoothing, chat cache reminders and local token tracking. Smoothing caps are **60, 90, 120 (default), and 150 minutes**. The estimator adapts below that cap, so choosing 150 does not force every curve to use a 150-minute window. This preference affects the rate curve, not recorded cumulative points or the observed one-hour average.
+
 ## Features
 
 - Claude: five-hour, total weekly, and Fable weekly quota.
@@ -37,7 +52,7 @@ Each chart chooses Rate or Total independently. The numbers in its header remain
 
 ## Getting started
 
-1. Download `QuotaWidget-v0.13.0-win-x64.zip` from [Releases](https://github.com/HailiangLoo/QuotaWidget/releases/latest) and extract it into a folder of your choice.
+1. Download `QuotaWidget-v0.13.1-win-x64.zip` from [Releases](https://github.com/HailiangLoo/QuotaWidget/releases/latest) and extract it into a folder of your choice.
 2. Open `QuotaWidget.exe` or `Start Widget.cmd`. The download includes the .NET runtime; no separate runtime installation is needed.
 3. On first launch, choose the providers to monitor and complete official sign-in, then select **Start monitoring**. No quota collection or chat-log reading begins before this step. The gear remains available in compact mode.
 4. Settings shows each provider’s connection status, sign-in/install instructions, a connection check, and a disconnect button. Disconnect stops widget monitoring; it does not sign out of the official app or delete history.
@@ -59,7 +74,7 @@ Data stays under `%USERPROFILE%\.quotawidget\data` for the current Windows user.
 
 Official quota readings are the source of truth. **Rates estimate a trend from discrete quota readings and local activity.** Totals use valid raw readings; gaps are not invented or filled with zero. Activity on other devices or the web may be absent from local logs. Token totals are not an account bill and are not converted into precise per-chat weekly quota costs.
 
-See [How smoothing works and its accuracy limits](docs/ALGORITHM.md). Smoothing estimates timing; it cannot reveal an exact instantaneous consumption rate. Fable-only fragments can share one display stroke in both chart modes while header totals remain independent.
+See [How smoothing works and its accuracy limits](docs/ALGORITHM.md). Smoothing estimates timing; it cannot reveal an exact instantaneous consumption rate. Fable-only fragments can share a rate stroke. Cumulative views share a stroke only when the entire selected recorded range is confirmed Fable-only; mixed history retains both complete curves. Header totals remain independent.
 
 The two providers use different quota units and cannot be added together. Fable conversion is enabled only for recognized supported plans. Provider interfaces, plans, and quota windows can change; a missing window is never presented as zero usage.
 

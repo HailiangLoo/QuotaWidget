@@ -32,6 +32,9 @@
   " 自身": " own",
   "10 分钟": "10 min",
   "120 分钟": "120 min",
+  "150 分钟": "150 min",
+  "演示": "Demo",
+  "仅显示合成数据，未连接真实账号。": "Synthetic data only; no real account is connected.",
   "30 分钟": "30 min",
   "5 分钟": "5 min",
   "5 小时": "5 hours",
@@ -402,5 +405,5 @@
   "欢迎使用。先选择监听平台，再完成官方登录。开始前不会采集额度或读取 chat 日志。": "Welcome. Choose your providers and complete official sign-in. Quota collection and chat-log reading begin only after you start.",
   "开始监听": "Start monitoring",
   "连接平台": "Connect your providers",
-  "\n仅 Fable 片段在速率和累计图中共用 Fable 折合线，零增量平台段延续此显示；混用、未知或无法解释的消耗保留两线。顶部累计和原始记录不变，本机日志不覆盖其他设备。": "\nConfirmed Fable-only fragments share the converted Fable curve in rate and cumulative views, including unchanged plateaus. Mixed, unknown or unexplained usage keeps both curves. Header totals and raw records remain unchanged; local logs do not cover other devices."
+  "\n仅 Fable 片段在速率图中共线；累计图仅在整个所选记录范围都确认只用 Fable 时共线，混合历史保留两条完整曲线。顶部累计和原始记录不变，本机日志不覆盖其他设备。": "\nConfirmed Fable-only fragments share a rate stroke. Cumulative views share only when the entire selected recorded range is confirmed Fable-only; mixed history retains both complete curves. Header totals and raw records remain unchanged; local logs do not cover other devices."
 }

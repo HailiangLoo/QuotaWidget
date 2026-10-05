@@ -52,6 +52,16 @@ static class LocalizationProbe
                 model.Settings.Width=width;model.Settings.Monitoring=mode;model.Settings.CompactMode=false;
                 typeof(MainWindow).GetMethod("ApplyCompactLayout",BindingFlags.NonPublic|BindingFlags.Instance)!.Invoke(window,null);
                 window.Render();Layout();
+                typeof(MainWindow).GetField("_demoSessionStart",BindingFlags.NonPublic|BindingFlags.Instance)!.SetValue(window,now.AddDays(-2));
+                window.Render();Layout();
+                void CheckTitle()
+                {
+                    var start=C<TextBlock>("SessionStartText");
+                    var label=new FormattedText(start.Text,CultureInfo.InvariantCulture,FlowDirection.LeftToRight,new Typeface(start.FontFamily,start.FontStyle,start.FontWeight,start.FontStretch),start.FontSize,Brushes.White,1);
+                    Check(label.Width<=start.ActualWidth+.1,$"English multi-day start time clipped: {width}/{mode}/{model.Settings.CompactMode}: {label.Width}>{start.ActualWidth}");
+                    Check(C<TextBlock>("HistoryLabel").Visibility==Visibility.Collapsed,"English history did not compact to icon");
+                }
+                CheckTitle();
                 foreach(var name in new[]{"RateMode","CumulativeMode","CodexRateMode","CodexCumulativeMode"})
                 {
                     var button=C<ToggleButton>(name);
@@ -62,9 +72,12 @@ static class LocalizationProbe
                 foreach(var provider in new[]{false,true})if(chart.ModeBounds(provider) is { } bounds)
                     Check(bounds.Left>=0&&bounds.Right<=chart.ActualWidth-21,$"mode overlaps collapse control: width={width}, mode={mode}, compact={model.Settings.CompactMode}, chart={chart.ActualWidth}, bounds={bounds}");
                 Click("CompactButton");Layout();Check(window.Width==264&&C<StackPanel>("CompactDetails").Visibility==Visibility.Visible,"compact layout changed");
+                CheckTitle();
                 Click("CompactButton");Layout();
             }
             window.OpenSettings();Layout();
+            C<ComboBox>("TrendCombo").SelectedIndex=3;
+            Check(model.Settings.TrendMinutes==150&&WidgetSettings.Load(paths.Settings,out _).TrendMinutes==150,"150 minute UI choice did not persist");
             var languageBox=C<ComboBox>("LanguageCombo");
             Check(languageBox.ActualWidth>=90&&languageBox.ActualHeight>0,"language selector unusable");
             foreach(var source in Loc.Keys)

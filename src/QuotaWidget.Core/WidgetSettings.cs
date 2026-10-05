@@ -102,7 +102,7 @@ public sealed class WidgetSettings
         if (ChartMode is not ("rate" or "cumulative")) ChartMode = "rate";
         if (ClaudeChartMode is not ("rate" or "cumulative")) ClaudeChartMode = ChartMode;
         if (CodexChartMode is not ("rate" or "cumulative")) CodexChartMode = ChartMode;
-        if (TrendMinutes is not (60 or 90 or 120)) TrendMinutes = 120;
+        if (TrendMinutes is not (60 or 90 or 120 or 150)) TrendMinutes = 120;
         FableToWeekByProfile ??= new();
         foreach (var key in FableToWeekByProfile.Where(kv => !ValidQ(kv.Value)).Select(kv => kv.Key).ToList())
             FableToWeekByProfile.Remove(key);

@@ -66,7 +66,7 @@ public partial class MainWindow : Window
         }
         IntervalCombo.SelectedIndex = poll;
         SmoothCheck.IsChecked = s.Smoothing;
-        TrendCombo.SelectedIndex = Array.IndexOf(new[] {60,90,120}, s.TrendMinutes);
+        TrendCombo.SelectedIndex = Array.IndexOf(new[] {60,90,120,150}, s.TrendMinutes);
         TokenCheck.IsChecked = s.TokenTrackingEnabled;
         CacheCheck.IsChecked = s.CacheRemindersEnabled;
         AutoLogoutCheck.IsChecked = s.AutoLogoutOnExit;
@@ -226,7 +226,7 @@ public partial class MainWindow : Window
         // The chart already draws a point-readout card; never cover it with a second tooltip.
         Chart.ToolTip = null;
         LegendBar.ToolTip = null;
-        ChartDiagnosticsText.Text = dashboard.Detail+(dashboard.Chart.MergesFable?Loc.T("\n仅 Fable 片段在速率和累计图中共用 Fable 折合线，零增量平台段延续此显示；混用、未知或无法解释的消耗保留两线。顶部累计和原始记录不变，本机日志不覆盖其他设备。"):"");
+        ChartDiagnosticsText.Text = dashboard.Detail+(dashboard.Chart.MergesFable?Loc.T("\n仅 Fable 片段在速率图中共线；累计图仅在整个所选记录范围都确认只用 Fable 时共线，混合历史保留两条完整曲线。顶部累计和原始记录不变，本机日志不覆盖其他设备。"):"");
         CumulativeMode.ToolTip = Loc.T("所选时段累计 · 点");
         RateMode.ToolTip = Loc.T("消耗速率 · 点/h");
         CollectorText.Text = _model.DemoMode ? Loc.T("演示数据") : string.Join("\n",new[]{watchClaude?"Claude · "+v.CollectorLine.Split('\n')[0]:null,watchCodex?dashboard.CodexStatus??Loc.T("Codex · 采集正常"):null}.Where(p=>p is not null));
@@ -323,7 +323,7 @@ public partial class MainWindow : Window
         foreach (var button in new ButtonBase[] { CompactButton, PinButton, SettingsButton, HideButton })
         {
             if (compact) { button.Width = 22; button.Height = 22; }
-            else { button.ClearValue(WidthProperty); button.ClearValue(HeightProperty); }
+            else { button.Width = 24; button.Height = 26; }
         }
         MainPanel.Margin = compact ? new Thickness(4,0,4,4) : new Thickness(9,0,9,8);
         MeterGrid.Margin = compact ? new Thickness(0,3,0,0) : new Thickness(-3,8,-3,0);
@@ -581,7 +581,14 @@ public partial class MainWindow : Window
         var start = _model.DemoMode ? _demoSessionStart : session?.Start;
         if (start is not { } at) { SessionStartText.Text = ""; return; }
         var local = at.ToLocalTime(); var today = now.ToLocalTime().Date;
-        SessionStartText.Text = local.Date == today ? Loc.F($"{local:HH:mm} 起") : local.Date == today.AddDays(-1) ? Loc.F($"昨{local:HH:mm} 起") : Loc.F($"{local:M/d HH:mm} 起");
+        var iconOnly=Loc.IsEnglish||_model.Settings.Width<280;
+        HistoryLabel.Visibility=iconOnly?Visibility.Collapsed:Visibility.Visible;
+        HistoryGlyph.Margin=new Thickness(0,0,iconOnly?0:4,0);
+        HistoryButton.Margin=new Thickness(iconOnly?3:6,0,0,0);
+        HistoryButton.Padding=new Thickness(3,3,3,3);
+        SessionStartText.Margin=new Thickness(3,0,0,0);
+        SessionStartText.Text = Loc.IsEnglish ? local.ToString(local.Date==today?"HH:mm":"M/d HH:mm",CultureInfo.InvariantCulture)
+            : local.Date == today ? Loc.F($"{local:HH:mm} 起") : local.Date == today.AddDays(-1) ? Loc.F($"昨{local:HH:mm} 起") : Loc.F($"{local:M/d HH:mm} 起");
         SessionStartText.ToolTip = Loc.F($"开始 · {local:M/d HH:mm}") + (session?.Recovered == true ? Loc.T(" · 恢复记录") : "");
     }
 

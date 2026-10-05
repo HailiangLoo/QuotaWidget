@@ -28,6 +28,21 @@ A small Windows desktop widget for Claude and Codex quota, usage trends, and loc
 <img src="docs/images/both-compact.png" width="264" alt="精简模式：按平台显示额度和 chat 活动" />
 <img src="docs/images/codex-compact.png" width="264" alt="仅 Codex 精简模式" />
 
+### 本机用量明细
+
+悬停在平台的 token 行或用量标题上，再点击卡片即可固定。Claude 和 Codex 各有一个可拖动的明细窗口，展示 IN 未缓存输入、CACHE 缓存命中、OUT 输出，并同时按模型和 chat / 模型分组。确认归属的 subagent 用量计入父 chat，可刷新固定窗口；统计范围沿用打开它的入口。
+
+<img src="docs/images/claude-usage.png" width="660" alt="合成 Claude 用量：按模型和 chat 分组" />
+<img src="docs/images/codex-usage.png" width="660" alt="合成 Codex 用量：按模型和 chat 分组" />
+
+这些是本机记录，不是账单，也不换算成每个 chat 的周额度。上图的名称、项目和数值全部来自合成演示数据。
+
+### 设置
+
+<img src="docs/images/settings.png" width="324" alt="演示设置：平台连接、采样与平滑选项" />
+
+完整和精简模式都可通过齿轮进入设置，调整语言、平台连接、显示方式、采样、平滑、chat 缓存提醒和本机 token 统计。平滑上限提供 **60、90、120（默认）、150 分钟**。算法在上限内自适应，选择 150 不代表每段曲线都强制使用 150 分钟；这个设置只影响速率曲线，不改变实际累计点数或近一小时观测均速。
+
 ## 能做什么
 
 - Claude：5 小时、总周额度、Fable 周额度。
@@ -38,7 +53,7 @@ A small Windows desktop widget for Claude and Codex quota, usage trends, and loc
 
 ## 开始使用
 
-1. 在 [Releases](https://github.com/HailiangLoo/QuotaWidget/releases/latest) 下载 `QuotaWidget-v0.13.0-win-x64.zip`，解压到自己的文件夹。
+1. 在 [Releases](https://github.com/HailiangLoo/QuotaWidget/releases/latest) 下载 `QuotaWidget-v0.13.1-win-x64.zip`，解压到自己的文件夹。
 2. 双击 `QuotaWidget.exe`，或者 `启动小挂件.cmd`。发布包包含 .NET 运行时，无需另外安装。
 3. 首次启动先选择监听平台、完成官方登录，再点“开始监听”。开始前不采集额度或读取 chat 日志。精简模式也保留齿轮设置入口。
 4. 设置显示各平台的当前状态，并提供登录/安装、检查连接和断开按钮。断开只停止挂件监听，不退出官方应用的账号，也不删除历史。
@@ -60,7 +75,7 @@ A small Windows desktop widget for Claude and Codex quota, usage trends, and loc
 
 额度以官方读数为准。**速率是根据离散额度读数和本机活动估算的趋势**；累计取有效原始读数，缺口不补造。其他设备或网页版活动可能不在本机记录内；token 统计不是账号账单，也不换算成精确的单 chat 周额度。
 
-[平滑算法和精度边界](docs/ALGORITHM.zh-CN.md)详细说明了观测、均速和趋势估算的区别。只用 Fable 的片段在速率、累计图中可以共线，顶部实际点数仍各自保留。
+[平滑算法和精度边界](docs/ALGORITHM.zh-CN.md)详细说明了观测、均速和趋势估算的区别。只用 Fable 的片段可在速率图中共线；累计图仅在整个所选记录范围都确认只用 Fable 时共线，含混合历史时保留两条完整曲线。顶部实际点数始终各自保留。
 
 两个平台的额度单位不同，不能相加。Fable 折算只在已识别的支持套餐上启用。平台接口、套餐和窗口可能变化，缺失的窗口不会显示成 0。
 

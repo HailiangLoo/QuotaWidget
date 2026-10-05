@@ -479,7 +479,8 @@ public partial class App : Application
     {
         if(_opts.Demo)
         {
-            return Core.TokenBreakdown.Build(start,end,DemoTokenRows(platform,end));
+            var first=end.AddHours(-26);
+            return Core.TokenBreakdown.Build(start<first?first:start,end,DemoTokenRows(platform,end));
         }
         try {return _tokens?.Breakdown(start,end,platform.ToString()) ?? _snapshotTokens?.Breakdown(start,end,platform.ToString()) ?? Core.TokenBreakdown.Build(start,end,[]);}
         catch {return Core.TokenBreakdown.Build(start,end,[]) with {Error=Loc.T("本地用量索引暂不可读")};}

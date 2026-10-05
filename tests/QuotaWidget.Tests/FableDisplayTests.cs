@@ -67,6 +67,28 @@ static class FableDisplayTests
             Check(!Contains(reset,202),"reset interval covered");
             Near(1,RateEngine.SumRange(total,t,t.AddMinutes(300)).Delta);Near(.5,RateEngine.SumRange(fable,t,t.AddMinutes(300)).Delta);
         });
+        Test("mixed cumulative history retains a continuous total; an isolated Fable viewport can share",()=>
+        {
+            var total=Series(.1);var fable=Series(.1);
+            total.Segments[0]=new(){Start=t,End=t.AddMinutes(5),Delta=8};
+            var evidence=new[]{new ChartSpan(t.AddMinutes(5),t.AddMinutes(300))};
+            ChartView View(DateTimeOffset start,bool cumulative)=>new(){Start=start,End=t.AddMinutes(300),Total=total,Fable=fable,Gaps=[],Smooth=false,
+                ClaudeCumulativeMode=cumulative,FableToClaudeFactor=.5,FableOnlySpans=evidence,FableCumulative=CumulativeSeries.Build(fable,start,t.AddMinutes(300))};
+            Check(!View(t,true).MergesFable,"cumulative punched holes after an earlier non-Fable baseline");
+            Check(View(t,false).MergesFable,"rate lost fragment alignment");
+            Check(View(t.AddMinutes(5),true).MergesFable,"all-Fable viewport did not share");
+            var isolated=View(t.AddMinutes(5),true);Check(isolated.MergesFable,"coverage cache setup");
+            isolated.FableOnlySpans=[new(t.AddMinutes(10),t.AddMinutes(300))];
+            Check(!isolated.MergesFable,"changed evidence retained stale cumulative eligibility");
+            Near(13.9,RateEngine.SumRange(total,t,t.AddMinutes(300)).Delta);
+            Near(6,RateEngine.SumRange(fable,t,t.AddMinutes(300)).Delta);
+        });
+        Test("cumulative fragments do not hide unknown intervals or accumulate large counter discrepancies",()=>
+        {
+            var total=Series(.1);var fable=Series(.1);
+            Check(!FableDisplay.CoversCumulativeRange(total,fable,[new(t,t.AddMinutes(10)),new(t.AddMinutes(15),t.AddMinutes(300))],t,t.AddMinutes(300)),"uncovered interval was hidden");
+            Check(!FableDisplay.CoversCumulativeRange(Series(.2),fable,[new(t,t.AddMinutes(300))],t,t.AddMinutes(300)),"large cumulative mismatch was hidden");
+        });
         Test("model query isolates provider and includes ongoing requests across the window edge",()=>
         {
             var path=Path.Combine(Path.GetTempPath(),"qw-model-"+Guid.NewGuid().ToString("N")+".sqlite");

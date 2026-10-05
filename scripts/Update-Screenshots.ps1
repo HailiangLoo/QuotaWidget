@@ -10,7 +10,10 @@ $views = @(
     @{ Name='codex-expanded'; Monitor='codex'; Layout='expanded'; Mode='rate'; Width=324 },
     @{ Name='both-cumulative'; Monitor='both'; Layout='expanded'; Mode='cumulative'; Width=324 },
     @{ Name='both-compact'; Monitor='both'; Layout='compact'; Mode='rate'; Width=264 },
-    @{ Name='codex-compact'; Monitor='codex'; Layout='compact'; Mode='rate'; Width=264 }
+    @{ Name='codex-compact'; Monitor='codex'; Layout='compact'; Mode='rate'; Width=264 },
+    @{ Name='claude-usage'; Monitor='both'; Layout='expanded'; Mode='rate'; Width=324; Extra=@('--usage-card','claude','--usage-pinned','--usage-range','0') },
+    @{ Name='codex-usage'; Monitor='both'; Layout='expanded'; Mode='rate'; Width=324; Extra=@('--usage-card','codex','--usage-pinned','--usage-range','0') },
+    @{ Name='settings'; Monitor='both'; Layout='expanded'; Mode='rate'; Width=324; Extra=@('--settings') }
 )
 foreach ($language in @('zh-CN','en')) {
     foreach ($view in $views) {
@@ -20,6 +23,7 @@ foreach ($language in @('zh-CN','en')) {
             '--language',$language,'--theme','dark','--range','300','--scale','2',
             '--monitor',$view.Monitor,('--'+$view.Layout),'--chart-mode',$view.Mode,
             '--width',[string]$view.Width)
+        if($view.Extra) { $arguments += $view.Extra }
         # ArgumentList preserves paths containing spaces. Snapshot mode uses a temporary demo root.
         $start = [Diagnostics.ProcessStartInfo]::new($exe)
         $start.UseShellExecute = $false
@@ -32,4 +36,4 @@ foreach ($language in @('zh-CN','en')) {
         $process.Dispose()
     }
 }
-Write-Output 'Updated ten synthetic gallery screenshots with continuous collection.'
+Write-Output 'Updated sixteen synthetic gallery screenshots, including usage details and settings.'

@@ -10,6 +10,19 @@ static class ActiveRateEstimatorTests
         RateSegment S(double a,double b,double d,SegmentIssue issue=SegmentIssue.None,int group=0)=>new(){Start=t.AddMinutes(a),End=t.AddMinutes(b),Delta=d,Issue=issue,Group=group};
         SeriesData Data(params RateSegment[] s)=>new(){Key=SeriesKey.Total,Segments=s.ToList()};
         double Area(IEnumerable<TrendRun> runs)=>runs.Sum(r=>r.Points.Zip(r.Points.Skip(1),(a,b)=>(a.Rate+b.Rate)/2*(b.Time-a.Time).TotalHours).Sum());
+        Test("150 minute cap persists, changes sparse-jump smoothing and preserves area and work edges",()=>
+        {
+            var settings=new WidgetSettings{TrendMinutes=150};settings.Normalize();Check(settings.TrendMinutes==150,"150 minute cap normalized away");
+            var file=Path.Combine(Path.GetTempPath(),"qw-smoothing-"+Guid.NewGuid()+".json");
+            try{settings.Save(file);Check(WidgetSettings.Load(file,out _).TrendMinutes==150,"150 minute preference lost");}finally{File.Delete(file);}
+            var data=Data(Enumerable.Range(0,84).Select(i=>S(i*5,(i+1)*5,i is 11 or 23 or 35 or 47 or 59 or 71?i==35?3:1:0)).ToArray());
+            WorkSpan[] work=[new(t,t.AddMinutes(360),true,true,null)];
+            var a=ActiveRateEstimator.Build(data,t.AddMinutes(420),work,120);
+            var b=ActiveRateEstimator.Build(data,t.AddMinutes(420),work,150);
+            Near(a.Delta,b.Delta);Near(8,Area(b.Runs.Where(r=>!r.Provisional)));
+            Check(Enumerable.Range(1,359).Any(m=>Math.Abs((a.ValueAt(t.AddMinutes(m))??0)-(b.ValueAt(t.AddMinutes(m))??0))>1e-4),"150 minute choice never reaches estimator");
+            Check(b.ValueAt(t.AddMinutes(-1)) is null or 0&&b.ValueAt(t.AddMinutes(361)) is null or 0,"smoothing escaped work boundaries");
+        });
         Test("handoff lifecycle drives both estimated paths and axis boundaries",()=>
         {
             foreach(var gap in new[]{.052,5.193,10d,10.001,60d})
