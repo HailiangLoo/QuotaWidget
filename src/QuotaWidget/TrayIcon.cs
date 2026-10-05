@@ -7,7 +7,7 @@ using QuotaWidget.Core;
 
 namespace QuotaWidget.App;
 
-/// <summary>Quota companion: two eyes show each provider's remaining weekly quota.</summary>
+/// <summary>Provider-logo face in the tray; current quota remains available in its tooltip.</summary>
 public sealed class TrayIcon : IDisposable
 {
     readonly NotifyIcon _icon;
@@ -24,7 +24,7 @@ public sealed class TrayIcon : IDisposable
 
         _icon = new NotifyIcon { ContextMenuStrip = _menu, Text = Loc.T("额度"), Visible = true };
         _icon.MouseClick += (_, e) => { if (e.Button == MouseButtons.Left) app.ToggleWindow(); };
-        SetIcon(null,null,app.Monitors(ChatPlatform.Claude),app.Monitors(ChatPlatform.Codex));
+        SetIcon(app.Monitors(ChatPlatform.Claude),app.Monitors(ChatPlatform.Codex));
     }
 
     public void Update(WidgetView view,WidgetView codex,WidgetSettings settings)
@@ -38,17 +38,17 @@ public sealed class TrayIcon : IDisposable
         if(claudeEnabled) text+=Loc.F($"\n5h 剩余 {P(Remaining(view.Five))} · Fable 剩余 {P(Remaining(view.Fable))}");
         if(codexEnabled&&!codex.Five.Missing)text+=Loc.F($"\nCodex 5h 剩余 {P(Remaining(codex.Five))}");
         _icon.Text = text.Length > 127 ? text[..127] : text;
-        SetIcon(claudeRemaining,codexRemaining,claudeEnabled,codexEnabled);
+        SetIcon(claudeEnabled,codexEnabled);
     }
 
     static double? Remaining(MeterView meter)=>!meter.Missing&&meter.UsedPercent is { } used&&double.IsFinite(used)?Math.Clamp(100-used,0,100):null;
 
-    void SetIcon(double? claudeRemaining,double? codexRemaining,bool claudeEnabled,bool codexEnabled)
+    void SetIcon(bool claudeEnabled,bool codexEnabled)
     {
         var size = Math.Max(16, SystemInformation.SmallIconSize.Width);
-        var key = $"{size}|{claudeEnabled}|{codexEnabled}|{claudeRemaining:0}|{codexRemaining:0}";
+        var key = $"{size}|{claudeEnabled}|{codexEnabled}";
         if (key == _lastKey) return;
-        using var bmp = QuotaIcon.Render(size,claudeRemaining,codexRemaining,claudeEnabled,codexEnabled,_claudeLogo,_codexLogo);
+        using var bmp = QuotaIcon.Render(size,claudeEnabled,codexEnabled,_claudeLogo,_codexLogo);
         var h = bmp.GetHicon();
         var previous = _icon.Icon;
         _icon.Icon = Icon.FromHandle(h);
