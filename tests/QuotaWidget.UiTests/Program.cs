@@ -228,6 +228,7 @@ static class Probe
             ChartInspectProbe.Run();
             MonitoringRefreshProbe.Run(app);
             LocalizationProbe.Run(app);
+            ConnectionProbe.Run(app);
             Console.WriteLine("Monitoring UI: real selector transitions both/Claude/Codex; live meters/chart/tokens/chats and compact rows follow; paused-provider status suppressed; both restores; corner icons and palette roles verified.");
             Console.WriteLine("PASS: full-row geometry and hover, table/card same snapshot with platform/scope isolation, fixed window snapshot/drag handle/close, reused-window refresh scope, demo totals consistent. No native windows shown.");
             Console.WriteLine("PASS: both usage groupings visible (2 models / 80 chats), title mapping, no switches, refresh/close actions, provider hover entry/leave wiring.");

@@ -42,7 +42,7 @@ static class CumulativeTests
                     FableToClaudeFactor=.5,FableOnlySpans=[new(t,t.AddMinutes(10))]};
                 Check(view.TotalAt(t.AddMinutes(7.5))==(claude?2:24)&&view.FableAt(t.AddMinutes(7.5))==(claude?2:24),"Claude/Fable mode differs");
                 Check(view.CodexAt(t.AddMinutes(7.5))==(codex?2:24),"Codex mode follows Claude");
-                Check(view.MergesFable==!claude,"Codex mode changed Fable-only visibility");
+                Check(view.MergesFable,"chart mode changed confirmed Fable-only visibility");
             }
         });
         Test("cumulative: preference persists and invalid setting falls back to rate", () =>

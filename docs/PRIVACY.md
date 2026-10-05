@@ -21,3 +21,5 @@ Settings can disable provider monitoring, token tracking, and chat reminders sep
 Quitting does not sign out of Claude by default. If sign out on exit is enabled, the official CLI performs the sign-out. This project does not claim that removing local credentials also revokes the token on the server.
 
 `--demo` uses synthetic data only. Documentation screenshots are generated from demo mode. The repository does not include the developer's account configuration, real history, session databases, or sign-in state.
+
+First-use setup must be completed before quota collection or chat-log reading begins. Disconnecting a provider stops widget monitoring and retains sign-in and history; Claude sign-out is a separate action. Provider marks in the tray also come from locally installed apps, without downloading or redistributing those assets.

@@ -17,6 +17,13 @@ public sealed class WidgetSettings
     public bool CollectorEnabled { get; set; } = true;
     public string Monitoring { get; set; } = "both";
     public string Language { get; set; } = "auto";
+    // Existing settings keep their working connections. App startup marks only a new installation unconfigured.
+    public bool SetupCompleted { get; set; } = true;
+    public bool ClaudeConnected { get; set; } = true;
+    public bool CodexConnected { get; set; } = true;
+    public bool Connected(ChatPlatform platform) => platform == ChatPlatform.Claude ? ClaudeConnected : CodexConnected;
+    public bool Listens(ChatPlatform platform) => SetupCompleted && Connected(platform) && Monitors(platform);
+    public bool Collects(ChatPlatform platform) => CollectorEnabled && Listens(platform);
     public bool Monitors(ChatPlatform platform) => Monitoring == "both" || Monitoring == (platform == ChatPlatform.Claude ? "claude" : "codex");
     public bool AutoLogoutOnExit { get; set; } = false;
     public bool CacheRemindersEnabled { get; set; } = true;

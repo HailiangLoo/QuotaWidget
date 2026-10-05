@@ -43,14 +43,29 @@ static class FableDisplayTests
             Check(visible.Count==2&&visible[0][^1].Time==t.AddMinutes(5)&&visible[1][0].Time==t.AddMinutes(15),"clipping connected across hidden curve");
             Near(3,visible[0][^1].Rate);Near(5,visible[1][0].Rate);Check(points.Length==3&&points[1].Rate==4,"source curve mutated");
         });
-        Test("native totals and Fable area stay distinct; cumulative and hidden Fable fall back",()=>
+        Test("native totals stay distinct while either display mode can share the Fable curve",()=>
         {
             var total=Series(.1);var fable=Series(5.5/60);var spans=new[]{new ChartSpan(t,t.AddMinutes(300))};
-            ChartView View(bool cumulative=false,bool visible=true)=>new(){Start=t,End=t.AddMinutes(300),Total=total,Fable=fable,Smooth=true,Gaps=[],FableToClaudeFactor=.5,FableOnlySpans=spans,Cumulative=cumulative,FableVisible=visible};
+            ChartView View(bool cumulative=false,bool visible=true)=>new(){Start=t,End=t.AddMinutes(300),Total=total,Fable=fable,Smooth=true,Gaps=[],FableToClaudeFactor=.5,FableOnlySpans=spans,Cumulative=cumulative,FableVisible=visible,FableCumulative=CumulativeSeries.Build(fable,t,t.AddMinutes(300))};
             var v=View();Check(v.MergesFable&&v.FableOnlyAt(t.AddMinutes(30)),"display classification absent");
             Near(6,RateEngine.SumRange(v.Total,v.Start,v.End).Delta);Near(5.5,RateEngine.SumRange(v.Fable,v.Start,v.End).Delta);
             Near(5.5,Area(v.DisplayFableTrend));Near(6,Area(v.TotalTrend));
-            Check(!View(true).MergesFable&&!View(visible:false).MergesFable,"cumulative or explicitly hidden Fable was substituted");
+            Check(View(true).MergesFable&&!View(visible:false).MergesFable,"cumulative did not merge, or explicitly hidden Fable was substituted");
+        });
+        Test("cumulative keeps an unchanged plateau merged, but respects unknown models and resets",()=>
+        {
+            var total=Series(0);var fable=Series(0);
+            total.Segments[5]=new(){Start=t.AddMinutes(25),End=t.AddMinutes(30),Delta=1};fable.Segments[5]=new(){Start=t.AddMinutes(25),End=t.AddMinutes(30),Delta=.5};
+            var activity=new[]{Use(27,"fable")};
+            var rate=FableDisplay.Build(total,fable,activity,t,t.AddMinutes(300),30);
+            var cumulative=FableDisplay.Build(total,fable,activity,t,t.AddMinutes(300),30,cumulative:true);
+            Check(!Contains(rate,200)&&Contains(cumulative,200),"flat cumulative interval drew two redundant strokes");
+            var mixed=FableDisplay.Build(total,fable,[..activity,Use(200,"opus")],t,t.AddMinutes(300),30,cumulative:true);
+            Check(!Contains(mixed,200),"unknown/mixed model hidden in a plateau");
+            fable.Segments[40]=new(){Start=t.AddMinutes(200),End=t.AddMinutes(205),Issue=SegmentIssue.Reset};
+            var reset=FableDisplay.Build(total,fable,activity,t,t.AddMinutes(300),30,cumulative:true);
+            Check(!Contains(reset,202),"reset interval covered");
+            Near(1,RateEngine.SumRange(total,t,t.AddMinutes(300)).Delta);Near(.5,RateEngine.SumRange(fable,t,t.AddMinutes(300)).Delta);
         });
         Test("model query isolates provider and includes ongoing requests across the window edge",()=>
         {

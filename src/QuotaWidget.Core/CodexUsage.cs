@@ -167,11 +167,12 @@ public sealed class CodexUsageCollector : IDisposable
         await _gate.WaitAsync(ct);
         try
         {
-            if (!_settings().Monitors(ChatPlatform.Codex) || _clock() < NotBefore) return null;
+            if (!_settings().Listens(ChatPlatform.Codex) || _clock() < NotBefore) return null;
             LatestEnvelope result;
             try { result = await _source.FetchAsync(ct); }
             catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
             catch { result = CodexUsageSource.Failure(_clock(), "source_failed"); }
+            if (!_settings().Listens(ChatPlatform.Codex)) return null;
             var success = Statuses.HasSnapshot(result.Status);
             _failures = success ? 0 : _failures + 1;
             var poll = Math.Max(60, _settings().PollIntervalSeconds);
@@ -198,6 +199,18 @@ public sealed class CodexUsageCollector : IDisposable
             }
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested) { }
+    }
+    public async Task<LatestEnvelope?> RecheckConnectionAsync(CancellationToken ct)
+    {
+        await _gate.WaitAsync(ct);
+        try
+        {
+            // Explicit post-login/local-install retry only. Never clear server/network backoff.
+            if (_last is { } last && (last.Status==Statuses.AuthRequired||last.ErrorCode=="cli_missing_or_untrusted") &&
+                (last.RetryAfterSeconds??0)==0 && _clock()-last.AttemptedAt>=TimeSpan.FromSeconds(60)) NotBefore=_clock();
+        }
+        finally{_gate.Release();}
+        return await CollectOnceAsync(ct);
     }
     public void Dispose() => _gate.Dispose();
 }

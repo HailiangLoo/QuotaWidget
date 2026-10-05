@@ -5,79 +5,54 @@ using System.Drawing.Imaging;
 
 namespace QuotaWidget.App;
 
-/// <summary>A small quota companion: two week-quota cells, a listening antenna and a smile.</summary>
+/// <summary>Two large provider lenses and quiet quota rails, sized for the Windows tray.</summary>
 public static class QuotaIcon
 {
-    // Fixed colours belong to the dark icon body, independently of the widget/taskbar theme.
-    static readonly Color Claude = Color.FromArgb(0xe3, 0xa0, 0x80);
-    static readonly Color Codex = Color.FromArgb(0xbc, 0x9d, 0xf0);
-
-    public static Bitmap Render(int size, double? claudeRemaining, double? codexRemaining, bool claudeEnabled = true, bool codexEnabled = true)
+    static readonly Color Claude=Color.FromArgb(0xe3,0xa0,0x80);
+    static readonly Color Codex=Color.FromArgb(0xbc,0x9d,0xf0);
+    public static Bitmap Render(int size,double? claudeRemaining,double? codexRemaining,bool claudeEnabled=true,bool codexEnabled=true,
+        Image? claudeLogo=null,Image? codexLogo=null)
     {
-        var bitmap = new Bitmap(size, size, PixelFormat.Format32bppArgb);
-        using var g = Graphics.FromImage(bitmap);
-        g.Clear(Color.Transparent);
-        g.SmoothingMode = SmoothingMode.AntiAlias;
-        g.PixelOffsetMode = PixelOffsetMode.HighQuality;
-        g.ScaleTransform(size / 32f, size / 32f);
-
-        using var stem = new Pen(Color.FromArgb(0x91, 0xac, 0xc0), 2) { StartCap=LineCap.Round, EndCap=LineCap.Round };
-        g.DrawLine(stem, 16, 4, 16, 8);
-        using var antenna = new SolidBrush(Color.FromArgb(0x69, 0xb8, 0xf3));
-        g.FillEllipse(antenna, 13.5f, .5f, 5, 5);
-
-        var face = new RectangleF(1.5f, 7, 29, 23.5f);
-        using var shape = Rounded(face, 6.5f);
-        using var shell = new LinearGradientBrush(face, Color.FromArgb(0x36, 0x40, 0x4d), Color.FromArgb(0x1e, 0x25, 0x30), 90);
-        using var rim = new Pen(Color.FromArgb(0x88, 0x95, 0xa7), 1);
-        g.FillPath(shell, shape); g.DrawPath(rim, shape);
-
-        Cell(new RectangleF(7.5f, 11.5f, 5.5f, 10), Claude, claudeRemaining, claudeEnabled);
-        Cell(new RectangleF(19, 11.5f, 5.5f, 10), Codex, codexRemaining, codexEnabled);
-
-        using var smile = new Pen(Color.FromArgb(0xc6, 0xd9, 0xdf), 1.6f) { StartCap=LineCap.Round, EndCap=LineCap.Round };
-        g.DrawBezier(smile, 12, 25, 14.5f, 27, 17.5f, 27, 20, 25);
+        var bitmap=new Bitmap(size,size,PixelFormat.Format32bppArgb);
+        using var g=Graphics.FromImage(bitmap);g.Clear(Color.Transparent);
+        g.SmoothingMode=SmoothingMode.AntiAlias;g.PixelOffsetMode=PixelOffsetMode.HighQuality;g.InterpolationMode=InterpolationMode.HighQualityBicubic;
+        g.ScaleTransform(size/32f,size/32f);
+        using var shell=Rounded(new RectangleF(.4f,3,31.2f,26),7);
+        using var body=new SolidBrush(Color.FromArgb(0x24,0x28,0x30));
+        using var rim=new Pen(Color.FromArgb(0x6c,0x73,0x80),.65f);
+        g.FillPath(body,shell);g.DrawPath(rim,shell);
+        Lens(new RectangleF(1,5,14.5f,14.5f),Claude,claudeRemaining,claudeEnabled,claudeLogo,"C");
+        Lens(new RectangleF(16.5f,5,14.5f,14.5f),Codex,codexRemaining,codexEnabled,codexLogo,">_");
         return bitmap;
 
-        void Cell(RectangleF rect, Color color, double? remaining, bool enabled)
+        void Lens(RectangleF rect,Color accent,double? remaining,bool enabled,Image? logo,string fallback)
         {
-            if (!enabled)
+            using var clip=new GraphicsPath();clip.AddEllipse(rect);
+            using var field=new SolidBrush(Color.FromArgb(0x34,0x39,0x43));g.FillEllipse(field,rect);
+            var state=g.Save();g.SetClip(clip,CombineMode.Intersect);
+            if(logo is not null)
             {
-                // A sleeping eye denotes an unmonitored source; it is not an empty quota.
-                using var sleeping = new Pen(Color.FromArgb(0x79, 0x83, 0x92), 1.6f) { StartCap=LineCap.Round, EndCap=LineCap.Round };
-                g.DrawLine(sleeping, rect.Left, rect.Top+rect.Height/2, rect.Right, rect.Top+rect.Height/2);
-                return;
-            }
-            using var path = Rounded(rect, 2.6f);
-            using var track = new SolidBrush(Color.FromArgb(0x48, 0x4e, 0x5b));
-            g.FillPath(track, path);
-            if (remaining is { } amount && double.IsFinite(amount))
-            {
-                var fill = (float)Math.Clamp(amount, 0, 100) / 100 * rect.Height;
-                if (fill > 0)
-                {
-                    var state = g.Save(); g.SetClip(path, CombineMode.Intersect);
-                    using var ink = new SolidBrush(color);
-                    g.FillRectangle(ink, rect.Left, rect.Bottom-fill, rect.Width, fill);
-                    g.Restore(state);
-                }
+                using var attributes=new ImageAttributes();attributes.SetColorMatrix(new ColorMatrix{Matrix33=enabled?1:.3f});
+                g.DrawImage(logo,Rectangle.Round(rect),0,0,logo.Width,logo.Height,GraphicsUnit.Pixel,attributes);
             }
             else
             {
-                // An unknown reading gets a dot; never pretend that it is zero or full.
-                using var unknown = new SolidBrush(color);
-                g.FillEllipse(unknown, rect.Left+1.5f, rect.Top+3.75f, 2.5f, 2.5f);
+                using var ink=new SolidBrush(enabled?accent:Color.Gray);using var font=new Font("Segoe UI",fallback=="C"?11:8,FontStyle.Bold,GraphicsUnit.Pixel);
+                using var format=new StringFormat{Alignment=StringAlignment.Center,LineAlignment=StringAlignment.Center};g.DrawString(fallback,font,ink,rect,format);
             }
-            using var edge = new Pen(Color.FromArgb(150, color), .65f);
-            g.DrawPath(edge, path);
+            g.Restore(state);
+            var rail=new RectangleF(rect.X+1.7f,23,11.1f,2.4f);
+            using var track=new SolidBrush(Color.FromArgb(0x4a,0x4f,0x59));using var trackShape=Rounded(rail,1.2f);g.FillPath(track,trackShape);
+            using var color=new SolidBrush(enabled?accent:Color.FromArgb(0x71,0x76,0x80));
+            if(!enabled){g.FillRectangle(color,rail.X+4,rail.Y,3,rail.Height);return;}
+            if(remaining is not {} value||!double.IsFinite(value)){g.FillEllipse(color,rail.X+4.5f,rail.Y,2.4f,2.4f);return;}
+            var width=(float)Math.Clamp(value,0,100)/100*rail.Width;
+            if(width>0){var saved=g.Save();g.SetClip(trackShape,CombineMode.Intersect);g.FillRectangle(color,rail.X,rail.Y,width,rail.Height);g.Restore(saved);}
         }
     }
-
-    static GraphicsPath Rounded(RectangleF r, float radius)
+    static GraphicsPath Rounded(RectangleF r,float radius)
     {
-        var p = new GraphicsPath(); var d = radius*2;
-        p.AddArc(r.X,r.Y,d,d,180,90);p.AddArc(r.Right-d,r.Y,d,d,270,90);
-        p.AddArc(r.Right-d,r.Bottom-d,d,d,0,90);p.AddArc(r.X,r.Bottom-d,d,d,90,90);
-        p.CloseFigure();return p;
+        var p=new GraphicsPath();var d=radius*2;
+        p.AddArc(r.X,r.Y,d,d,180,90);p.AddArc(r.Right-d,r.Y,d,d,270,90);p.AddArc(r.Right-d,r.Bottom-d,d,d,0,90);p.AddArc(r.X,r.Bottom-d,d,d,90,90);p.CloseFigure();return p;
     }
 }

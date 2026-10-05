@@ -42,6 +42,7 @@ public partial class MainWindow : Window
         Loc.Configure(opts.Language ?? model.Settings.Language);
         Translate.RefreshResources();
         InitializeComponent();
+        InitializeConnections();
         Chart.AttachInspectOverlay(ChartInspection);
         Chart.SizeChanged += (_,_) => PlaceChartButtons();
         if (opts.QaWindow) ShowInTaskbar = true; // permits native UI inspection of this otherwise tool-only window
@@ -50,7 +51,7 @@ public partial class MainWindow : Window
         Width = s.Width + 2 * ShadowMargin;
         Topmost = s.Topmost;
         PinButton.IsChecked = s.Topmost;
-        if (opts.SettingsOpen || opts.HistoryOpen) s.CompactMode = false;
+        if (opts.HistoryOpen) s.CompactMode = false;
         ApplyCompactLayout();
         PlaceInitially();
 
@@ -71,7 +72,7 @@ public partial class MainWindow : Window
         AutoLogoutCheck.IsChecked = s.AutoLogoutOnExit;
         if(opts.HistoryDay is { } historyDay) { _historyDay=historyDay.Date; _historyMonth=new(historyDay.Year,historyDay.Month,1); }
         ExpiredChats.IsExpanded = opts.ExpandArchive;
-        if (opts.SettingsOpen) ShowSettings(true);
+        if (opts.SettingsOpen || !s.SetupCompleted) ShowSettings(true);
         if (opts.HistoryOpen) ShowHistory(true);
         OnThemeChanged();
         _suppress = false;
@@ -79,6 +80,7 @@ public partial class MainWindow : Window
         _saveTimer = new DispatcherTimer(TimeSpan.FromSeconds(1), DispatcherPriority.Background, (_, _) => { _saveTimer!.Stop(); PersistPlacement(); }, Dispatcher);
         _saveTimer.Stop();
         InitializeUsageHover();
+        Loaded+=(_,_)=>{if(SettingsPanel.Visibility==Visibility.Visible){_ = _app.CheckConnection(ChatPlatform.Claude);_ = _app.CheckConnection(ChatPlatform.Codex);}};
         IsVisibleChanged += (_, _) => { if (!IsVisible) ReleaseChart(); };
         LocationChanged += (_, _) => { if (!_suppress && opts.Snapshot is null) { _saveTimer.Stop(); _saveTimer.Start(); } };
         KeyDown += (_, e) =>
@@ -148,9 +150,12 @@ public partial class MainWindow : Window
 
     public WidgetView Render()
     {
+        RenderConnections();
         var now = DateTimeOffset.Now;
         var s = _model.Settings;
         ApplyPlatformLayout();
+        foreach(var meter in new[]{FiveMeter,WeekMeter,FableMeter})meter.Opacity=s.ClaudeConnected?1:.45;
+        foreach(var meter in new[]{CodexFiveMeter,CodexMeter,CodexInlineMeter})meter.Opacity=s.CodexConnected?1:.45;
         if (s.CompactMode) return RenderCompact(now);
         RenderSessionStart(now);
         if (HistoryPanel.Visibility == Visibility.Visible)
@@ -168,12 +173,12 @@ public partial class MainWindow : Window
         var historyStart = v.Chart.EstimationStart < cv.Chart.EstimationStart ? v.Chart.EstimationStart : cv.Chart.EstimationStart;
         var dashboard = Dashboard.Combine(v, cv, s, now, _codex.LastEnvelope, range,
             _app.TrendSessionEdges(historyStart, now), _app.WorkTrendActivity(now));
-        if(watchClaude&&s.ChartModeFor(ChatPlatform.Claude)=="rate"&&dashboard.Chart.FableToClaudeFactor is not null)
+        if(watchClaude&&dashboard.Chart.FableToClaudeFactor is not null)
         {
             var chart=dashboard.Chart;
             var window=s.Smoothing?s.TrendMinutes:10;
             chart.FableOnlySpans=FableDisplay.Build(chart.Total,chart.Fable,
-                _app.ClaudeModelActivity(chart.EstimationStart.AddMinutes(-window/2d),now),chart.EstimationStart,chart.End,window);
+                _app.ClaudeModelActivity(chart.EstimationStart.AddMinutes(-window/2d),now),chart.EstimationStart,chart.End,window,chart.ClaudeCumulativeMode);
         }
         _suppress = true;
         TagText.Text = v.Tag ?? "";
@@ -187,8 +192,8 @@ public partial class MainWindow : Window
         CodexMeter.Show(cv.Week, dashboard.CodexStatus);
 
         var flashing = _flash is not null && _flashUntil > now;
-        var note = flashing ? _flash : (watchClaude?v.Note:null) ?? (watchCodex?dashboard.CodexStatus:null);
-        _noteAction = flashing || !watchClaude ? NoteAction.None : v.NoteAction;
+        var note = flashing ? _flash : DisconnectedNote() ?? (watchClaude?v.Note:null) ?? (watchCodex?dashboard.CodexStatus:null);
+        _noteAction = flashing || !watchClaude || DisconnectedNote() is not null ? NoteAction.None : v.NoteAction;
         NoteBar.Visibility = note is null ? Visibility.Collapsed : Visibility.Visible;
         NoteText.Text = note ?? "";
         NoteBar.Cursor = _noteAction == NoteAction.None ? null : Cursors.Hand;
@@ -221,7 +226,7 @@ public partial class MainWindow : Window
         // The chart already draws a point-readout card; never cover it with a second tooltip.
         Chart.ToolTip = null;
         LegendBar.ToolTip = null;
-        ChartDiagnosticsText.Text = dashboard.Detail+(dashboard.Chart.MergesFable?Loc.T("\n本机模型记录仅Fable的片段只画Fable折合周额度曲线；混用/未知模型的平滑邻域保留两线。顶部累计始终取各自实际读数；本机模型记录不覆盖其他设备。"):"");
+        ChartDiagnosticsText.Text = dashboard.Detail+(dashboard.Chart.MergesFable?Loc.T("\n仅 Fable 片段在速率和累计图中共用 Fable 折合线，零增量平台段延续此显示；混用、未知或无法解释的消耗保留两线。顶部累计和原始记录不变，本机日志不覆盖其他设备。"):"");
         CumulativeMode.ToolTip = Loc.T("所选时段累计 · 点");
         RateMode.ToolTip = Loc.T("消耗速率 · 点/h");
         CollectorText.Text = _model.DemoMode ? Loc.T("演示数据") : string.Join("\n",new[]{watchClaude?"Claude · "+v.CollectorLine.Split('\n')[0]:null,watchCodex?dashboard.CodexStatus??Loc.T("Codex · 采集正常"):null}.Where(p=>p is not null));
@@ -257,7 +262,7 @@ public partial class MainWindow : Window
         DisplayLabelText.Text = s.Display == "used" ? Loc.T("已用 %") : Loc.T("剩余 %");
         if(_model.DemoMode) DisplayLabelText.Text=Loc.T("演示 %");
         DisplayLabelText.ToolTip = string.Join(" · ",new[]{s.Monitors(ChatPlatform.Claude)?view.PlanLabel:null,s.Monitors(ChatPlatform.Codex)?Loc.T(codex.PlanLabel):null}.Where(p=>p is not null));
-        var note = _flashUntil > now && _flash is not null ? _flash : (s.Monitors(ChatPlatform.Claude)?view.Note:null) ?? (s.Monitors(ChatPlatform.Codex)?codexStatus:null);
+        var note = _flashUntil > now && _flash is not null ? _flash : DisconnectedNote() ?? (s.Monitors(ChatPlatform.Claude)?view.Note:null) ?? (s.Monitors(ChatPlatform.Codex)?codexStatus:null);
         CompactStatus.Visibility = note is null ? Visibility.Collapsed : Visibility.Visible;
         CompactStatus.ToolTip = note is null ? null : note + Loc.T("\n点击展开查看");
         System.Windows.Automation.AutomationProperties.SetName(CompactStatus, note ?? Loc.T("采集正常"));
@@ -303,18 +308,19 @@ public partial class MainWindow : Window
     void ApplyCompactLayout()
     {
         var compact = _model.Settings.CompactMode;
-        Width = (compact ? 240 : _model.Settings.Width) + 2 * ShadowMargin;
+        Width = (compact && SettingsPanel.Visibility!=Visibility.Visible ? 240 : _model.Settings.Width) + 2 * ShadowMargin;
         CompactButton.IsChecked = compact;
         CompactButton.ToolTip = compact ? Loc.T("展开") : Loc.T("精简模式");
         System.Windows.Automation.AutomationProperties.SetName(CompactButton, compact ? Loc.T("展开完整模式") : Loc.T("切换精简模式"));
         CompactGlyph.Data = Geometry.Parse(compact ? "M4,4 H20 V20 H4 Z M4,10 H20 M9,17 L12,14 L15,17" : "M4,4 H20 V20 H4 Z M4,10 H20 M9,14 L12,17 L15,14");
-        HistoryButton.Visibility = SettingsButton.Visibility = WidthGrip.Visibility = compact ? Visibility.Collapsed : Visibility.Visible;
+        HistoryButton.Visibility = WidthGrip.Visibility = compact ? Visibility.Collapsed : Visibility.Visible;
+        SettingsButton.Visibility=Visibility.Visible;
         SessionStartText.Visibility = Visibility.Visible;
         ChartPanel.Visibility = CachePanel.Visibility = compact ? Visibility.Collapsed : Visibility.Visible;
         CompactDetails.Visibility=compact?Visibility.Visible:Visibility.Collapsed;
         TagText.Visibility = compact || !_model.DemoMode ? Visibility.Collapsed : Visibility.Visible;
         TitleBar.Padding = compact ? new Thickness(8,2,6,2) : new Thickness(9,3,9,3);
-        foreach (var button in new ButtonBase[] { CompactButton, PinButton, HideButton })
+        foreach (var button in new ButtonBase[] { CompactButton, PinButton, SettingsButton, HideButton })
         {
             if (compact) { button.Width = 22; button.Height = 22; }
             else { button.ClearValue(WidthProperty); button.ClearValue(HeightProperty); }
@@ -758,7 +764,6 @@ public partial class MainWindow : Window
 
     public void OpenSettings()
     {
-        if(_model.Settings.CompactMode) SetCompactMode(false);
         ShowSettings(true);
     }
 
@@ -775,6 +780,8 @@ public partial class MainWindow : Window
         DisplayLabelText.Text = _model.Settings.Display == "used" ? Loc.T("已用 %") : Loc.T("剩余 %");
         MainPanel.Visibility = open ? Visibility.Collapsed : Visibility.Visible;
         SettingsPanel.Visibility = open ? Visibility.Visible : Visibility.Collapsed;
+        ApplyCompactLayout();
+        RenderConnections();
         SettingsButton.Background = open ? Theme.Brush("Raised") : Brushes.Transparent;
     }
 

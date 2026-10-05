@@ -87,7 +87,7 @@ static class ChartInspectProbe
         Check(paths.Count==2&&paths[0][^1].Time<=now.AddMinutes(-90)&&paths[1][0].Time>=now.AddMinutes(-30),"Claude stroke still crosses the Fable-only fragment");
         Hover(5,35);Verify(false,["Claude","Fable"]);
         var cumulativeView=View(cumulative:true);cumulativeView.FableOnlySpans=solo.FableOnlySpans;Set(cumulativeView);
-        Hover(chart.ActualWidth/2,35);Verify(false,["Claude","Fable"]);
+        Hover(chart.ActualWidth/2,35);Verify(false,["Fable"]);
         var origin=now.AddHours(-12); var edge=origin.AddHours(3).AddMinutes(37).AddMilliseconds(408);
         SeriesData boundedSource = new() { Key=SeriesKey.Total, Segments=Enumerable.Range(0,144)
             .Select(i=>new RateSegment{Start=origin.AddMinutes(i*5),End=origin.AddMinutes((i+1)*5),Delta=i==48?1:0}).ToList() };

@@ -17,6 +17,12 @@ A small Windows desktop widget for Claude and Codex quota, usage trends, and loc
 <img src="docs/images/both-expanded.png" width="324" alt="Claude 与 Codex 完整模式" />
 <img src="docs/images/codex-expanded.png" width="324" alt="仅 Codex 完整模式" />
 
+### 累计视图
+
+<img src="docs/images/both-cumulative.png" width="324" alt="Claude、Fable 和 Codex 的累计消耗" />
+
+每个图可以独立选择速率或累计，顶部数字始终保留已记录累计。
+
 ### 精简模式
 
 <img src="docs/images/both-compact.png" width="264" alt="精简模式：按平台显示额度和 chat 活动" />
@@ -32,13 +38,17 @@ A small Windows desktop widget for Claude and Codex quota, usage trends, and loc
 
 ## 开始使用
 
-1. 在 [Releases](https://github.com/HailiangLoo/QuotaWidget/releases/latest) 下载 `QuotaWidget-v0.12.0-win-x64.zip`，解压到自己的文件夹。
+1. 在 [Releases](https://github.com/HailiangLoo/QuotaWidget/releases/latest) 下载 `QuotaWidget-v0.13.0-win-x64.zip`，解压到自己的文件夹。
 2. 双击 `QuotaWidget.exe`，或者 `启动小挂件.cmd`。发布包包含 .NET 运行时，无需另外安装。
-3. 设置中选择需要监听的平台和语言。语言默认跟随系统，也可选择简体中文或 English；切换立即生效。
+3. 首次启动先选择监听平台、完成官方登录，再点“开始监听”。开始前不采集额度或读取 chat 日志。精简模式也保留齿轮设置入口。
+4. 设置显示各平台的当前状态，并提供登录/安装、检查连接和断开按钮。断开只停止挂件监听，不退出官方应用的账号，也不删除历史。
+5. 设置中选择语言。语言默认跟随系统，也可选择简体中文或 English；切换立即生效。
 
 **Codex**：先安装并登录官方 Codex Windows 应用。挂件通过应用附带、经签名校验的 CLI 查询额度，使用现有登录状态。
 
-**Claude**：需要受支持的官方 Claude Code CLI，或 Claude Windows 应用附带的 CLI。双击 `登录Claude.cmd` 完成挂件专用登录；它使用独立配置目录。找不到兼容 CLI 时，在设置中指定路径或更新官方应用。
+官方安装与登录说明：[Codex / ChatGPT](https://learn.chatgpt.com/docs/app)、[ChatGPT 登录](https://learn.chatgpt.com/docs/auth)、[Claude Code](https://code.claude.com/docs/en/setup)。
+
+**Claude**：需要受支持的官方 Claude Code CLI，或 Claude Windows 应用附带的 CLI。双击 `登录Claude.cmd` 完成挂件专用登录；它使用独立配置目录。找不到兼容 CLI 时，在 settings.json 中指定 claudeExePath 或更新官方应用。
 
 只想先看效果，双击 `演示模式.cmd`。演示数据与真实数据分开存放。
 
@@ -49,6 +59,8 @@ A small Windows desktop widget for Claude and Codex quota, usage trends, and loc
 数据保存在当前 Windows 用户的 `%USERPROFILE%\.quotawidget\data`，不会随程序目录上传到 GitHub。可用 `--data-dir "你的目录"` 指定其他位置。程序不自动添加开机启动项。
 
 额度以官方读数为准。**速率是根据离散额度读数和本机活动估算的趋势**；累计取有效原始读数，缺口不补造。其他设备或网页版活动可能不在本机记录内；token 统计不是账号账单，也不换算成精确的单 chat 周额度。
+
+[平滑算法和精度边界](docs/ALGORITHM.zh-CN.md)详细说明了观测、均速和趋势估算的区别。只用 Fable 的片段在速率、累计图中可以共线，顶部实际点数仍各自保留。
 
 两个平台的额度单位不同，不能相加。Fable 折算只在已识别的支持套餐上启用。平台接口、套餐和窗口可能变化，缺失的窗口不会显示成 0。
 

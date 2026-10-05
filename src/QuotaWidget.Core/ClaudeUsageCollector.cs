@@ -101,7 +101,7 @@ public sealed class ClaudeUsageCollector : IDisposable
         {
             try
             {
-                if (!_settings().CollectorEnabled || !_settings().Monitors(ChatPlatform.Claude))
+                if (!_settings().Collects(ChatPlatform.Claude))
                 {
                     await Task.Delay(TimeSpan.FromSeconds(2), ct);
                     continue;
@@ -165,11 +165,12 @@ public sealed class ClaudeUsageCollector : IDisposable
         await _gate.WaitAsync(ct);
         try
         {
-            if (!_settings().Monitors(ChatPlatform.Claude)) return null;
+            if (!_settings().Listens(ChatPlatform.Claude)) return null;
             var now = _clock();
             if (InBackoff(now) && !TryLocalRepair(now)) return null;
             if (trigger == CollectTrigger.Manual && now - _lastAttempt < MinManualSpacing) return null;
             var result = await AttemptAsync(ct);
+            if (!_settings().Listens(ChatPlatform.Claude)) return null;
             _lastAttempt = result.AttemptedAt;
             _lastStatus = result.Status;
             _lastError = result.ErrorCode;

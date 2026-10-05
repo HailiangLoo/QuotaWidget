@@ -15,6 +15,12 @@ All screenshots use synthetic demo data. Supports light and dark themes, full an
 <img src="docs/images/both-expanded-en.png" width="324" alt="Full mode with Claude and Codex" />
 <img src="docs/images/codex-expanded-en.png" width="324" alt="Full mode with Codex only" />
 
+### Cumulative view
+
+<img src="docs/images/both-cumulative-en.png" width="324" alt="Cumulative Claude, Fable and Codex usage" />
+
+Each chart chooses Rate or Total independently. The numbers in its header remain recorded totals.
+
 ### Compact mode
 
 <img src="docs/images/both-compact-en.png" width="264" alt="Compact mode with Claude and Codex" />
@@ -31,11 +37,15 @@ All screenshots use synthetic demo data. Supports light and dark themes, full an
 
 ## Getting started
 
-1. Download `QuotaWidget-v0.12.0-win-x64.zip` from [Releases](https://github.com/HailiangLoo/QuotaWidget/releases/latest) and extract it into a folder of your choice.
+1. Download `QuotaWidget-v0.13.0-win-x64.zip` from [Releases](https://github.com/HailiangLoo/QuotaWidget/releases/latest) and extract it into a folder of your choice.
 2. Open `QuotaWidget.exe` or `Start Widget.cmd`. The download includes the .NET runtime; no separate runtime installation is needed.
-3. Select the providers to monitor in Settings. Language defaults to the Windows display language: Chinese on Chinese systems, English otherwise. You can choose **English** or **简体中文** explicitly.
+3. On first launch, choose the providers to monitor and complete official sign-in, then select **Start monitoring**. No quota collection or chat-log reading begins before this step. The gear remains available in compact mode.
+4. Settings shows each provider’s connection status, sign-in/install instructions, a connection check, and a disconnect button. Disconnect stops widget monitoring; it does not sign out of the official app or delete history.
+5. Choose a language in Settings. Language defaults to the Windows display language: Chinese on Chinese systems, English otherwise. You can choose **English** or **简体中文** explicitly.
 
 **Codex:** install and sign in to the official Codex Windows app first. The widget checks the signature of the bundled CLI, queries quota through it, and reuses the existing sign-in.
+
+Official installation and sign-in guides: [Codex / ChatGPT](https://learn.chatgpt.com/docs/app), [ChatGPT authentication](https://learn.chatgpt.com/docs/auth), and [Claude Code](https://code.claude.com/docs/en/setup).
 
 **Claude:** requires a supported official Claude Code CLI, or the CLI bundled with the Claude Windows app. Open `Sign in to Claude.cmd` to complete the widget's separate sign-in. If no compatible CLI is found, update the official app or set `claudeExePath` in `settings.json`.
 
@@ -48,6 +58,8 @@ Requires Windows 10/11, x64. Release binaries are currently unsigned.
 Data stays under `%USERPROFILE%\.quotawidget\data` for the current Windows user. It is not uploaded to GitHub with the application. Use `--data-dir "your-directory"` to choose a different location. The app does not add itself to Windows startup automatically.
 
 Official quota readings are the source of truth. **Rates estimate a trend from discrete quota readings and local activity.** Totals use valid raw readings; gaps are not invented or filled with zero. Activity on other devices or the web may be absent from local logs. Token totals are not an account bill and are not converted into precise per-chat weekly quota costs.
+
+See [How smoothing works and its accuracy limits](docs/ALGORITHM.md). Smoothing estimates timing; it cannot reveal an exact instantaneous consumption rate. Fable-only fragments can share one display stroke in both chart modes while header totals remain independent.
 
 The two providers use different quota units and cannot be added together. Fable conversion is enabled only for recognized supported plans. Provider interfaces, plans, and quota windows can change; a missing window is never presented as zero usage.
 

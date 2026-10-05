@@ -30,6 +30,7 @@ public sealed class AppOptions
     public double? InspectMinutesAgo { get; private set; }
     public string? InspectPlatform { get; private set; }
     public bool SettingsOpen { get; private set; }
+    public bool Setup { get; private set; }
     public bool HistoryOpen { get; private set; }
     public bool ExpandArchive { get; private set; }
     public double? Width { get; private set; }
@@ -72,6 +73,7 @@ public sealed class AppOptions
                 case "--inspect": o.InspectMinutesAgo = double.TryParse(Next(), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var m) ? m : null; break;
                 case "--inspect-platform": var platform = Next(); o.InspectPlatform = platform is "claude" or "codex" ? platform : null; break;
                 case "--settings": o.SettingsOpen = true; break;
+                case "--setup": o.Setup = true; o.SettingsOpen = true; break;
                 case "--history": o.HistoryOpen = true; break;
                 case "--expand-archive": o.ExpandArchive = true; break;
                 case "--width": o.Width = double.TryParse(Next(), out var w) ? w : null; break;
@@ -136,6 +138,7 @@ public partial class App : Application
     public bool IsTopmost => _model.Settings.Topmost;
     public bool CollectorAvailable => _collector is not null;
     public bool Monitors(ChatPlatform platform)=>_model.Settings.Monitors(platform);
+    public bool Listens(ChatPlatform platform)=>_model.Settings.Listens(platform);
     public bool Exiting => _exiting;
 
     protected override void OnStartup(StartupEventArgs e)
@@ -188,12 +191,15 @@ public partial class App : Application
             return;
         }
 
+        var firstUse=!File.Exists(_paths.Settings);
         if (_opts.Demo) DemoData.Generate(_paths, DateTimeOffset.Now, _opts.Scenario);
         _themeForced = _opts.Theme is "dark" or "light";
         Theme.Apply(_opts.Theme switch { "dark" => true, "light" => false, _ => Theme.SystemPrefersDark() });
 
         _model = new WidgetModel(_paths, _opts.Demo) { ReadOnly = snapshot };
         _model.Initialize();
+        if (_opts.Setup || (firstUse&&!_opts.Demo&&_opts.Snapshot is null))
+        { _model.Settings.SetupCompleted=false;_model.SaveSettings(); }
         if (_opts.Language is "auto" or "en" or "zh-CN") _model.Settings.Language = _opts.Language;
         Loc.Configure(_model.Settings.Language);
         if (_opts.Range is { } range && WidgetSettings.RangeChoices.Contains(range)) _model.Settings.RangeMinutes = range;
@@ -260,7 +266,7 @@ public partial class App : Application
         _fileTimer.Start();
         _clockTimer.Start();
         Render();
-        if (!_opts.Hidden) { _window.Show(); Render(); }
+        if (!_opts.Hidden || !_model.Settings.SetupCompleted) { _window.Show(); Render(); }
         var logoutResult = AtomicFile.TryReadAllText(Path.Combine(_paths.Root, "logout-result.txt"));
         if (!_opts.Demo && logoutResult is { Length: > 0 }) _window.Flash(Loc.T("上次退出未确认清除登录，可在设置的数据诊断中重试"));
     }
@@ -387,13 +393,13 @@ public partial class App : Application
         {
             while (!_cts.IsCancellationRequested)
             {
-                if (_model.Settings.CacheRemindersEnabled)
+                if (_model.Settings.CacheRemindersEnabled && (Listens(ChatPlatform.Claude)||Listens(ChatPlatform.Codex)))
                 {
                     try
                     {
                         var now = DateTimeOffset.Now;
                         var mode=_model.Settings.Monitoring;
-                        _cacheEntries = monitor.Poll(now,mode is "both" or "claude",mode is "both" or "codex"); _cacheWarning = monitor.Warning;
+                        _cacheEntries = monitor.Poll(now,Listens(ChatPlatform.Claude),Listens(ChatPlatform.Codex)); _cacheWarning = monitor.Warning;
                         try
                         {
                             _chatHistory.Capture(_cacheEntries, now);
@@ -512,14 +518,14 @@ public partial class App : Application
         {
             while (!_cts.IsCancellationRequested)
             {
-                if (_model.Settings.TokenTrackingEnabled)
+                if (_model.Settings.TokenTrackingEnabled && (Listens(ChatPlatform.Claude)||Listens(ChatPlatform.Codex)))
                 {
                     var previousVersion=TokenVersion;
                     try
                     {
                         _tokens ??= TokenIndex.Local(Path.Combine(_paths.Root,"tokens"),DateTimeOffset.Now);
                         var mode=_model.Settings.Monitoring;
-                        _tokens.Poll(DateTimeOffset.Now, _cts.Token,mode is "both" or "claude",mode is "both" or "codex"); _tokenWarning=null;
+                        _tokens.Poll(DateTimeOffset.Now, _cts.Token,Listens(ChatPlatform.Claude),Listens(ChatPlatform.Codex)); _tokenWarning=null;
                     }
                     catch (OperationCanceledException) when (_cts.IsCancellationRequested) { throw; }
                     catch { _tokenWarning="本地 token 索引暂不可读 · 稍后重试"; }
@@ -535,9 +541,9 @@ public partial class App : Application
     }
     IEnumerable<ChatCacheEntry> RetainedCacheEntries(DateTimeOffset now) =>
         (CurrentSession(now)?.Chats.Select(c => c.Last) ?? []).Concat(_recentCompacts);
-    IEnumerable<ChatCacheEntry> LifecycleCandidates(DateTimeOffset now) => _cacheEntries.Concat(RetainedCacheEntries(now)).Where(e=>Monitors(e.Platform));
+    IEnumerable<ChatCacheEntry> LifecycleCandidates(DateTimeOffset now) => _cacheEntries.Concat(RetainedCacheEntries(now)).Where(e=>Listens(e.Platform));
     public IReadOnlyList<ChatCacheEntry> CacheEntries(DateTimeOffset now) => (_opts.Demo ? DemoCacheEntries(now)
-        : ChatListPolicy.Merge(_cacheEntries, RetainedCacheEntries(now), now, _chatLifecycle)).Where(e=>Monitors(e.Platform)).ToArray();
+        : ChatListPolicy.Merge(_cacheEntries, RetainedCacheEntries(now), now, _chatLifecycle)).Where(e=>_opts.Demo?Monitors(e.Platform):Listens(e.Platform)).ToArray();
 
     IReadOnlyList<ChatCacheEntry> DemoCacheEntries(DateTimeOffset now)
     {
@@ -659,11 +665,12 @@ public partial class App : Application
 
     public void MonitoringChanged(string previous)
     {
-        var before=new WidgetSettings{Monitoring=previous};var now=DateTimeOffset.Now;
+        var s=_model.Settings;
+        var before=new WidgetSettings{Monitoring=previous,SetupCompleted=s.SetupCompleted,ClaudeConnected=s.ClaudeConnected,CodexConnected=s.CodexConnected};var now=DateTimeOffset.Now;
         foreach(var (platform,model) in new[]{(ChatPlatform.Claude,_model),(ChatPlatform.Codex,_codex)})
-            if(before.Monitors(platform)!=Monitors(platform))
+            if(before.Listens(platform)!=Listens(platform))
             {
-                model.RecordEvent(new AppEvent(now,Monitors(platform)?EventTypes.MonitorResume:EventTypes.MonitorPause));
+                model.RecordEvent(new AppEvent(now,Listens(platform)?EventTypes.MonitorResume:EventTypes.MonitorPause));
                 model.ReleaseArchive();
             }
     }

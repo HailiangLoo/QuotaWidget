@@ -10,7 +10,7 @@ public static class FableDisplay
         (model.Equals("fable",StringComparison.OrdinalIgnoreCase)||model.StartsWith("claude-fable-",StringComparison.OrdinalIgnoreCase));
 
     public static IReadOnlyList<ChartSpan> Build(SeriesData total,SeriesData fable,IReadOnlyList<ModelActivity> activity,
-        DateTimeOffset start,DateTimeOffset end,double smoothingMinutes)
+        DateTimeOffset start,DateTimeOffset end,double smoothingMinutes,bool cumulative=false)
     {
         if(activity.Count==0)return [];
         // A mixed-model smoothing neighbourhood must keep both curves. Isolated known Fable
@@ -19,6 +19,16 @@ public static class FableDisplay
         var known=Merge(activity.Where(a=>IsFable(a.Model)).Select(a=>new ChartSpan(a.Start-radius,a.End+radius)));
         var blocked=Merge(activity.Where(a=>!IsFable(a.Model)).Select(a=>new ChartSpan(a.Start-radius,a.End+radius)));
         var valid=total.Segments.Where(s=>s.Valid).ToDictionary(s=>(s.Start,s.End));
+        if(cumulative)
+        {
+            // A zero-increment plateau adds no new model attribution. Carry confirmed
+            // Fable-only display through that plateau, without crossing an unexplained
+            // increment, a reset, missing coverage or mixed/unknown model evidence.
+            var quiet=fable.Segments.Where(s=>s.Valid&&s.Start>=start&&s.End<=end&&Math.Abs(s.Delta)<1e-9&&
+                valid.TryGetValue((s.Start,s.End),out var t)&&Math.Abs(t.Delta)<1e-9).Select(s=>new ChartSpan(s.Start,s.End));
+            var candidates=Merge(known.Concat(quiet));
+            known=candidates.Where(s=>known.Any(k=>k.Start<s.End&&k.End>s.Start)).ToList();
+        }
         var output=new List<ChartSpan>();
         foreach(var s in fable.Segments)
         {

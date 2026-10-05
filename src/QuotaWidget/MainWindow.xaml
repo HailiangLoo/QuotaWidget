@@ -42,7 +42,7 @@
                 <Viewbox Width="14" Height="14">
                   <Canvas Width="24" Height="24">
                     <Path Stroke="{DynamicResource Ink}" StrokeThickness="2" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"
-                          Data="M20,7 H11 M14,17 H5 M20,17 A3,3 0 1 1 14,17 A3,3 0 1 1 20,17 M10,7 A3,3 0 1 1 4,7 A3,3 0 1 1 10,7" />
+                          Data="M10,2 H14 L14.8,4.9 L17.1,6.2 L20,5.5 L22,9 L19.9,11.1 V13.7 L22,16 L20,19.5 L17.1,18.8 L14.8,20.1 L14,23 H10 L9.2,20.1 L6.9,18.8 L4,19.5 L2,16 L4.1,13.7 V11.1 L2,9 L4,5.5 L6.9,6.2 L9.2,4.9 Z M15.5,12.5 A3.5,3.5 0 1 1 8.5,12.5 A3.5,3.5 0 1 1 15.5,12.5" />
                   </Canvas>
                 </Viewbox>
               </Button>
@@ -268,8 +268,27 @@
         </StackPanel>
 
         <!-- Settings -->
-        <StackPanel x:Name="SettingsPanel" Margin="14" Visibility="Collapsed">
-          <TextBlock local:Translate.Text="显示设置" FontSize="14" FontWeight="Medium" Margin="0,0,0,2" />
+        <StackPanel x:Name="SettingsPanel" Visibility="Collapsed">
+          <ScrollViewer MaxHeight="560" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+          <ScrollViewer.Resources>
+            <Style TargetType="ScrollBar">
+              <Setter Property="Width" Value="8" />
+              <Setter Property="Template">
+                <Setter.Value>
+                  <ControlTemplate TargetType="ScrollBar">
+                    <Track x:Name="PART_Track" Orientation="Vertical" IsDirectionReversed="True" Minimum="{TemplateBinding Minimum}" Maximum="{TemplateBinding Maximum}" Value="{TemplateBinding Value}" ViewportSize="{TemplateBinding ViewportSize}">
+                      <Track.DecreaseRepeatButton><RepeatButton Command="ScrollBar.PageUpCommand"><RepeatButton.Template><ControlTemplate TargetType="RepeatButton"><Border Background="Transparent"/></ControlTemplate></RepeatButton.Template></RepeatButton></Track.DecreaseRepeatButton>
+                      <Track.Thumb><Thumb><Thumb.Template><ControlTemplate TargetType="Thumb"><Border Margin="2,3" CornerRadius="2" Background="{DynamicResource Muted}" Opacity="0.45"/></ControlTemplate></Thumb.Template></Thumb></Track.Thumb>
+                      <Track.IncreaseRepeatButton><RepeatButton Command="ScrollBar.PageDownCommand"><RepeatButton.Template><ControlTemplate TargetType="RepeatButton"><Border Background="Transparent"/></ControlTemplate></RepeatButton.Template></RepeatButton></Track.IncreaseRepeatButton>
+                    </Track>
+                  </ControlTemplate>
+                </Setter.Value>
+              </Setter>
+            </Style>
+          </ScrollViewer.Resources>
+          <StackPanel Margin="14">
+          <TextBlock x:Name="SettingsTitle" local:Translate.Text="显示设置" FontSize="14" FontWeight="Medium" Margin="0,0,0,2" />
+          <TextBlock x:Name="SetupIntro" local:Translate.Text="欢迎使用。先选择监听平台，再完成官方登录。开始前不会采集额度或读取 chat 日志。" FontSize="11" TextWrapping="Wrap" Foreground="{DynamicResource Muted}" Margin="0,6,0,0" Visibility="Collapsed" />
           <DockPanel Margin="0,12,0,0">
             <ComboBox x:Name="LanguageCombo" DockPanel.Dock="Right" Style="{StaticResource FlatCombo}" SelectionChanged="LanguageCombo_SelectionChanged">
               <ComboBoxItem Tag="auto" local:Translate.Content="跟随系统" />
@@ -284,6 +303,10 @@
             </ComboBox>
             <TextBlock local:Translate.Text="监听平台" VerticalAlignment="Center" />
           </DockPanel>
+          <StackPanel x:Name="ConnectionRows" Margin="0,7,0,0" />
+          <TextBlock local:Translate.Text="断开仅停止挂件监听，不退出官方账号或删除历史。" FontSize="10" Foreground="{DynamicResource Muted}" TextWrapping="Wrap" Margin="0,5,0,0" />
+          <Button x:Name="SetupStart" Style="{StaticResource FlatButton}" Background="{DynamicResource Raised}" Padding="7" Margin="0,9,0,0" local:Translate.Content="开始监听" Click="SetupStart_Click" Visibility="Collapsed" />
+          <StackPanel x:Name="AppearanceSettings">
           <DockPanel Margin="0,12,0,0">
             <ComboBox x:Name="DisplayCombo" DockPanel.Dock="Right" Style="{StaticResource FlatCombo}" SelectionChanged="DisplayCombo_SelectionChanged">
               <ComboBoxItem Tag="used" local:Translate.Content="已用额度" />
@@ -354,6 +377,9 @@
           <TextBlock local:Translate.Text="下次需重新登录；缩到托盘不受影响。" TextWrapping="Wrap" FontSize="11" Foreground="{DynamicResource Muted}" Margin="0,5,0,0" />
           <Button Style="{StaticResource FlatButton}" Background="{DynamicResource Raised}" Padding="8" Margin="0,12,0,0" HorizontalContentAlignment="Center"
                   local:Translate.Content="返回小窗" Click="BackButton_Click" />
+          </StackPanel>
+          </StackPanel>
+          </ScrollViewer>
         </StackPanel>
       </StackPanel>
     </Border>

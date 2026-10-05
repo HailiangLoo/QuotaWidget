@@ -14,9 +14,10 @@ namespace QuotaWidget.App;
 public static class ProviderIcon
 {
     static readonly Dictionary<string,ImageSource> Cache=new();
-    public static ImageSource Get(string platform)
+    public static ImageSource Get(string platform,bool? darkOverride=null)
     {
-        var key=platform+"|"+Theme.IsDark;
+        var dark=darkOverride??Theme.IsDark;
+        var key=platform+"|"+dark;
         if(Cache.TryGetValue(key,out var cached))return cached;
         ImageSource? image=null;
         try
@@ -27,7 +28,7 @@ public static class ProviderIcon
             {
                 using var package=packages!.OpenSubKey(name);
                 if(package?.GetValue("PackageRootFolder") is not string root||!Path.IsPathFullyQualified(root))continue;
-                var file=Path.Combine(root,"assets",platform!="Claude"&&!Theme.IsDark?
+                var file=Path.Combine(root,"assets",platform!="Claude"&&!dark?
                     "Square44x44Logo.targetsize-64_altform-lightunplated.png":"Square44x44Logo.targetsize-64_altform-unplated.png");
                 if(!File.Exists(file))continue;
                 using var stream=File.OpenRead(file);
@@ -35,7 +36,17 @@ public static class ProviderIcon
             }
         }
         catch(Exception e) when(e is IOException or UnauthorizedAccessException or System.Security.SecurityException or NotSupportedException or FormatException) { }
-        return Cache[key]=image??Fallback(platform,Theme.IsDark);
+        return Cache[key]=image??Fallback(platform,dark);
+    }
+
+    public static System.Drawing.Bitmap TrayBitmap(string platform)
+    {
+        var visual=new DrawingVisual();using(var dc=visual.RenderOpen())dc.DrawImage(Get(platform,true),new Rect(0,0,64,64));
+        var target=new RenderTargetBitmap(64,64,96,96,PixelFormats.Pbgra32);target.Render(visual);
+        var encoder=new PngBitmapEncoder();encoder.Frames.Add(BitmapFrame.Create(target));
+        using var stream=new MemoryStream();encoder.Save(stream);stream.Position=0;
+        using var bitmap=new System.Drawing.Bitmap(stream);
+        return new System.Drawing.Bitmap(bitmap);
     }
 
     public static ImageSource Fallback(string platform,bool dark)

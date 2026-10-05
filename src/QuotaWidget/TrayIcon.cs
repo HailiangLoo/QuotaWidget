@@ -14,6 +14,8 @@ public sealed class TrayIcon : IDisposable
     readonly TrayMenu _menu;
     IntPtr _hicon;
     string _lastKey = "";
+    readonly Bitmap _claudeLogo=ProviderIcon.TrayBitmap("Claude");
+    readonly Bitmap _codexLogo=ProviderIcon.TrayBitmap("Codex");
 
     public TrayIcon(App app)
     {
@@ -27,11 +29,12 @@ public sealed class TrayIcon : IDisposable
 
     public void Update(WidgetView view,WidgetView codex,WidgetSettings settings)
     {
-        var claudeEnabled=settings.Monitors(ChatPlatform.Claude);var codexEnabled=settings.Monitors(ChatPlatform.Codex);
+        var claudeEnabled=settings.Collects(ChatPlatform.Claude);var codexEnabled=settings.Collects(ChatPlatform.Codex);
         var claudeRemaining=Remaining(view.Week);var codexRemaining=Remaining(codex.Week);
         string P(double? value)=>value is { } n?$"{n:0.#}%":"—";
         string Old(WidgetView v)=>v.TrayText.Contains(Loc.T("旧数据"),StringComparison.Ordinal)?Loc.T("（旧）"):"";
         var text=Loc.T("周剩余 · ")+string.Join(" · ",new[]{claudeEnabled?$"Claude {P(claudeRemaining)}{Old(view)}":null,codexEnabled?$"Codex {P(codexRemaining)}{Old(codex)}":null}.Where(s=>s is not null));
+        if(!claudeEnabled&&!codexEnabled)text=Loc.T("已停止挂件监听，保留登录和历史。");
         if(claudeEnabled) text+=Loc.F($"\n5h 剩余 {P(Remaining(view.Five))} · Fable 剩余 {P(Remaining(view.Fable))}");
         if(codexEnabled&&!codex.Five.Missing)text+=Loc.F($"\nCodex 5h 剩余 {P(Remaining(codex.Five))}");
         _icon.Text = text.Length > 127 ? text[..127] : text;
@@ -45,7 +48,7 @@ public sealed class TrayIcon : IDisposable
         var size = Math.Max(16, SystemInformation.SmallIconSize.Width);
         var key = $"{size}|{claudeEnabled}|{codexEnabled}|{claudeRemaining:0}|{codexRemaining:0}";
         if (key == _lastKey) return;
-        using var bmp = QuotaIcon.Render(size,claudeRemaining,codexRemaining,claudeEnabled,codexEnabled);
+        using var bmp = QuotaIcon.Render(size,claudeRemaining,codexRemaining,claudeEnabled,codexEnabled,_claudeLogo,_codexLogo);
         var h = bmp.GetHicon();
         var previous = _icon.Icon;
         _icon.Icon = Icon.FromHandle(h);
@@ -61,6 +64,7 @@ public sealed class TrayIcon : IDisposable
         var image = _icon.Icon;
         _icon.Dispose();
         _menu.Dispose();
+        _claudeLogo.Dispose();_codexLogo.Dispose();
         image?.Dispose();
         if (_hicon != IntPtr.Zero) DestroyIcon(_hicon);
         _hicon = IntPtr.Zero;
