@@ -28,7 +28,9 @@ Each chart chooses Rate or Total independently. The numbers in its header remain
 
 ### Local usage details
 
-Hover a provider's token row or usage heading, then click the card to pin it. Each provider has its own movable window showing input, cached-input and output tokens, grouped by model and by chat/model. Confirmed subagent usage is grouped under its parent chat. Refresh updates the pinned snapshot; its range follows the entry point used to open it.
+Hover a provider's token row or usage heading, then click the card to pin it. Each provider has its own movable window showing input, cached-input and output tokens, grouped by model and by chat/model. Confirmed subagent usage is grouped under its parent chat. Its range follows the entry point used to open it.
+
+Visible pinned windows automatically refresh at the configured polling interval (5 minutes by default), preserving their range and scroll position. This only reads existing local records; it does not trigger quota requests or model calls. Hidden or closed windows do not refresh, and dragging or recent interaction briefly defers an update. **Refresh** remains available for an immediate update.
 
 <img src="docs/images/claude-usage-en.png" width="660" alt="Synthetic Claude usage grouped by model and chat" />
 <img src="docs/images/codex-usage-en.png" width="660" alt="Synthetic Codex usage grouped by model and chat" />
@@ -52,7 +54,7 @@ The gear is available in full and compact modes. Settings includes language, pro
 
 ## Getting started
 
-1. Download `QuotaWidget-v0.13.1-win-x64.zip` from [Releases](https://github.com/HailiangLoo/QuotaWidget/releases/latest) and extract it into a folder of your choice.
+1. Download `QuotaWidget-v0.13.2-win-x64.zip` from [Releases](https://github.com/HailiangLoo/QuotaWidget/releases/latest) and extract it into a folder of your choice.
 2. Open `QuotaWidget.exe` or `Start Widget.cmd`. The download includes the .NET runtime; no separate runtime installation is needed.
 3. On first launch, choose the providers to monitor and complete official sign-in, then select **Start monitoring**. No quota collection or chat-log reading begins before this step. The gear remains available in compact mode.
 4. Settings shows each provider’s connection status, sign-in/install instructions, a connection check, and a disconnect button. Disconnect stops widget monitoring; it does not sign out of the official app or delete history.

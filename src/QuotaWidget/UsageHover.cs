@@ -20,6 +20,14 @@ public partial class MainWindow
     readonly Dictionary<ChatPlatform,UsageDetailWindow> _usageWindows=new();
     PlatformUsageCard? _hoverCard;
 
+    public void RefreshPinnedUsage(DateTimeOffset now)
+    {
+        var settings=_model.Settings;
+        foreach(var (platform,window) in _usageWindows.ToArray())
+            window.RefreshIfDue(now,settings.PollIntervalSeconds,settings.TokenTrackingEnabled&&settings.Listens(platform)&&
+                window.IsVisible&&window.WindowState!=WindowState.Minimized);
+    }
+
     void InitializeUsageHover()
     {
         foreach(var (host,platform) in new[]{(CompactClaudeRate,ChatPlatform.Claude),(CompactCodexRate,ChatPlatform.Codex)}) BindUsage(host,platform,true);

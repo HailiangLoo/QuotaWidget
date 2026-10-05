@@ -17,6 +17,7 @@ public sealed class PlatformUsageCard : Border
     readonly IReadOnlyDictionary<string,ChatCacheEntry> _names;
     public StackPanel ModelRows {get;}=new();
     public StackPanel ChatRows {get;}=new();
+    public ScrollViewer TableScroll {get;}
     readonly string _accent;
     Action _refresh,_close;
     readonly TextBlock _mode;
@@ -69,7 +70,7 @@ public sealed class PlatformUsageCard : Border
         var tables=new StackPanel();
         AddSection(tables,Loc.T("按模型"),data.Models.Count,ModelRows);FillRows(ModelRows,false);
         AddSection(tables,Loc.T("按 chat / 模型"),data.Chats.Count,ChatRows);FillRows(ChatRows,true);
-        var scroll=new ScrollViewer{MaxHeight=Math.Max(200,Math.Min(640,SystemParameters.WorkArea.Height-240)),VerticalScrollBarVisibility=ScrollBarVisibility.Hidden,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled,PanningMode=PanningMode.VerticalOnly,Content=tables};body.Children.Add(scroll);
+        TableScroll=new ScrollViewer{MaxHeight=Math.Max(200,Math.Min(640,SystemParameters.WorkArea.Height-240)),VerticalScrollBarVisibility=ScrollBarVisibility.Hidden,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled,PanningMode=PanningMode.VerticalOnly,Content=tables};body.Children.Add(TableScroll);
         var footer=Text(Loc.T("本机记录 · IN 未缓存 / CACHE 命中 / OUT 输出"),10,"Muted");footer.Margin=new Thickness(0,9,0,0);footer.ToolTip=Loc.T("详细口径：设置 → 数据诊断");body.Children.Add(footer);
         if(data.Total.Conflicts>0){var warning=Text(Loc.F($"{data.Total.Conflicts} 条记录存在冲突 · 详见数据诊断"),10,"Muted");body.Children.Add(warning);}
     }

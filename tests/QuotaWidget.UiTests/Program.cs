@@ -15,7 +15,9 @@ static class Probe
         var root=Path.Combine(Path.GetTempPath(),"qw-compact-ui-"+Guid.NewGuid().ToString("N")); Directory.CreateDirectory(root);
         try
         {
-            var app=new App(); app.InitializeComponent(); Theme.Apply(true);
+            // Dispatcher-based probes must never start collectors or open the user's data.
+            var app=(App)Activator.CreateInstance(typeof(App),BindingFlags.Instance|BindingFlags.NonPublic,null,[false],null)!;
+            app.InitializeComponent(); Theme.Apply(true);
             var opts=AppOptions.Parse(["--compact","--snapshot","unused"]);
             var model=new WidgetModel(new DataPaths(root),false){ReadOnly=true};model.Initialize();model.Settings.Language="zh-CN";model.Settings.CompactMode=true;model.Settings.Width=318;
             var codex=new WidgetModel(new DataPaths(Path.Combine(root,"codex")),false){ReadOnly=true};codex.Initialize();
@@ -171,6 +173,9 @@ static class Probe
             model.Settings.CompactMode=true;window.Render();Pin("CompactCodexRate");
             Check(windows[ChatPlatform.Codex].Card.Minutes==60,"compact direct pin reused expanded scope");
             Check(windows.Values.All(w=>!w.IsVisible),"isolated handler probe displayed a native window");
+            var hiddenSnapshot=windows[ChatPlatform.Codex].Card;
+            window.RefreshPinnedUsage(now.AddDays(1));
+            Check(ReferenceEquals(windows[ChatPlatform.Codex].Card,hiddenSnapshot),"app clock refreshed an invisible pinned window");
             foreach(var w in windows.Values.ToArray()) w.Close();
             Console.WriteLine("Direct pin: cold click, click during delay, hover snapshot reuse, per-platform reuse, pinned-hover suppression, close/reopen, compact 1h scope. No native windows shown.");
             Console.WriteLine("Recent amount: previous hour excluded / full 1h / partial / thin / zero / missing values; no extrapolation; shared compact/expanded start time.");
@@ -229,6 +234,7 @@ static class Probe
             MonitoringRefreshProbe.Run(app);
             LocalizationProbe.Run(app);
             ConnectionProbe.Run(app);
+            UsageRefreshProbe.Run();
             Console.WriteLine("Monitoring UI: real selector transitions both/Claude/Codex; live meters/chart/tokens/chats and compact rows follow; paused-provider status suppressed; both restores; corner icons and palette roles verified.");
             Console.WriteLine("PASS: full-row geometry and hover, table/card same snapshot with platform/scope isolation, fixed window snapshot/drag handle/close, reused-window refresh scope, demo totals consistent. No native windows shown.");
             Console.WriteLine("PASS: both usage groupings visible (2 models / 80 chats), title mapping, no switches, refresh/close actions, provider hover entry/leave wiring.");

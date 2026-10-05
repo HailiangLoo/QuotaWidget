@@ -103,6 +103,10 @@ public sealed class AppOptions
 
 public partial class App : Application
 {
+    readonly bool _startRuntime=true;
+    public App() { }
+    // Isolated WPF probes can pump the dispatcher without starting collectors or opening real data.
+    internal App(bool startRuntime) { _startRuntime=startRuntime; }
     AppOptions _opts = new();
     DataPaths _paths = null!;
     WidgetModel _model = null!;
@@ -143,6 +147,7 @@ public partial class App : Application
 
     protected override void OnStartup(StartupEventArgs e)
     {
+        if(!_startRuntime)return;
         base.OnStartup(e);
         _opts = AppOptions.Parse(e.Args);
         Loc.Configure(_opts.Language);
@@ -258,9 +263,11 @@ public partial class App : Application
 
         _tray = new TrayIcon(this);
         _fileTimer = new DispatcherTimer(TimeSpan.FromSeconds(2), DispatcherPriority.Background, (_, _) => { if ((Monitors(ChatPlatform.Claude)&&_model.PollLatest()) | (Monitors(ChatPlatform.Codex)&&_codex.PollLatest())) Render(); }, Dispatcher);
-        // Countdowns and staleness only; the curves are cached until data changes. Hidden: tray only, less often.
+        // Cheap clock checks; visible detail windows reload local usage only when their cadence is due.
+        // Curves stay cached until data changes. Hidden widget: update the tray less often.
         _clockTimer = new DispatcherTimer(TimeSpan.FromSeconds(15), DispatcherPriority.Background, (_, _) =>
         {
+            _window.RefreshPinnedUsage(DateTimeOffset.Now);
             if (_window.IsVisible || ++_hiddenTicks % 4 == 0) Render();
         }, Dispatcher);
         _fileTimer.Start();
