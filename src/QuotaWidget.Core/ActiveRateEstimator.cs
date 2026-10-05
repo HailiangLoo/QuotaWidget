@@ -1,0 +1,200 @@
+namespace QuotaWidget.Core;
+
+/// <summary>One estimate per continuous work/observation context, independent of the viewport.
+/// A clean counter reset may share rate context without joining its accounting periods.
+/// Integer increments are spread between observations on the shared active clock, not
+/// assigned as separate bills to individual tasks. No token-to-quota conversion.</summary>
+public static class ActiveRateEstimator
+{
+    sealed record Span(DateTimeOffset Start,DateTimeOffset End,bool HardStart,bool HardEnd,double U)
+    {public double Minutes=>(End-Start).TotalMinutes;public double V=>U+Minutes;}
+
+    public static RateTrend Build(SeriesData source,DateTimeOffset asOf,IReadOnlyList<WorkSpan>? activity=null,
+        double maxWindowMinutes=120,double quantum=1,IReadOnlyList<DateTimeOffset>? fallbackEdges=null)
+    {
+        activity=WorkActivity.Episodes(activity??[],asOf);
+        // Only the estimation copy may span a counter reset. The caller's original
+        // source still owns cumulative points, coverage, reset labels and recent-hour facts.
+        var continuity=TrendContinuity.Prepare(source,asOf,activity);
+        source=continuity.Source;
+        var result=new RateTrend();var run=new List<RateSegment>();var afterReset=false;
+        foreach(var s in source.Segments)
+        {
+            if(s.End>asOf)break;
+            if(!s.Valid||s.Minutes<=0||!double.IsFinite(s.Delta)||s.Delta<0)
+            {
+                Flush(s.Issue==SegmentIssue.Reset);
+                afterReset=s.Issue==SegmentIssue.Reset;continue;
+            }
+            if(run.Count>0&&(run[^1].End!=s.Start||run[^1].Group!=s.Group)){Flush();afterReset=false;}
+            run.Add(s);
+        }
+        Flush();result.Runs.Sort((a,b)=>a.Points[0].Time.CompareTo(b.Points[0].Time));return result;
+
+        void Flush(bool closedByReset=false)
+        {
+            if(run.Count==0)return;
+            var origin=run[0].Start;var end=run[^1].End;
+            var spans=new List<Span>();double activeMinutes=0;
+            if(activity is {Count:>0})
+            {
+                // Unknown edges use the OBSERVATION segment, never the selected view.
+                var support=activity.Where(a=>a.End>origin&&a.Start<end).Select(a=>a with
+                {Start=a.KnownStart&&a.Start>origin?a.Start:origin,End=a.KnownEnd&&a.End<end?a.End:end,
+                 KnownStart=a.KnownStart&&a.Start>=origin,KnownEnd=a.KnownEnd&&a.End<=end});
+                foreach(var a in WorkActivity.Merge(support,TimeSpan.Zero))
+                {
+                    spans.Add(new(a.Start,a.End,a.KnownStart,a.KnownEnd,activeMinutes));
+                    activeMinutes+=(a.End-a.Start).TotalMinutes;
+                }
+            }
+            if(spans.Count==0){Fallback();return;}
+            var jumps=new List<(double U,double Delta)>();bool unexplained=false;
+            foreach(var s in run.Where(s=>s.Delta>0))
+            {
+                var overlap=spans.LastOrDefault(a=>a.End>s.Start&&a.Start<s.End);
+                double? u=null;
+                if(overlap is not null)
+                    u=overlap.U+((overlap.End<s.End?overlap.End:s.End)-overlap.Start).TotalMinutes;
+                else
+                {
+                    var previous=spans.LastOrDefault(a=>a.HardEnd&&a.End<=s.Start);
+                    // Only the first post-completion observation, plus a short cache grace.
+                    // A long backoff is not evidence for arbitrarily delayed attribution.
+                    var grace=TimeSpan.FromSeconds(Math.Clamp(s.Minutes*60,60,600)+60);
+                    if(previous is not null&&s.Start-previous.End<=TimeSpan.FromSeconds(60)&&s.End-previous.End<=grace)
+                        u=previous.V;
+                }
+                if(u is not { } at||at<=0){unexplained=true;break;}
+                if(jumps.Count>0&&Math.Abs(at-jumps[^1].U)<1e-8)jumps[^1]=(at,jumps[^1].Delta+s.Delta);
+                else jumps.Add((at,s.Delta));
+            }
+            // Local logs are not an account-wide activity ledger. Preserve unexplained
+            // real increments without silently attaching them to an unrelated local task.
+            if(unexplained){Fallback();return;}
+            var idleFrom=origin;
+            foreach(var span in spans)
+            {
+                if(span.HardStart&&span.Start>idleFrom)Zero(idleFrom,span.Start);
+                idleFrom=span.End;
+            }
+            if(spans[^1].HardEnd&&idleFrom<end)Zero(idleFrom,end);
+            if(jumps.Count==0)
+            {
+                result.Runs.Add(new([new(origin,0),new(end,0)],0,0));run.Clear();return;
+            }
+            var clock=DateTimeOffset.UnixEpoch;var bins=new List<RateSegment>();double from=0;
+            foreach(var jump in jumps)
+            {
+                bins.Add(new(){Start=clock.AddMinutes(from),End=clock.AddMinutes(jump.U),Delta=jump.Delta});from=jump.U;
+            }
+            // Roughly 2–3 counter updates on the active clock, capped by the user's
+            // smoothing preference. Idle wall time never flattens an entire day's work.
+            var lengths=bins.Select(s=>s.Minutes).Order().ToArray();
+            var adaptive=Math.Min(Math.Clamp(maxWindowMinutes,30,180),Math.Max(30,3*lengths[lengths.Length/2]));
+            // A completed episode followed by a full, valid idle observation closes the
+            // unreported tail even if the integer counter never changes again. Require
+            // actual samples (including the CLI's short cache grace), not elapsed time.
+            // Preserve this closure when a later episode starts with no new counter jump.
+            // A reset closes the old counter: do not leave an unreported prediction
+            // permanently appended to a completed accounting period. The reset interval
+            // itself remains unknown and is never assigned to either side.
+            // At the new counter's start, fewer than three quanta cannot identify a
+            // local peak. Include its unchanged samples instead of scaling up the
+            // first jump's short interval and then inventing a separate decaying tail.
+            var warmingUp=afterReset&&jumps.Sum(j=>j.Delta)<3*Math.Max(.0001,quantum)-1e-8;
+            var observedThrough=closedByReset||warmingUp?activeMinutes:from;var idleSample=0;
+            for(var i=0;i<spans.Count;i++)
+            {
+                var span=spans[i];if(!span.HardEnd||span.V<=observedThrough)continue;
+                var next=i+1<spans.Count?spans[i+1].Start:end;
+                while(idleSample<run.Count&&(run[idleSample].Start<span.End||run[idleSample].End<span.End.AddMinutes(1)))idleSample++;
+                if(idleSample<run.Count&&run[idleSample].End<=next)observedThrough=span.V;
+            }
+            // Zero is the observed counter increment, not a claim that each active
+            // minute cost nothing. Smooth this final interval with the preceding bins;
+            // its area is redistributed from the observed total, never added to it.
+            if(observedThrough>from+1e-8)bins.Add(new(){Start=clock.AddMinutes(from),End=clock.AddMinutes(observedThrough),Delta=0});
+            if(afterReset)bins=PoolResetStart(bins,quantum);
+            var confirmed=RateTrend.Build(new(){Key=source.Key,Segments=bins},clock,clock.AddMinutes(observedThrough),adaptive);
+            var points=confirmed.Runs.Single().Points;
+            Map(points,0,observedThrough,false,confirmed.Runs.Single().KernelMinutes);
+            // Only the remaining, unsettled activity may use a bounded live estimate.
+            // This internal flag excludes unobserved quota from totals and peak labels;
+            // the UI uses one solid stroke for the entire estimated rate curve.
+            if(activeMinutes>observedThrough+1e-8)
+            {
+                // An unchanged integer reading is not a completion event. Continue
+                // from the observed endpoint with a diminishing estimate, with no
+                // finite artificial zero. Widening steps keep long tails inexpensive.
+                // The infinite trapezoid series sums to one quantum:
+                // rate * step * (1+decay) / (120 * (1-growth*decay)).
+                var rate=points[^1].Rate;
+                var pendingFrom=observedThrough;
+                // Until the first new-period increment arrives, a saturated old
+                // counter cannot imply deceleration. Carry its estimated endpoint
+                // through the reset; only the new counter's unchanged readings use
+                // the usual one-quantum decay budget. Subsequent increments replace
+                // this prediction with the shared, area-constrained estimate above.
+                foreach(var reset in continuity.Resets.Where(r=>r.StartsAtCapacity&&r.Start>=origin&&r.End<=end))
+                {
+                    var span=spans.FirstOrDefault(a=>a.Start<=reset.End&&a.End>=reset.End);
+                    if(span is not null)pendingFrom=Math.Max(pendingFrom,span.U+(reset.End-span.Start).TotalMinutes);
+                }
+                var duration=activeMinutes-pendingFrom;
+                const double decay=.8,growth=1.1;
+                var step=rate>0?120*Math.Max(.0001,quantum)*(1-growth*decay)/(rate*(1+decay)):duration;
+                var pending=new List<TrendPoint>{new(clock.AddMinutes(observedThrough),rate)};
+                if(pendingFrom>observedThrough)pending.Add(new(clock.AddMinutes(pendingFrom),rate));
+                double elapsed=0;
+                while(elapsed<duration)
+                {
+                    var dt=Math.Min(step,duration-elapsed);
+                    rate*=1-(1-decay)*dt/step;elapsed+=dt;
+                    pending.Add(new(clock.AddMinutes(pendingFrom+elapsed),rate));step*=growth;
+                }
+                Map(pending,observedThrough,activeMinutes,true,0);
+            }
+            run.Clear();
+
+            void Map(IReadOnlyList<TrendPoint> values,double a,double b,bool provisional,double kernel)
+            {
+                foreach(var span in spans)
+                {
+                    var left=Math.Max(a,span.U);var right=Math.Min(b,span.V);if(right<=left)continue;
+                    var cut=ChartPath.Clip([values],clock.AddMinutes(left),clock.AddMinutes(right)).Single();
+                    var mapped=cut.Select(p=>new TrendPoint(span.Start.AddMinutes((p.Time-clock).TotalMinutes-span.U),p.Rate)).ToArray();
+                    if(left==span.U)mapped[0]=mapped[0] with{Time=span.Start};
+                    if(right==span.V)mapped[^1]=mapped[^1] with{Time=span.End};
+                    result.Runs.Add(new(mapped,Area(mapped),kernel,span.HardStart&&left==span.U,span.HardEnd&&right==span.V,provisional));
+                }
+            }
+            void Fallback()
+            {
+                // A coarse session marker is only a hint. If observations on both sides
+                // contain consumption, it cannot establish an inactive boundary.
+                var cuts=(fallbackEdges??[]).Where(t=>t>=origin&&t<=end).Distinct().Order().ToArray();
+                var inner=cuts.Where(t=>t>origin&&t<end).ToArray();
+                var limits=new[]{origin}.Concat(inner).Append(end).ToArray();
+                var consumed=limits.Zip(limits.Skip(1),(a,b)=>run.Any(s=>s.Delta>0&&s.End>a&&s.Start<b)).ToArray();
+                var supported=cuts.Where(t=>t==origin||t==end||!consumed[Array.BinarySearch(inner,t)]||!consumed[Array.BinarySearch(inner,t)+1]).ToArray();
+                var estimate=RateTrend.Build(new(){Key=source.Key,Segments=afterReset?PoolResetStart(run,quantum):run.ToList()},origin,end,maxWindowMinutes,supported);
+                result.Runs.AddRange(estimate.Runs);run.Clear();
+            }
+            void Zero(DateTimeOffset a,DateTimeOffset b)=>result.Runs.Add(new([new(a,0),new(b,0)],0,0));
+        }
+    }
+    // The first new-period jump has an unknown integer-counter phase. Pool it with
+    // the next two quanta before estimating shape. If that much evidence has not
+    // arrived, use the whole observed prefix, including zero increments. This affects
+    // only the new period; no rates or quota are borrowed across the reset boundary.
+    static List<RateSegment> PoolResetStart(IReadOnlyList<RateSegment> bins,double quantum)
+    {
+        var count=0;double delta=0;
+        while(count<bins.Count&&delta<3*Math.Max(.0001,quantum)-1e-8)delta+=bins[count++].Delta;
+        if(count<2)return bins.ToList();
+        var prefix=new RateSegment{Start=bins[0].Start,End=bins[count-1].End,Delta=delta,Group=bins[0].Group};
+        return new[]{prefix}.Concat(bins.Skip(count)).ToList();
+    }
+    static double Area(IReadOnlyList<TrendPoint> points)=>points.Zip(points.Skip(1),(a,b)=>(a.Rate+b.Rate)/2*(b.Time-a.Time).TotalHours).Sum();
+}

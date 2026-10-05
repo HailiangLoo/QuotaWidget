@@ -1,0 +1,362 @@
+<Window x:Class="QuotaWidget.App.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="clr-namespace:QuotaWidget.App"
+        Title="Quota Widget" Icon="Assets/quota-companion.png" WindowStyle="None" AllowsTransparency="True" Background="Transparent"
+        ResizeMode="NoResize" SizeToContent="Height" ShowInTaskbar="False" Topmost="True"
+        Width="324" UseLayoutRounding="True"
+        FontFamily="{StaticResource UiFont}" FontSize="13" Foreground="{DynamicResource Ink}"
+        TextOptions.TextFormattingMode="Ideal">
+  <Grid x:Name="Outer" Margin="12">
+    <!-- Shadow sits on its own layer so the effect never softens the text. -->
+    <Border x:Name="ShadowLayer" CornerRadius="12" Background="{DynamicResource Bg}" Margin="1">
+      <Border.Effect>
+        <DropShadowEffect x:Name="Shadow" BlurRadius="24" ShadowDepth="8" Direction="270" Opacity="0.09" Color="Black" RenderingBias="Quality" />
+      </Border.Effect>
+    </Border>
+    <Border x:Name="Frame" CornerRadius="12" Background="{DynamicResource Bg}" BorderBrush="{DynamicResource Line}" BorderThickness="1"
+            Typography.NumeralAlignment="Tabular">
+      <StackPanel>
+        <!-- Title: drag handle -->
+        <Border x:Name="TitleBar" Background="Transparent" BorderBrush="{DynamicResource Line}" BorderThickness="0,0,0,1" Padding="9,3"
+                MouseLeftButtonDown="TitleBar_MouseLeftButtonDown">
+          <DockPanel LastChildFill="True">
+            <StackPanel Orientation="Horizontal" DockPanel.Dock="Right" VerticalAlignment="Center">
+              <TextBlock x:Name="TagText" FontSize="11" Foreground="{DynamicResource Muted}" VerticalAlignment="Center" Margin="0,0,8,0" Visibility="Collapsed" />
+              <ToggleButton x:Name="CompactButton" Style="{StaticResource IconButton}" ToolTip="精简模式" Margin="0,0,3,0" Click="CompactButton_Click"
+                            AutomationProperties.Name="切换精简模式">
+                <Path x:Name="CompactGlyph" Width="13" Height="13" Stretch="Uniform" Stroke="{DynamicResource Ink}" StrokeThickness="1.7"
+                      StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Data="M4,4 H20 V20 H4 Z M4,10 H20 M9,14 L12,17 L15,14" />
+              </ToggleButton>
+              <ToggleButton x:Name="PinButton" Style="{StaticResource IconButton}" ToolTip="置顶" Click="PinButton_Click"
+                            AutomationProperties.Name="置顶">
+                <Viewbox Width="14" Height="14">
+                  <Canvas Width="24" Height="24">
+                    <Path Stroke="{DynamicResource Ink}" StrokeThickness="2" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"
+                          Data="M12,17 L12,22 M5,17 H19 V15.24 A2,2 0 0 0 17.89,13.45 L16.11,12.55 A2,2 0 0 1 15,10.76 V6 H16 A2,2 0 0 0 16,2 H8 A2,2 0 0 0 8,6 H9 V10.76 A2,2 0 0 1 7.89,12.55 L6.11,13.45 A2,2 0 0 0 5,15.24 Z" />
+                  </Canvas>
+                </Viewbox>
+              </ToggleButton>
+              <Button x:Name="SettingsButton" Style="{StaticResource IconButton}" ToolTip="设置" Margin="3,0,0,0" Click="SettingsButton_Click"
+                      AutomationProperties.Name="设置">
+                <Viewbox Width="14" Height="14">
+                  <Canvas Width="24" Height="24">
+                    <Path Stroke="{DynamicResource Ink}" StrokeThickness="2" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"
+                          Data="M20,7 H11 M14,17 H5 M20,17 A3,3 0 1 1 14,17 A3,3 0 1 1 20,17 M10,7 A3,3 0 1 1 4,7 A3,3 0 1 1 10,7" />
+                  </Canvas>
+                </Viewbox>
+              </Button>
+              <Button x:Name="HideButton" Style="{StaticResource IconButton}" ToolTip="缩到托盘" Margin="3,0,0,0" Click="HideButton_Click"
+                      AutomationProperties.Name="缩到托盘">
+                <Viewbox Width="14" Height="14">
+                  <Canvas Width="24" Height="24">
+                    <Path Stroke="{DynamicResource Ink}" StrokeThickness="2" StrokeStartLineCap="Round" Data="M5,12 H19" />
+                  </Canvas>
+                </Viewbox>
+              </Button>
+            </StackPanel>
+            <DockPanel VerticalAlignment="Center" LastChildFill="True">
+              <TextBlock x:Name="DisplayLabelText" DockPanel.Dock="Left" Text="已用 %" FontSize="10" Foreground="{DynamicResource Muted}" VerticalAlignment="Center" />
+              <Button x:Name="CompactStatus" DockPanel.Dock="Left" Style="{StaticResource FlatButton}" Visibility="Collapsed" Margin="5,0,0,0"
+                      Padding="4,0" FontSize="11" FontWeight="Bold" Foreground="{DynamicResource Orange}" Content="!" Click="CompactStatus_Click"
+                      AutomationProperties.Name="查看采集状态" />
+              <Button x:Name="HistoryButton" DockPanel.Dock="Left" Style="{StaticResource FlatButton}" Margin="6,0,0,0" Padding="5,3" Click="HistoryButton_Click"
+                      ToolTip="使用记录" AutomationProperties.Name="历史使用记录">
+                <StackPanel Orientation="Horizontal">
+                  <Path Width="12" Height="12" Stretch="Uniform" Margin="0,0,4,0" Stroke="{DynamicResource Muted}" StrokeThickness="1.5" StrokeStartLineCap="Round" StrokeEndLineCap="Round"
+                        Data="M3,10 A9,9 0 1 1 3,15 M3,4 V10 H9 M12,6 V12 L16,14" />
+                  <TextBlock Text="历史" FontSize="10" Foreground="{DynamicResource Muted}" />
+                </StackPanel>
+              </Button>
+              <TextBlock x:Name="SessionStartText" FontSize="10" Foreground="{DynamicResource Muted}" Margin="5,0,0,0"
+                         VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+            </DockPanel>
+          </DockPanel>
+        </Border>
+
+        <!-- One-line note, only when something needs saying -->
+        <Border x:Name="NoteBar" Background="{DynamicResource Raised}" Padding="12,6" Visibility="Collapsed" MouseLeftButtonUp="NoteBar_MouseLeftButtonUp">
+          <TextBlock x:Name="NoteText" FontSize="11" Foreground="{DynamicResource Muted}" TextTrimming="CharacterEllipsis" />
+        </Border>
+
+        <StackPanel x:Name="HistoryPanel" Visibility="Collapsed" Margin="10,8,10,10">
+          <DockPanel Margin="0,0,0,5">
+            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+              <Button x:Name="PreviousMonthButton" Style="{StaticResource IconButton}" Width="22" Height="24" Content="‹" FontSize="18" Click="PreviousMonth_Click" ToolTip="上个月" AutomationProperties.Name="上个月" />
+              <Button x:Name="NextMonthButton" Style="{StaticResource IconButton}" Width="22" Height="24" Content="›" FontSize="18" Click="NextMonth_Click" ToolTip="下个月" AutomationProperties.Name="下个月" />
+              <Button Style="{StaticResource FlatButton}" FontSize="10" Padding="4,3" Margin="2,0,0,0" Content="今天" Click="HistoryToday_Click" />
+              <Button Style="{StaticResource FlatButton}" FontSize="10" Padding="4,3" Content="返回" Click="HistoryBack_Click" ToolTip="返回实时" />
+            </StackPanel>
+            <TextBlock x:Name="HistoryMonthTitle" FontSize="14" FontWeight="SemiBold" VerticalAlignment="Center" />
+          </DockPanel>
+          <TextBlock x:Name="MonthQuotaSummary" FontSize="10" Margin="0,0,0,8" />
+          <UniformGrid Columns="7" Margin="0,0,0,4">
+            <UniformGrid.Resources><Style TargetType="TextBlock"><Setter Property="FontSize" Value="10"/><Setter Property="Foreground" Value="{DynamicResource Muted}"/><Setter Property="HorizontalAlignment" Value="Center"/></Style></UniformGrid.Resources>
+            <TextBlock Text="一"/><TextBlock Text="二"/><TextBlock Text="三"/><TextBlock Text="四"/><TextBlock Text="五"/><TextBlock Text="六"/><TextBlock Text="日"/>
+          </UniformGrid>
+          <UniformGrid x:Name="HistoryCalendar" Columns="7" KeyboardNavigation.DirectionalNavigation="Contained" />
+          <DockPanel Margin="0,9,0,4">
+            <TextBlock x:Name="HistoryDayCount" DockPanel.Dock="Right" Foreground="{DynamicResource Muted}" FontSize="10" VerticalAlignment="Center" />
+            <TextBlock x:Name="HistoryDayTitle" FontSize="12" FontWeight="SemiBold" />
+          </DockPanel>
+          <ScrollViewer MaxHeight="68" VerticalScrollBarVisibility="Hidden" HorizontalScrollBarVisibility="Disabled" PanningMode="VerticalOnly">
+            <StackPanel x:Name="HistorySessions" />
+          </ScrollViewer>
+          <TextBlock x:Name="HistoryPeriod" FontSize="10" Foreground="{DynamicResource Muted}" TextTrimming="CharacterEllipsis" Margin="0,6,0,4" />
+          <ScrollViewer MaxHeight="188" VerticalScrollBarVisibility="Hidden" HorizontalScrollBarVisibility="Disabled" PanningMode="VerticalOnly">
+            <StackPanel x:Name="HistoryChats" />
+          </ScrollViewer>
+        </StackPanel>
+
+        <!-- Main -->
+        <StackPanel x:Name="MainPanel" Margin="9,0,9,8">
+          <Grid x:Name="CodexCompactSummary" Visibility="Collapsed" Margin="4,3,4,2" Height="30">
+            <Grid.ColumnDefinitions><ColumnDefinition Width="112"/><ColumnDefinition/></Grid.ColumnDefinitions>
+            <local:QuotaRing x:Name="CodexInlineMeter" Label="week" Accent="Violet" Platform="Codex" Compact="True" SingleProvider="True" />
+            <StackPanel x:Name="CodexInlineUsage" Grid.Column="1" Background="Transparent" VerticalAlignment="Center">
+              <Viewbox Stretch="Uniform" StretchDirection="DownOnly" HorizontalAlignment="Right">
+                <StackPanel Orientation="Horizontal">
+                  <TextBlock x:Name="CodexInlineRateValue" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource Violet}" VerticalAlignment="Center" />
+                  <TextBlock Text="/h" FontSize="9" Foreground="{DynamicResource Violet}" VerticalAlignment="Center" />
+                  <TextBlock x:Name="CodexInlinePoints" Visibility="Collapsed" FontSize="9" Foreground="{DynamicResource Muted}" Margin="6,0,0,0" VerticalAlignment="Center" />
+                </StackPanel>
+              </Viewbox>
+            </StackPanel>
+          </Grid>
+          <Grid x:Name="MeterGrid" Margin="-3,8,-3,0">
+            <Grid.ColumnDefinitions><ColumnDefinition /><ColumnDefinition /><ColumnDefinition /><ColumnDefinition /></Grid.ColumnDefinitions>
+            <local:QuotaRing x:Name="FiveMeter" Grid.Column="0" Label="5h" Accent="Blue" ShowPlatformIcon="True" />
+            <local:QuotaRing x:Name="WeekMeter" Grid.Column="1" Label="week" Accent="Claude" />
+            <local:QuotaRing x:Name="FableMeter" Grid.Column="2" Label="Fable" Accent="Fable" />
+            <local:QuotaRing x:Name="CodexFiveMeter" Grid.Column="3" Label="5h" Accent="Blue" Platform="Codex" ShowPlatformIcon="True" Visibility="Collapsed" />
+            <local:QuotaRing x:Name="CodexMeter" Grid.Column="3" Label="week" Accent="Violet" Platform="Codex" ShowPlatformIcon="True" />
+            <Border x:Name="MeterDivider" Grid.Column="3" Width="1" HorizontalAlignment="Left" Background="{DynamicResource Line}" Margin="0,0,0,9" IsHitTestVisible="False" />
+          </Grid>
+
+          <StackPanel x:Name="CompactDetails" Visibility="Collapsed" Margin="4,0,4,0">
+            <Grid x:Name="CompactRates" Height="20" Background="Transparent">
+              <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition/></Grid.ColumnDefinitions>
+              <StackPanel x:Name="CompactClaudeRate" Grid.Column="0" VerticalAlignment="Center" Background="Transparent" Margin="0,0,4,0">
+                <Viewbox Stretch="Uniform" StretchDirection="DownOnly" HorizontalAlignment="Left">
+                  <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="Claude" Foreground="{DynamicResource Claude}" FontSize="10" Margin="0,0,3,0" VerticalAlignment="Center" />
+                    <TextBlock x:Name="CompactClaudeRateValue" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource Claude}" VerticalAlignment="Center" />
+                    <TextBlock Text="/h" FontSize="9" Foreground="{DynamicResource Claude}" VerticalAlignment="Center" />
+                    <TextBlock x:Name="CompactClaudePoints" Visibility="Collapsed" FontSize="9" Foreground="{DynamicResource Muted}" Margin="5,0,0,0" VerticalAlignment="Center" />
+                  </StackPanel>
+                </Viewbox>
+              </StackPanel>
+              <StackPanel x:Name="CompactCodexRate" Grid.Column="1" VerticalAlignment="Center" Background="Transparent" Margin="4,0,0,0">
+                <Viewbox Stretch="Uniform" StretchDirection="DownOnly" HorizontalAlignment="Right">
+                  <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="Codex" Foreground="{DynamicResource Violet}" FontSize="10" Margin="0,0,3,0" VerticalAlignment="Center" />
+                    <TextBlock x:Name="CompactCodexRateValue" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource Violet}" VerticalAlignment="Center" />
+                    <TextBlock Text="/h" FontSize="9" Foreground="{DynamicResource Violet}" VerticalAlignment="Center" />
+                    <TextBlock x:Name="CompactCodexPoints" Visibility="Collapsed" FontSize="9" Foreground="{DynamicResource Muted}" Margin="5,0,0,0" VerticalAlignment="Center" />
+                  </StackPanel>
+                </Viewbox>
+              </StackPanel>
+            </Grid>
+            <Border x:Name="CompactChats" BorderBrush="{DynamicResource Line}" BorderThickness="0,1,0,0" Padding="0,3,0,0">
+              <StackPanel>
+                <TextBlock x:Name="CompactChatsEmpty" Text="暂无计时 chat" FontSize="10" Foreground="{DynamicResource Muted}" Margin="1,2,0,0" />
+                <StackPanel x:Name="CompactChatRows" />
+              </StackPanel>
+            </Border>
+          </StackPanel>
+
+          <Border x:Name="ChartPanel" BorderBrush="{DynamicResource Line}" BorderThickness="0,1,0,0" Margin="0,0,0,0" Padding="0,6,0,0">
+            <StackPanel>
+                <UniformGrid x:Name="RangeTabs" Columns="6" Margin="-1,0,-1,2">
+                  <ToggleButton Style="{StaticResource TabButton}" Tag="60" Content="1h" Click="Range_Click" />
+                  <ToggleButton Style="{StaticResource TabButton}" Tag="300" Content="5h" Click="Range_Click" />
+                  <ToggleButton Style="{StaticResource TabButton}" Tag="720" Content="12h" Click="Range_Click" />
+                  <ToggleButton Style="{StaticResource TabButton}" Tag="1440" Content="24h" Click="Range_Click" />
+                  <ToggleButton Style="{StaticResource TabButton}" Tag="4320" Content="3d" Click="Range_Click" />
+                  <ToggleButton Style="{StaticResource TabButton}" Tag="0" Content="all" Click="Range_Click" ToolTip="当前账号 · 全部记录" />
+                </UniformGrid>
+              <Grid Margin="-5,0,-5,0">
+                <local:RateChart x:Name="Chart" />
+                <Canvas>
+                  <Border x:Name="ClaudeUsageHotspot" Canvas.Left="0" Width="95" Height="19" Background="Transparent" />
+                  <Border x:Name="CodexUsageHotspot" Canvas.Left="0" Width="95" Height="19" Background="Transparent" />
+                  <StackPanel x:Name="ClaudeChartModes" Orientation="Horizontal" Height="20">
+                    <ToggleButton x:Name="RateMode" Style="{StaticResource TabButton}" FontSize="10" Width="30" Height="20" Padding="0" Content="速率" Tag="rate" Click="ChartMode_Click" ToolTip="Claude / Fable · 速率" AutomationProperties.Name="Claude / Fable 速率" />
+                    <ToggleButton x:Name="CumulativeMode" Style="{StaticResource TabButton}" FontSize="10" Width="30" Height="20" Padding="0" Content="累计" Tag="cumulative" Click="ChartMode_Click" ToolTip="Claude / Fable · 累计" AutomationProperties.Name="Claude / Fable 累计" />
+                  </StackPanel>
+                  <StackPanel x:Name="CodexChartModes" Orientation="Horizontal" Height="20">
+                    <ToggleButton x:Name="CodexRateMode" Style="{StaticResource TabButton}" FontSize="10" Width="30" Height="20" Padding="0" Content="速率" Tag="rate" Click="ChartMode_Click" ToolTip="Codex · 速率" AutomationProperties.Name="Codex 速率" />
+                    <ToggleButton x:Name="CodexCumulativeMode" Style="{StaticResource TabButton}" FontSize="10" Width="30" Height="20" Padding="0" Content="累计" Tag="cumulative" Click="ChartMode_Click" ToolTip="Codex · 累计" AutomationProperties.Name="Codex 累计" />
+                  </StackPanel>
+                  <ToggleButton x:Name="ClaudeCollapseButton" Canvas.Right="0" Style="{StaticResource IconButton}" Width="21" Height="20" FontSize="12" Content="⌄" Tag="Claude" Click="ChartCollapse_Click" AutomationProperties.Name="收起 Claude 图表" />
+                  <ToggleButton x:Name="CodexCollapseButton" Canvas.Right="0" Style="{StaticResource IconButton}" Width="21" Height="20" FontSize="12" Content="⌄" Tag="Codex" Click="ChartCollapse_Click" AutomationProperties.Name="收起 Codex 图表" />
+                </Canvas>
+              </Grid>
+              <StackPanel x:Name="LegendBar" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,0,0,1">
+                  <ToggleButton x:Name="TotalLegend" Style="{StaticResource LegendButton}" IsChecked="True" Click="Legend_Click" AutomationProperties.Name="显示或隐藏 Claude">
+                    <StackPanel Orientation="Horizontal">
+                      <Border Width="10" Height="2" Background="{DynamicResource Claude}" VerticalAlignment="Center" Margin="0,0,4,0" />
+                      <TextBlock Text="Claude" />
+                    </StackPanel>
+                  </ToggleButton>
+                  <ToggleButton x:Name="FableLegend" Style="{StaticResource LegendButton}" IsChecked="True" Margin="6,0,0,0" Click="Legend_Click" AutomationProperties.Name="显示或隐藏 Fable">
+                    <StackPanel Orientation="Horizontal">
+                      <Line X1="0" X2="10" Y1="1" Y2="1" Stroke="{DynamicResource Fable}" StrokeThickness="2" VerticalAlignment="Center" Margin="0,0,4,0" />
+                      <TextBlock x:Name="FableLegendText" Text="Fable" />
+                    </StackPanel>
+                  </ToggleButton>
+                  <ToggleButton x:Name="CodexLegend" Style="{StaticResource LegendButton}" IsChecked="True" Margin="6,0,0,0" Click="Legend_Click" AutomationProperties.Name="显示或隐藏 Codex">
+                    <StackPanel Orientation="Horizontal">
+                      <Border Width="10" Height="2" Background="{DynamicResource Violet}" VerticalAlignment="Center" Margin="0,0,3,0" />
+                      <TextBlock Text="Codex" />
+                    </StackPanel>
+                  </ToggleButton>
+              </StackPanel>
+              <Grid x:Name="TokenPanel" Margin="0,7,0,2">
+                <Grid.ColumnDefinitions><ColumnDefinition Width="44"/><ColumnDefinition/><ColumnDefinition/><ColumnDefinition/></Grid.ColumnDefinitions>
+                <Grid.RowDefinitions><RowDefinition Height="15"/><RowDefinition Height="22"/><RowDefinition Height="22"/></Grid.RowDefinitions>
+                <Button x:Name="TokenScope" Grid.Column="0" Content="TOKEN" FontSize="9" Padding="0" HorizontalAlignment="Left" Style="{StaticResource FlatButton}" Foreground="{DynamicResource Muted}" Click="TokenDiagnostics_Click" ToolTip="数据诊断" />
+                <TextBlock Grid.Column="1" Text="IN" FontSize="9" Foreground="{DynamicResource Muted}" HorizontalAlignment="Right" ToolTip="未缓存输入" />
+                <TextBlock Grid.Column="2" Text="CACHE" FontSize="9" Foreground="{DynamicResource Muted}" HorizontalAlignment="Right" ToolTip="缓存命中的输入" />
+                <TextBlock Grid.Column="3" Text="OUT" FontSize="9" Foreground="{DynamicResource Muted}" HorizontalAlignment="Right" ToolTip="输出（含推理）" />
+                <TextBlock x:Name="ClaudeTokenLabel" Grid.Row="1" Text="Claude" FontSize="10" Foreground="{DynamicResource Claude}" VerticalAlignment="Center" />
+                <TextBlock x:Name="ClaudeInput" Grid.Row="1" Grid.Column="1" FontSize="12" FontWeight="SemiBold" HorizontalAlignment="Right" VerticalAlignment="Center" />
+                <TextBlock x:Name="ClaudeCached" Grid.Row="1" Grid.Column="2" FontSize="12" FontWeight="SemiBold" HorizontalAlignment="Right" VerticalAlignment="Center" />
+                <TextBlock x:Name="ClaudeOutput" Grid.Row="1" Grid.Column="3" FontSize="12" FontWeight="SemiBold" HorizontalAlignment="Right" VerticalAlignment="Center" />
+                <TextBlock x:Name="CodexTokenLabel" Grid.Row="2" Text="Codex" FontSize="10" Foreground="{DynamicResource Violet}" VerticalAlignment="Center" />
+                <TextBlock x:Name="CodexInput" Grid.Row="2" Grid.Column="1" FontSize="12" FontWeight="SemiBold" HorizontalAlignment="Right" VerticalAlignment="Center" />
+                <TextBlock x:Name="CodexCached" Grid.Row="2" Grid.Column="2" FontSize="12" FontWeight="SemiBold" HorizontalAlignment="Right" VerticalAlignment="Center" />
+                <TextBlock x:Name="CodexOutput" Grid.Row="2" Grid.Column="3" FontSize="12" FontWeight="SemiBold" HorizontalAlignment="Right" VerticalAlignment="Center" />
+                <Border x:Name="ClaudeTokenHitArea" Grid.Row="1" Grid.ColumnSpan="4" Background="Transparent" />
+                <Border x:Name="CodexTokenHitArea" Grid.Row="2" Grid.ColumnSpan="4" Background="Transparent" />
+              </Grid>
+            </StackPanel>
+          </Border>
+          <Border x:Name="CachePanel" BorderBrush="{DynamicResource Line}" BorderThickness="0,1,0,0" Margin="0,8,0,0" Padding="0,8,0,0">
+            <StackPanel>
+              <TextBlock x:Name="CacheEmpty" Text="暂无近期可识别的本地 chat" Foreground="{DynamicResource Muted}" FontSize="11" Margin="0,7,0,3" />
+              <ScrollViewer MaxHeight="140" VerticalScrollBarVisibility="Hidden" HorizontalScrollBarVisibility="Disabled" Margin="0,3,0,0" PanningMode="VerticalOnly">
+                <StackPanel x:Name="CacheRows" />
+              </ScrollViewer>
+              <Expander x:Name="ExpiredChats" Foreground="{DynamicResource Muted}" FontSize="10" Visibility="Collapsed" Margin="0,3,0,0">
+                <Expander.Template>
+                  <ControlTemplate TargetType="Expander">
+                    <StackPanel>
+                      <ToggleButton Style="{StaticResource FlatButton}" Padding="0,4" HorizontalContentAlignment="Left" Foreground="{DynamicResource Muted}"
+                                    IsChecked="{Binding IsExpanded, RelativeSource={RelativeSource TemplatedParent}}">
+                        <StackPanel Orientation="Horizontal">
+                          <TextBlock x:Name="Arrow" Text="›" Margin="0,0,6,0" />
+                          <ContentPresenter Content="{TemplateBinding Header}" />
+                        </StackPanel>
+                      </ToggleButton>
+                      <ContentPresenter x:Name="ExpandedContent" Content="{TemplateBinding Content}" Visibility="Collapsed" />
+                    </StackPanel>
+                    <ControlTemplate.Triggers>
+                      <Trigger Property="IsExpanded" Value="True">
+                        <Setter TargetName="ExpandedContent" Property="Visibility" Value="Visible" />
+                        <Setter TargetName="Arrow" Property="Text" Value="⌄" />
+                      </Trigger>
+                    </ControlTemplate.Triggers>
+                  </ControlTemplate>
+                </Expander.Template>
+                <ScrollViewer MaxHeight="112" VerticalScrollBarVisibility="Hidden" HorizontalScrollBarVisibility="Disabled" PanningMode="VerticalOnly">
+                  <StackPanel x:Name="ExpiredRows" />
+                </ScrollViewer>
+              </Expander>
+            </StackPanel>
+          </Border>
+        </StackPanel>
+
+        <!-- Settings -->
+        <StackPanel x:Name="SettingsPanel" Margin="14" Visibility="Collapsed">
+          <TextBlock Text="显示设置" FontSize="14" FontWeight="Medium" Margin="0,0,0,2" />
+          <DockPanel Margin="0,12,0,0">
+            <ComboBox x:Name="MonitoringCombo" DockPanel.Dock="Right" Style="{StaticResource FlatCombo}" SelectionChanged="MonitoringCombo_SelectionChanged" PreviewMouseWheel="MonitoringCombo_PreviewMouseWheel">
+              <ComboBoxItem Tag="both" Content="两者"/><ComboBoxItem Tag="claude" Content="仅 Claude"/><ComboBoxItem Tag="codex" Content="仅 Codex"/>
+            </ComboBox>
+            <TextBlock Text="监听平台" VerticalAlignment="Center" />
+          </DockPanel>
+          <DockPanel Margin="0,12,0,0">
+            <ComboBox x:Name="DisplayCombo" DockPanel.Dock="Right" Style="{StaticResource FlatCombo}" SelectionChanged="DisplayCombo_SelectionChanged">
+              <ComboBoxItem Tag="used" Content="已用额度" />
+              <ComboBoxItem Tag="remaining" Content="剩余额度" />
+            </ComboBox>
+            <TextBlock Text="显示方式" VerticalAlignment="Center" />
+          </DockPanel>
+          <DockPanel Margin="0,12,0,0">
+            <ComboBox x:Name="IntervalCombo" DockPanel.Dock="Right" Style="{StaticResource FlatCombo}" SelectionChanged="IntervalCombo_SelectionChanged">
+              <ComboBoxItem Tag="300" Content="5 分钟" />
+              <ComboBoxItem Tag="600" Content="10 分钟" />
+              <ComboBoxItem Tag="1800" Content="30 分钟" />
+              <ComboBoxItem Tag="3600" Content="60 分钟" />
+            </ComboBox>
+            <TextBlock Text="采集间隔" VerticalAlignment="Center" />
+          </DockPanel>
+          <DockPanel Margin="0,12,0,0">
+            <CheckBox x:Name="SmoothCheck" DockPanel.Dock="Right" Style="{StaticResource FlatCheck}" Click="SmoothCheck_Click" VerticalAlignment="Center" />
+            <TextBlock Text="速率趋势平滑" VerticalAlignment="Center" />
+          </DockPanel>
+          <DockPanel Margin="0,10,0,0">
+            <ComboBox x:Name="TrendCombo" DockPanel.Dock="Right" Style="{StaticResource FlatCombo}" SelectionChanged="TrendCombo_SelectionChanged">
+              <ComboBoxItem Tag="60" Content="60 分钟" /><ComboBoxItem Tag="90" Content="90 分钟" /><ComboBoxItem Tag="120" Content="120 分钟" />
+            </ComboBox>
+            <TextBlock Text="平滑上限" VerticalAlignment="Center" />
+          </DockPanel>
+          <TextBlock x:Name="CollectorText" Margin="0,6,0,0" FontSize="11" Foreground="{DynamicResource Muted}" TextWrapping="Wrap" />
+          <DockPanel Margin="0,14,0,0">
+            <CheckBox x:Name="CacheCheck" DockPanel.Dock="Right" Style="{StaticResource FlatCheck}" Click="CacheCheck_Click" VerticalAlignment="Center" AutomationProperties.Name="本地 chat 缓存提醒" />
+            <TextBlock Text="本地 chat 缓存提醒" VerticalAlignment="Center" />
+          </DockPanel>
+          <DockPanel Margin="0,12,0,0">
+            <CheckBox x:Name="TokenCheck" DockPanel.Dock="Right" Style="{StaticResource FlatCheck}" Click="TokenCheck_Click" VerticalAlignment="Center" />
+            <TextBlock Text="本地 token 统计" VerticalAlignment="Center" />
+          </DockPanel>
+          <Expander x:Name="TokenDiagnostics" Header="数据诊断" FontSize="11" Margin="0,8,0,0" Foreground="{DynamicResource Muted}">
+            <ScrollViewer MaxHeight="220" VerticalScrollBarVisibility="Hidden" HorizontalScrollBarVisibility="Disabled" PanningMode="VerticalOnly">
+              <StackPanel Margin="0,5,0,0">
+                <Expander x:Name="ChartCalculation" Header="图表计算" Margin="0,3,0,0">
+                  <TextBlock x:Name="ChartDiagnosticsText" TextWrapping="Wrap" Margin="0,5,0,8" />
+                </Expander>
+                <Expander x:Name="TokenCalculation" Header="Token 记录" Margin="0,3,0,0">
+                  <TextBlock x:Name="TokenDiagnosticsText" TextWrapping="Wrap" Margin="0,5,0,8" />
+                </Expander>
+                <Expander Header="历史与提醒" Margin="0,3,0,0">
+                  <StackPanel Margin="0,5,0,8">
+                    <TextBlock TextWrapping="Wrap" Text="使用段：连续 4h 无日志活动才另开一段；重启和跨日不拆分。恢复的记录可能不完整。&#10;日历：各平台分别统计周额度点；Claude 已包含 Fable。缺口不补零，跨午夜区间按时长分摊，≈ 表示估计。&#10;compact：列表保留 24h，之后仅在历史显示。提醒时间是最近请求的年龄，不是服务端缓存寿命。&#10;精简均速：近 1h 有效增量 ÷ 有效时长，至少 15m 才显示；* 表示记录不全。" />
+                    <TextBlock x:Name="CacheDiagnosticsText" TextWrapping="Wrap" Margin="0,5,0,0" />
+                  </StackPanel>
+                </Expander>
+                <Expander Header="采集与登录" Margin="0,3,0,0">
+                  <StackPanel Margin="0,5,0,8">
+                    <TextBlock x:Name="CollectorDiagnosticsText" TextWrapping="Wrap" Margin="0,0,0,5" />
+                    <TextBlock TextWrapping="Wrap" Text="Token 和提醒只读本机日志，首次分批补读，随后只读新增记录；关闭统计会暂停读取，已有数据保留。&#10;Claude 使用挂件专用登录；Codex 复用现有官方登录，不复制凭证。&#10;开启退出注销只影响 Claude：正常退出时删除本机凭证，下次需重新登录。缩到托盘不算退出；崩溃、关机不保证完成，服务端撤销未验证。" />
+                    <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
+                      <Button x:Name="ClaudeLoginButton" Style="{StaticResource FlatButton}" Content="登录 Claude" Click="ClaudeLogin_Click" />
+                      <Button x:Name="ClaudeLogoutButton" Style="{StaticResource FlatButton}" Content="退出登录" Margin="6,0,0,0" Click="ClaudeLogout_Click" />
+                    </StackPanel>
+                  </StackPanel>
+                </Expander>
+              </StackPanel>
+            </ScrollViewer>
+          </Expander>
+          <DockPanel Margin="0,14,0,0">
+            <CheckBox x:Name="AutoLogoutCheck" DockPanel.Dock="Right" Style="{StaticResource FlatCheck}" Click="AutoLogoutCheck_Click" VerticalAlignment="Center" AutomationProperties.Name="退出挂件时自动退出 Claude 登录" />
+            <TextBlock Text="退出时退出 Claude 登录" ToolTip="退出挂件时自动退出 Claude 登录" TextWrapping="Wrap" Margin="0,0,10,0" VerticalAlignment="Center" />
+          </DockPanel>
+          <TextBlock Text="下次需重新登录；缩到托盘不受影响。" TextWrapping="Wrap" FontSize="11" Foreground="{DynamicResource Muted}" Margin="0,5,0,0" />
+          <Button Style="{StaticResource FlatButton}" Background="{DynamicResource Raised}" Padding="8" Margin="0,12,0,0" HorizontalContentAlignment="Center"
+                  Content="返回小窗" Click="BackButton_Click" />
+        </StackPanel>
+      </StackPanel>
+    </Border>
+    <!-- Width grip on the right edge (240–340) -->
+    <Thumb x:Name="WidthGrip" HorizontalAlignment="Right" Width="6" Margin="0,40,-3,12" Cursor="SizeWE" DragDelta="WidthGrip_DragDelta" DragCompleted="WidthGrip_DragCompleted">
+      <Thumb.Template>
+        <ControlTemplate TargetType="Thumb">
+          <Border Background="Transparent" />
+        </ControlTemplate>
+      </Thumb.Template>
+    </Thumb>
+    <local:ChartInspectOverlay x:Name="ChartInspection" />
+  </Grid>
+</Window>

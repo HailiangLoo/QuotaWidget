@@ -1,0 +1,273 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Quota Widget Snapshot v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "sourceId",
+    "profileKey",
+    "attemptedAt",
+    "status",
+    "effectivePollIntervalSeconds",
+    "snapshot"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1
+    },
+    "sourceId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 80
+    },
+    "profileKey": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 80
+    },
+    "planLabel": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "maxLength": 40,
+      "description": "Optional display label for the plan, e.g. Max (5x). Added for the native widget; absent is fine."
+    },
+    "attemptedAt": {
+      "$ref": "#/$defs/timestamp"
+    },
+    "status": {
+      "enum": [
+        "ok",
+        "partial",
+        "error",
+        "auth_required",
+        "rate_limited"
+      ]
+    },
+    "effectivePollIntervalSeconds": {
+      "type": "integer",
+      "minimum": 60
+    },
+    "retryAfterSeconds": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 0
+    },
+    "errorCode": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "maxLength": 100
+    },
+    "snapshot": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "id",
+            "observedAt",
+            "limits"
+          ],
+          "properties": {
+            "id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 150
+            },
+            "observedAt": {
+              "$ref": "#/$defs/timestamp"
+            },
+            "limits": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "fiveHour",
+                "allWeek",
+                "fableWeek"
+              ],
+              "properties": {
+                "fiveHour": {
+                  "$ref": "#/$defs/nullableLimit"
+                },
+                "allWeek": {
+                  "$ref": "#/$defs/nullableLimit"
+                },
+                "fableWeek": {
+                  "$ref": "#/$defs/nullableLimit"
+                }
+              }
+            }
+          }
+        }
+      ]
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "enum": [
+              "ok",
+              "partial"
+            ]
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "snapshot": {
+            "type": "object"
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "snapshot": {
+            "type": "null"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "ok"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "snapshot": {
+            "properties": {
+              "limits": {
+                "properties": {
+                  "fiveHour": {
+                    "type": "object"
+                  },
+                  "allWeek": {
+                    "type": "object"
+                  },
+                  "fableWeek": {
+                    "type": "object"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "partial"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "snapshot": {
+            "properties": {
+              "limits": {
+                "anyOf": [
+                  {
+                    "properties": {
+                      "fiveHour": {
+                        "type": "object"
+                      }
+                    }
+                  },
+                  {
+                    "properties": {
+                      "allWeek": {
+                        "type": "object"
+                      }
+                    }
+                  },
+                  {
+                    "properties": {
+                      "fableWeek": {
+                        "type": "object"
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?(?:Z|[+-]\\d{2}:\\d{2})$"
+    },
+    "nullableLimit": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "$ref": "#/$defs/limit"
+        }
+      ]
+    },
+    "limit": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "usedPercent",
+        "resetsAt",
+        "windowId",
+        "windowMode"
+      ],
+      "properties": {
+        "usedPercent": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "resetsAt": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "#/$defs/timestamp"
+            }
+          ]
+        },
+        "windowId": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1,
+          "maxLength": 150
+        },
+        "windowMode": {
+          "enum": [
+            "fixed",
+            "rolling",
+            "unknown"
+          ]
+        }
+      }
+    }
+  }
+}

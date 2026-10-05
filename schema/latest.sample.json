@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "sourceId": "demo-only",
+  "profileKey": "demo-max-5x",
+  "attemptedAt": "2026-10-01T04:56:02+08:00",
+  "status": "ok",
+  "effectivePollIntervalSeconds": 300,
+  "retryAfterSeconds": null,
+  "errorCode": null,
+  "snapshot": {
+    "id": "demo-20261001-045600",
+    "observedAt": "2026-10-01T04:56:00+08:00",
+    "limits": {
+      "fiveHour": {
+        "usedPercent": 69,
+        "resetsAt": "2026-10-01T08:05:00+08:00",
+        "windowId": null,
+        "windowMode": "unknown"
+      },
+      "allWeek": {
+        "usedPercent": 44,
+        "resetsAt": "2026-10-01T16:55:00+08:00",
+        "windowId": null,
+        "windowMode": "unknown"
+      },
+      "fableWeek": {
+        "usedPercent": 15,
+        "resetsAt": "2026-10-01T16:55:00+08:00",
+        "windowId": null,
+        "windowMode": "unknown"
+      }
+    }
+  }
+}

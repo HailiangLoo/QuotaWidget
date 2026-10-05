@@ -1,0 +1,19 @@
+name: Bug report / 问题反馈
+description: Report a reproducible problem without private account data.
+body:
+  - type: markdown
+    attributes:
+      value: 请勿上传登录配置、凭证、真实聊天日志或整个数据目录。截图请脱敏。
+  - type: input
+    id: version
+    attributes:
+      label: QuotaWidget / Windows version
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Reproduction / 复现步骤
+      description: Include monitoring mode, chart range, and expected versus actual behavior.
+    validations:
+      required: true
