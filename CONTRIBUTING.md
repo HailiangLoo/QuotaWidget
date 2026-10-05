@@ -12,6 +12,8 @@ dotnet run --project src/QuotaWidget -- --demo --scenario codex-plus --language 
 
 Core tests use temporary directories and synthetic records. WPF tests exercise real layouts and handlers without starting background collectors.
 
+To refresh the README gallery, run `pwsh -File scripts/Update-Screenshots.ps1` with PowerShell 7. This uses the `showcase` demo scenario: continuous synthetic collection with both Codex quota windows. Other demo scenarios retain simulated sleep and connection gaps for diagnostics. Real sleep labels require recorded Windows power events; an idle chat does not imply sleep.
+
 Optional official CLI integration checks are skipped by default. To run them explicitly on your own computer:
 
 ```powershell

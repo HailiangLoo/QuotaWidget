@@ -12,6 +12,8 @@ dotnet run --project src/QuotaWidget -- --demo --scenario codex-plus
 
 核心测试使用临时目录和合成记录。WPF 测试调用真实布局与处理函数，不启动采集后台任务。
 
+更新 README 展示图时，用 PowerShell 7 运行 `pwsh -File scripts/Update-Screenshots.ps1`。脚本采用 `showcase` 演示场景：连续采样的合成数据，并展示 Codex 的两个额度窗口。其他演示场景保留模拟休眠和连接中断，供调试使用。真实界面的“休眠”只由 Windows 电源事件判定，chat 暂时没有活动不代表电脑休眠。
+
 可选的官方 CLI 集成检查默认跳过。要在自己电脑显式运行：
 
 ```powershell

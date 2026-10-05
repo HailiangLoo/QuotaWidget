@@ -30,7 +30,9 @@ public static class DemoData
         var store = new HistoryStore(paths, demoMode: true);
         var events = new EventLog(paths);
         var rnd = new Random(7);
-        var plan = codex ? scenario=="codex-plus"?"Codex Plus（演示）":"Codex Pro（演示）" : "Max (5x)";
+        var showcase = scenario == "showcase";
+        var codexFiveHour = scenario == "codex-plus" || showcase;
+        var plan = codex ? codexFiveHour?"Codex Plus（演示）":"Codex Pro（演示）" : "Max (5x)";
         var lastT = scenario == "stale" ? now.AddMinutes(-22) : now.AddMinutes(-1);
         var t0 = lastT.AddHours(-26);
         var weekReset = lastT.AddHours(-15);
@@ -46,12 +48,17 @@ public static class DemoData
         DateTimeOffset? prev = null;
         bool In((DateTimeOffset a, DateTimeOffset b) w, DateTimeOffset t) => t >= w.a && t < w.b;
 
-        events.Append(new AppEvent(notRunning.Item1.AddSeconds(30), EventTypes.AppExit));
-        events.Append(new AppEvent(notRunning.Item2.AddSeconds(-40), EventTypes.AppStart));
-        events.Append(new AppEvent(sleep.Item1.AddSeconds(20), EventTypes.Suspend));
-        events.Append(new AppEvent(sleep.Item2.AddSeconds(-30), EventTypes.Resume));
-        for (var f = offline.Item1.AddMinutes(1); f < offline.Item2; f = f.AddMinutes(5))
-            events.Append(new AppEvent(f, EventTypes.CollectFail, Statuses.Error, "network", SourceId, ProfileKey));
+        // Gallery screenshots show ordinary continuous collection. Other demo scenarios retain
+        // interruption examples for inspecting the real gap renderer.
+        if (!showcase)
+        {
+            events.Append(new AppEvent(notRunning.Item1.AddSeconds(30), EventTypes.AppExit));
+            events.Append(new AppEvent(notRunning.Item2.AddSeconds(-40), EventTypes.AppStart));
+            events.Append(new AppEvent(sleep.Item1.AddSeconds(20), EventTypes.Suspend));
+            events.Append(new AppEvent(sleep.Item2.AddSeconds(-30), EventTypes.Resume));
+            for (var f = offline.Item1.AddMinutes(1); f < offline.Item2; f = f.AddMinutes(5))
+                events.Append(new AppEvent(f, EventTypes.CollectFail, Statuses.Error, "network", SourceId, ProfileKey));
+        }
 
         var step = scenario == "slow" ? 30 : 5; // "slow": 30-minute polling
         settings.PollIntervalSeconds = step * 60;
@@ -59,7 +66,7 @@ public static class DemoData
         for (var t = t0; t <= lastT; t = t.AddMinutes(step))
         {
             var obs = t.AddSeconds(rnd.Next(-8, 9));
-            if (In(sleep, obs) || In(unexplained, obs) || In(notRunning, obs) || In(offline, obs)) continue;
+            if (!showcase && (In(sleep, obs) || In(unexplained, obs) || In(notRunning, obs) || In(offline, obs))) continue;
             if (prev is { } p)
             {
                 var hours = (obs - p).TotalHours;
@@ -78,7 +85,7 @@ public static class DemoData
             prev = obs;
             var fableMissing = obs < t0.AddMinutes(40);
             var limits = new QuotaLimits(
-                codex&&scenario!="codex-plus"?null:UsageParser.Limit(Math.Round(five, 2), fiveResetAt),
+                codex&&!codexFiveHour?null:UsageParser.Limit(Math.Round(five, 2), fiveResetAt),
                 UsageParser.Limit(Math.Round(week, 2), weekResetAt),
                 codex||fableMissing ? null : UsageParser.Limit(Math.Round(fab, 2), weekResetAt));
             var snap = new QuotaSnapshot("demo-" + obs.UtcDateTime.ToString("yyyyMMddTHHmmss"), obs, limits);
