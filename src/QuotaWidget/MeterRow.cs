@@ -33,7 +33,7 @@ public sealed class MeterRow : StackPanel
         grid.Children.Add(_fill);
         _track = new Border { Height = 4, CornerRadius = new CornerRadius(2), Child = grid, ClipToBounds = true };
         _track.SetResourceReference(Border.BackgroundProperty, "Track");
-        AutomationProperties.SetName(_track, "额度进度");
+        AutomationProperties.SetName(_track, Loc.T("额度进度"));
         Children.Add(_track);
 
         var bottom = new DockPanel { Margin = new Thickness(0, 7, 0, 0) };

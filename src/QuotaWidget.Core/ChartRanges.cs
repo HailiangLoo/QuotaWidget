@@ -18,5 +18,5 @@ public static class ChartRanges
         return WidgetSettings.RangeChoices.Where(m => m == All || TimeSpan.FromMinutes(m==4320?1440:m) <= span).ToArray();
     }
     public static int Select(int preferred, IReadOnlyCollection<int> available) => available.Contains(preferred) ? preferred : All;
-    public static string Label(int minutes) => minutes == All ? "全部" : "近" + WidgetModel.RangeLabel(minutes);
+    public static string Label(int minutes) => minutes == All ? Loc.T("全部") : Loc.T("近") + WidgetModel.RangeLabel(minutes);
 }

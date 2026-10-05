@@ -380,23 +380,23 @@ public sealed class WidgetModel
 
     public static string Countdown(DateTimeOffset? resetsAt, DateTimeOffset now)
     {
-        if (resetsAt is null) return "重置时间未知";
+        if (resetsAt is null) return Loc.T("重置时间未知");
         var left = resetsAt.Value - now;
-        if (left <= TimeSpan.Zero) return "已到重置时间";
+        if (left <= TimeSpan.Zero) return Loc.T("已到重置时间");
         var totalMin = (int)Math.Floor(left.TotalMinutes);
         var d = totalMin / 1440;
         var h = totalMin % 1440 / 60;
         var m = totalMin % 60;
-        if (d > 0) return $"{d}天{h}时重置";
-        if (h > 0) return $"{h}时{m:00}分重置";
-        return $"{m}分重置";
+        if (d > 0) return Loc.F($"{d}天{h}时重置");
+        if (h > 0) return Loc.F($"{h}时{m:00}分重置");
+        return Loc.F($"{m}分重置");
     }
 
     public static string Duration(double minutes)
     {
         var total = (int)Math.Round(minutes);
-        if (total < 60) return total + "分钟";
-        return total % 60 == 0 ? $"{total / 60}小时" : $"{total / 60}小时{total % 60}分";
+        if (total < 60) return total + Loc.T("分钟");
+        return total % 60 == 0 ? Loc.F($"{total / 60}小时") : Loc.F($"{total / 60}小时{total % 60}分");
     }
 
     static string Clock(DateTimeOffset t, DateTimeOffset now)
@@ -411,9 +411,9 @@ public sealed class WidgetModel
     MeterView Meter(string label, QuotaLimit? limit, bool haveRecord, DateTimeOffset now)
     {
         if (!haveRecord)
-            return new MeterView { Label = label, Value = "—", Other = "等待数据", Reset = "重置时间未知", Missing = true };
+            return new MeterView { Label = label, Value = "—", Other = Loc.T("等待数据"), Reset = Loc.T("重置时间未知"), Missing = true };
         if (limit is null)
-            return new MeterView { Label = label, Value = "—", Other = "来源缺少该指标", Reset = "", Missing = true };
+            return new MeterView { Label = label, Value = "—", Other = Loc.T("来源缺少该指标"), Reset = "", Missing = true };
         var used = limit.UsedPercent;
         var showUsed = Settings.Display == "used";
         var value = showUsed ? used : 100 - used;
@@ -421,7 +421,7 @@ public sealed class WidgetModel
         {
             Label = label,
             Value = Pct(value) + "%",
-            Other = showUsed ? $"剩 {Pct(100 - used)}%" : $"已用 {Pct(used)}%",
+            Other = showUsed ? Loc.F($"剩 {Pct(100 - used)}%") : Loc.F($"已用 {Pct(used)}%"),
             Reset = Countdown(limit.ResetsAt, now),
             ResetsAt = limit.ResetsAt,
             Fill = Math.Clamp(value, 0, 100),
@@ -454,9 +454,9 @@ public sealed class WidgetModel
         if (start >= end) start = end.AddMinutes(-5);
         var gaps = new List<GapRegion>();
         string? blocked = null;
-        if (total.Segments.Count == 0 && fable.Segments.Count == 0 && Records.Count == 0) blocked = "等待有效记录";
+        if (total.Segments.Count == 0 && fable.Segments.Count == 0 && Records.Count == 0) blocked = Loc.T("等待有效记录");
         else if (!total.Segments.Any(x => x.Valid) && !fable.Segments.Any(x => x.Valid))
-            blocked = Records.Count == 1 ? "等待下一次采样" : "暂无可计算的连续记录";
+            blocked = Records.Count == 1 ? Loc.T("等待下一次采样") : Loc.T("暂无可计算的连续记录");
         if (last is not null)
         {
             if (Records[0].T > start) gaps.Add(new GapRegion(start, Records[0].T, "未记录"));
@@ -475,116 +475,116 @@ public sealed class WidgetModel
         var sumT = RateEngine.SumRange(total, start, end);
         var sumF = RateEngine.SumRange(fable, start, end);
         string summary;
-        if (blocked is not null) summary = "等待有效记录";
-        else if (sumT.CoverageMinutes <= 0) summary = "所选时段没有有效记录";
+        if (blocked is not null) summary = Loc.T("等待有效记录");
+        else if (sumT.CoverageMinutes <= 0) summary = Loc.T("所选时段没有有效记录");
         else
         {
-            var fablePart = sumF.CoverageMinutes <= 0 ? "Fable 无记录" : $"Fable {F1(sumF.Delta)}点";
-            summary = $"{rangeLabel} · 已记录 {F1(sumT.Delta)}点 · {fablePart}";
+            var fablePart = sumF.CoverageMinutes <= 0 ? Loc.T("Fable 无记录") : Loc.F($"Fable {F1(sumF.Delta)}点");
+            summary = Loc.F($"{rangeLabel} · 已记录 {F1(sumT.Delta)}点 · {fablePart}");
         }
 
         var detail = new List<string>();
-        if (blocked is not null) detail.Add("尚未取得可计算的连续数据");
+        if (blocked is not null) detail.Add(Loc.T("尚未取得可计算的连续数据"));
         else
         {
-            detail.Add($"{rangeLabel}：总消耗覆盖{Duration(sumT.CoverageMinutes)}，{fableName} 覆盖{Duration(sumF.CoverageMinutes)}");
-            detail.Add("只累计完整有效采样区间，缺口未补零");
+            detail.Add(Loc.F($"{rangeLabel}：总消耗覆盖{Duration(sumT.CoverageMinutes)}，{fableName} 覆盖{Duration(sumF.CoverageMinutes)}"));
+            detail.Add(Loc.T("只累计完整有效采样区间，缺口未补零"));
             if (sumT.CoverageMinutes > 0)
             {
-                var avg = $"已采样平均 {F2(sumT.Delta * 60 / sumT.CoverageMinutes)} 点/h";
+                var avg = Loc.F($"已采样平均 {F2(sumT.Delta * 60 / sumT.CoverageMinutes)} 点/h");
                 if (sumF.CoverageMinutes > 0) avg += $" · Fable {F2(sumF.Delta * 60 / sumF.CoverageMinutes)}";
                 detail.Add(avg);
             }
             if (cumT is not null)
             {
-                var line = $"自{Clock(cumT.From, now)}累计平均 {F2(cumT.Rate)} 点/h（同周期{(cumT.IncludesGap ? "，含缺口" : "")}）";
+                var line = Loc.F($"自{Clock(cumT.From, now)}累计平均 {F2(cumT.Rate)} 点/h（同周期{(cumT.IncludesGap ? Loc.T("，含缺口") : "")}）");
                 if (cumF is not null) line += $" · Fable {F2(cumF.Rate)}";
                 detail.Add(line);
             }
-            else detail.Add("累计平均：当前周期记录不足");
-            detail.Add("各自周额度点/h；不同线的 1 点不代表相同 token 数，不能相加。");
+            else detail.Add(Loc.T("累计平均：当前周期记录不足"));
+            detail.Add(Loc.T("各自周额度点/h；不同线的 1 点不代表相同 token 数，不能相加。"));
         }
 
         // Note bar: one line, only when something needs saying.
         string? note = null;
         var action = NoteAction.None;
         var env = LastEnvelope;
-        if (LatestError is not null) note = LatestError;
+        if (LatestError is not null) note = Loc.T(LatestError);
         else if (env is { Status: Statuses.AuthRequired })
         {
             note = env.ErrorCode switch
             {
-                "not_logged_in" => "未登录 Claude · 点此登录",
-                "identity_unknown" => "登录信息缺少账号标识 · 点此重新登录",
-                _ => "登录已失效 · 点此重新登录",
+                "not_logged_in" => Loc.T("未登录 Claude · 点此登录"),
+                "identity_unknown" => Loc.T("登录信息缺少账号标识 · 点此重新登录"),
+                _ => Loc.T("登录已失效 · 点此重新登录"),
             };
             action = NoteAction.Login;
         }
         else if (env is { Status: Statuses.Error, ErrorCode: "cli_untrusted" })
-            note = "Claude CLI 签名校验未通过 · 已停止调用";
+            note = Loc.T("Claude CLI 签名校验未通过 · 已停止调用");
         else if (env is { Status: Statuses.Error, ErrorCode: "cli_missing" })
-            note = "未找到 Claude Code CLI";
+            note = Loc.T("未找到 Claude Code CLI");
         else if (env is { Status: Statuses.Error, ErrorCode: "cli_incompatible" })
-            note = "Claude CLI 版本不支持额度接口 · 请更新";
+            note = Loc.T("Claude CLI 版本不支持额度接口 · 请更新");
         else if (env is { Status: Statuses.RateLimited })
         {
             var wait = env.AttemptedAt + TimeSpan.FromSeconds(Math.Max(env.RetryAfterSeconds ?? 0, env.EffectivePollIntervalSeconds)) - now;
-            note = wait > TimeSpan.Zero ? $"服务限流 · {Math.Max(1, (int)Math.Ceiling(wait.TotalMinutes))}分钟后重试" : "服务限流 · 即将重试";
+            note = wait > TimeSpan.Zero ? Loc.F($"服务限流 · {Math.Max(1, (int)Math.Ceiling(wait.TotalMinutes))}分钟后重试") : Loc.T("服务限流 · 即将重试");
         }
         else if (env is { Status: Statuses.Error })
         {
             var reason = env.ErrorCode switch
             {
-                "network" or "dns" => "网络",
-                "timeout" => "超时",
-                "unavailable" => "额度暂不可读",
-                "not_fresh" => "未取得新数据",
-                "bad_output" or "cli_failed" => "CLI 调用失败",
-                "no_known_limits" or "value_out_of_range" => "数据格式变化",
-                _ => env.ErrorCode ?? "未知",
+                "network" or "dns" => Loc.T("网络"),
+                "timeout" => Loc.T("超时"),
+                "unavailable" => Loc.T("额度暂不可读"),
+                "not_fresh" => Loc.T("未取得新数据"),
+                "bad_output" or "cli_failed" => Loc.T("CLI 调用失败"),
+                "no_known_limits" or "value_out_of_range" => Loc.T("数据格式变化"),
+                _ => env.ErrorCode ?? Loc.T("未知"),
             };
-            note = last is null ? $"采集失败（{reason}）" : $"采集失败（{reason}）· 数据停在 {Clock(last.T, now)}";
+            note = last is null ? Loc.F($"采集失败（{reason}）") : Loc.F($"采集失败（{reason}）· 数据停在 {Clock(last.T, now)}");
             action = NoteAction.Retry;
         }
-        else if (stale) note = $"{(int)(now - last!.T).TotalMinutes}分钟未更新 · 曲线为旧数据";
-        else if (last is null) note = s.CollectorEnabled || DemoMode ? "等待首次数据" : "等待数据源（latest.json）";
+        else if (stale) note = Loc.F($"{(int)(now - last!.T).TotalMinutes}分钟未更新 · 曲线为旧数据");
+        else if (last is null) note = s.CollectorEnabled || DemoMode ? Loc.T("等待首次数据") : Loc.T("等待数据源（latest.json）");
         else if (total.Segments.Any(x => x.Issue == SegmentIssue.Decrease && x.End > now - TimeSpan.FromDays(1)))
-            note = "周额度同周期内下降 · 相关区间不计速率";
+            note = Loc.T("周额度同周期内下降 · 相关区间不计速率");
         else if (last.Snapshot.Limits.AllWeek is { WindowMode: not WindowModes.Fixed })
-            note = "周额度周期未确认 · 暂不计算速率";
+            note = Loc.T("周额度周期未确认 · 暂不计算速率");
         else if (env is { ErrorCode: "value_out_of_range" })
-            note = "部分额度数值越界 · 已按缺失处理";
+            note = Loc.T("部分额度数值越界 · 已按缺失处理");
 
         var l = last?.Snapshot.Limits;
-        var five = Meter("5 小时", l?.FiveHour, last is not null, now);
-        var week = Meter("本周 · 全部", l?.AllWeek, last is not null, now);
-        var fab = Meter($"本周 · {fableName}", l?.FableWeek, last is not null, now);
+        var five = Meter(Loc.T("5 小时"), l?.FiveHour, last is not null, now);
+        var week = Meter(Loc.T("本周 · 全部"), l?.AllWeek, last is not null, now);
+        var fab = Meter(Loc.F($"本周 · {fableName}"), l?.FableWeek, last is not null, now);
 
-        var tray = last is null ? "额度 · 等待数据"
-            : $"额度 · 5h {five.Value} · 周 {week.Value} · {fableName} {fab.Value}{(stale ? " · 旧数据" : "")}";
+        var tray = last is null ? Loc.T("额度 · 等待数据")
+            : Loc.F($"额度 · 5h {five.Value} · 周 {week.Value} · {fableName} {fab.Value}{(stale ? Loc.T(" · 旧数据") : "")}");
 
         string collectorLine;
-        if (DemoMode) collectorLine = "演示数据 · 不采集";
-        else if (!s.CollectorEnabled) collectorLine = "内置采集已关闭 · 读取 latest.json";
-        else if (env is null) collectorLine = "采集：启动中";
+        if (DemoMode) collectorLine = Loc.T("演示数据 · 不采集");
+        else if (!s.CollectorEnabled) collectorLine = Loc.T("内置采集已关闭 · 读取 latest.json");
+        else if (env is null) collectorLine = Loc.T("采集：启动中");
         else
         {
             var next = env.AttemptedAt + TimeSpan.FromSeconds(env.EffectivePollIntervalSeconds);
             collectorLine = env.Status switch
             {
-                Statuses.Ok or Statuses.Partial => $"采集正常 · 上次 {Clock(env.AttemptedAt, now)} · 下次 {Clock(next, now)}",
-                Statuses.AuthRequired => "采集暂停：需要登录",
-                Statuses.RateLimited => $"采集限流 · {Clock(next, now)} 后重试",
-                _ => $"采集失败 · {Clock(next, now)} 后重试（本地退避）",
+                Statuses.Ok or Statuses.Partial => Loc.F($"采集正常 · 上次 {Clock(env.AttemptedAt, now)} · 下次 {Clock(next, now)}"),
+                Statuses.AuthRequired => Loc.T("采集暂停：需要登录"),
+                Statuses.RateLimited => Loc.F($"采集限流 · {Clock(next, now)} 后重试"),
+                _ => Loc.F($"采集失败 · {Clock(next, now)} 后重试（本地退避）"),
             };
         }
         if (CliSummary is not null && !DemoMode) collectorLine += "\n" + CliSummary;
 
         return new WidgetView
         {
-            Tag = DemoMode ? "演示数据" : null,
+            Tag = DemoMode ? Loc.T("演示数据") : null,
             PlanLabel = last?.PlanLabel ?? env?.PlanLabel ?? "Claude",
-            DisplayLabel = s.Display == "used" ? "已用额度" : "剩余额度",
+            DisplayLabel = s.Display == "used" ? Loc.T("已用额度") : Loc.T("剩余额度"),
             Five = five, Week = week, Fable = fab,
             Note = note, NoteAction = action,
             Chart = chart,

@@ -10,7 +10,7 @@ $stage = Join-Path $artifacts ('build-'+[Guid]::NewGuid().ToString('N').Substrin
 [IO.Directory]::CreateDirectory($artifacts) | Out-Null
 dotnet publish $project -c Release -r win-x64 --self-contained true -o $stage -p:ContinuousIntegrationBuild=true -p:DebugType=None -p:DebugSymbols=false
 if ($LASTEXITCODE -ne 0) { throw 'dotnet publish failed.' }
-foreach ($file in @('README.md','CONTRIBUTING.md','LICENSE','NOTICE.md','启动小挂件.cmd','登录Claude.cmd','演示模式.cmd')) {
+foreach ($file in @('README.md','README.zh-CN.md','CONTRIBUTING.md','CONTRIBUTING.zh-CN.md','Start Widget.cmd','Sign in to Claude.cmd','Demo.cmd','LICENSE','NOTICE.md','启动小挂件.cmd','登录Claude.cmd','演示模式.cmd')) {
     Copy-Item -LiteralPath (Join-Path $root $file) -Destination $stage
 }
 Copy-Item -LiteralPath (Join-Path $root 'docs') -Destination $stage -Recurse

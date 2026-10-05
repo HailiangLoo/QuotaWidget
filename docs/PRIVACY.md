@@ -1,21 +1,23 @@
-# 隐私与本地数据
+# Privacy and local data
 
-QuotaWidget 没有自建服务器、遥测或日志上传接口。配额查询由官方 CLI 与各自服务通信。
+**English** · [简体中文](PRIVACY.zh-CN.md)
 
-| 来源 | 用途 | 本地保存内容 |
+QuotaWidget has no project-operated server, telemetry, or log-upload endpoint. Official CLIs communicate with their respective services to query quota.
+
+| Source | Purpose | Stored locally |
 | --- | --- | --- |
-| Claude 官方 CLI | 查询额度、完成官方登录 | 额度读数与独立 CLI 配置；登录凭证由官方 CLI 管理 |
-| Codex 官方 app-server | 只读查询当前账号额度 | 额度读数；账号与套餐的散列标识，不保存返回的原始账号 ID |
-| 本机 Claude/Codex 日志 | token、工作起止、chat 和缓存计时 | 用量数值、模型、时间、chat ID/标题、项目名及归属关系 |
-| 本机应用/会话元数据 | 识别运行状态和显示名称 | 必要的会话状态；不读取浏览器 Cookie 或密码库 |
-| Windows 已安装应用信息 | 本地显示平台图标、定位官方 CLI | 兼容性缓存；不上传应用列表 |
+| Official Claude CLI | Quota queries and official sign-in | Quota readings and a separate CLI configuration; the official CLI manages credentials |
+| Official Codex app-server | Read-only quota queries for the current account | Quota readings and hashed account/plan identifiers, not the raw account ID returned by the service |
+| Local Claude/Codex logs | Tokens, work start/end times, chat metadata, and cache reminders | Usage counters, models, timestamps, chat IDs/titles, project names, and parent relationships |
+| Local app/session metadata | Running state and display names | Necessary session state; no browser cookies or password-store access |
+| Installed Windows app information | Local provider icons and official CLI discovery | Compatibility cache; the installed-app list is not uploaded |
 
-为了提取元数据，程序会读取本机日志文件，这些文件本身可能包含对话内容。程序不将完整聊天正文复制到自己的索引或上传；本地索引仍含敏感的标题、项目名、路径和用量信息，应当按私人数据处理。
+The widget reads local log files to extract metadata. Those source files may contain conversation text. The widget does not copy full chat bodies into its index or upload them. Its local index still contains sensitive titles, project names, paths, and usage records; treat it as private data.
 
-默认目录为 `%USERPROFILE%\.quotawidget\data`。其中 `claude-auth` 属于官方 CLI 的独立登录配置，其他目录保存历史、事件和 token 索引。**不要提交、分享或打包整个数据目录。** `.gitignore` 只是防误提交，不能替代检查。
+The default directory is `%USERPROFILE%\.quotawidget\data`. Its `claude-auth` directory holds the official CLI's separate sign-in configuration. Other directories store history, events, and token indexes. **Do not commit, share, or package the entire data directory.** `.gitignore` is a guard against accidental commits, not a substitute for reviewing files.
 
-在设置中可分别关闭平台监听、token 统计和 chat 提醒。关闭统计不会自动删除已保存数据。删除历史前请退出挂件并自行备份需要保留的记录。
+Settings can disable provider monitoring, token tracking, and chat reminders separately. Disabling tracking does not delete saved data. Exit the widget and back up anything you want to keep before deleting history.
 
-退出挂件默认不会退出 Claude 登录。设置中的自动退出登录选项由官方 CLI 执行；本项目不承诺其等同于服务端令牌撤销。
+Quitting does not sign out of Claude by default. If sign out on exit is enabled, the official CLI performs the sign-out. This project does not claim that removing local credentials also revokes the token on the server.
 
-`--demo` 仅使用合成数据；文档截图均由演示模式重新生成。仓库不包含开发者的账户配置、实际历史、会话数据库或登录状态。
+`--demo` uses synthetic data only. Documentation screenshots are generated from demo mode. The repository does not include the developer's account configuration, real history, session databases, or sign-in state.

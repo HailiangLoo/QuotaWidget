@@ -3,7 +3,7 @@ description: Report a reproducible problem without private account data.
 body:
   - type: markdown
     attributes:
-      value: 请勿上传登录配置、凭证、真实聊天日志或整个数据目录。截图请脱敏。
+      value: Do not upload sign-in configuration, credentials, real chat logs, or the entire data directory. Redact screenshots. / 请勿上传登录配置、凭证、真实聊天日志或整个数据目录。截图请脱敏。
   - type: input
     id: version
     attributes:

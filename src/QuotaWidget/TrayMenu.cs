@@ -1,3 +1,4 @@
+using QuotaWidget.Core;
 using System;
 using System.Drawing;
 using System.Drawing.Drawing2D;
@@ -15,17 +16,19 @@ public sealed class TrayMenu : ContextMenuStrip
         ShowImageMargin=ShowCheckMargin=false;
         DropShadowEnabled=true;
         Font=_font;
-        _show=new ToolStripMenuItem("显示小窗",null,(_,_)=>toggle());
+        _show=new ToolStripMenuItem(Loc.T("显示小窗"),null,(_,_)=>toggle());
         Items.Add(_show);
-        Items.Add(new ToolStripMenuItem("设置",null,(_,_)=>settings()));
-        Items.Add(new ToolStripMenuItem("退出",null,(_,_)=>exit()));
+        Items.Add(new ToolStripMenuItem(Loc.T("设置"),null,(_,_)=>settings()));
+        Items.Add(new ToolStripMenuItem(Loc.T("退出"),null,(_,_)=>exit()));
         Prepare(true,false);
     }
     public void Prepare(bool dark,bool windowVisible)
     {
         var scale=DeviceDpi/96f;
         Padding=new Padding((int)(4*scale),(int)(5*scale),(int)(4*scale),(int)(5*scale));
-        _show.Text=windowVisible?"隐藏小窗":"显示小窗";
+        _show.Text=windowVisible?Loc.T("隐藏小窗"):Loc.T("显示小窗");
+        Items[1].Text=Loc.T("设置");
+        Items[2].Text=Loc.T("退出");
         BackColor=dark?Color.FromArgb(32,32,32):Color.FromArgb(250,250,250);
         ForeColor=dark?Color.FromArgb(238,238,239):Color.FromArgb(32,33,36);
         Renderer=new MenuRenderer(BackColor,ForeColor,dark?Color.FromArgb(53,55,60):Color.FromArgb(235,237,239),dark?Color.FromArgb(63,65,70):Color.FromArgb(218,219,221));

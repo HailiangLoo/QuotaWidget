@@ -1,16 +1,18 @@
-# 开发
+# Development
 
-使用 Windows 和 .NET 10 SDK。UI 为 WPF，存储使用 Windows 自带 SQLite；核心项目无第三方 NuGet 依赖。
+**English** · [简体中文](CONTRIBUTING.zh-CN.md)
+
+Use Windows and the .NET 10 SDK. The interface uses WPF; storage uses Windows' built-in SQLite. The core project has no third-party NuGet dependencies.
 
 ```powershell
 dotnet run --project tests/QuotaWidget.Tests -c Release
 dotnet run --project tests/QuotaWidget.UiTests -c Release
-dotnet run --project src/QuotaWidget -- --demo --scenario codex-plus
+dotnet run --project src/QuotaWidget -- --demo --scenario codex-plus --language en
 ```
 
-核心测试使用临时目录和合成记录。WPF 测试调用真实布局与处理函数，不启动采集后台任务。
+Core tests use temporary directories and synthetic records. WPF tests exercise real layouts and handlers without starting background collectors.
 
-可选的官方 CLI 集成检查默认跳过。要在自己电脑显式运行：
+Optional official CLI integration checks are skipped by default. To run them explicitly on your own computer:
 
 ```powershell
 $env:QUOTAWIDGET_LIVE_TESTS = '1'
@@ -18,15 +20,21 @@ dotnet run --project tests/QuotaWidget.Tests -c Release
 Remove-Item Env:QUOTAWIDGET_LIVE_TESTS
 ```
 
-这些检查会定位并校验已安装官方程序，部分检查在临时空配置目录中调用 CLI。不要在自动构建中提供个人登录凭证。`--cache-probe`、`--lifecycle-probe`、`--codex-probe` 是显式的本机诊断入口，输出不得直接作为公开附件。
+These checks locate and verify installed official executables. Some invoke the CLI with an empty temporary configuration. Do not provide personal credentials to CI. The `--cache-probe`, `--lifecycle-probe`, and `--codex-probe` flags are explicit local diagnostics; their output should not be attached to public issues without review and redaction.
 
-## 发布
+## Languages
+
+`src/QuotaWidget.Core/Strings.en.json` maps Chinese source text to English. `Loc.T` handles plain text; `Loc.F` handles composite formats. Keep all format arguments in translations. Static WPF labels use the `Translate` attached properties so open controls update without a restart. Keep machine identifiers, stored metadata, provider responses, and user chat/project names out of translation.
+
+Check both `--language en` and `--language zh-CN`, all monitoring modes, and compact/full layouts. Keep chart labels short and put longer explanations in tooltips. The test suite checks resource formats, language persistence, live switching, narrow layouts, and language-independent quota calculations.
+
+## Releases
 
 ```powershell
 powershell -File scripts/Build-Release.ps1
 powershell -File scripts/Test-PublicTree.ps1
 ```
 
-构建从源码重新生成二进制，移除调试符号并映射编译路径；不要复制私人安装目录。仅发布 `artifacts/` 下新生成的 zip 与校验文件。推送前人工检查 `git diff --cached`，自动扫描并不保证能识别所有私人信息。
+Build fresh binaries from source with debug symbols removed and compiler paths mapped. Do not copy a private installation directory. Publish only the newly generated zip and checksum from `artifacts/`. Review `git diff --cached` before pushing; automated scans cannot identify every kind of private information.
 
-功能修改请补充有意义的回归测试。曲线修改应保留原始记账总量、真实工作边界和提供方隔离，并验证切换视图/监听模式不会改变同一时刻的估算依据。
+Add meaningful regression coverage for functional changes. Chart changes must preserve recorded totals, real work boundaries, and provider isolation. Switching view ranges or monitoring modes must not change the estimation basis at the same timestamp.

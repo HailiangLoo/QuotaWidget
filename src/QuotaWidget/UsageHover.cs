@@ -113,10 +113,10 @@ public partial class MainWindow
         var data=_app.TokenBreakdown(platform,start,now);
         var names=_app.TokenChatNames(platform,data.Start,data.End,data.Chats.Select(g=>g.Key).ToHashSet());
         var rate=_model.Settings.CompactMode?
-            (platform==ChatPlatform.Claude?CompactClaudePoints:CompactCodexPoints).Text+" · 均速 "+
-            (platform==ChatPlatform.Claude?CompactClaudeRateValue:CompactCodexRateValue).Text+" 点/h":null;
-        if(rate?.Contains('*')==true)rate+=" · 记录不全";
+            (platform==ChatPlatform.Claude?CompactClaudePoints:CompactCodexPoints).Text+Loc.T(" · 均速 ")+
+            (platform==ChatPlatform.Claude?CompactClaudeRateValue:CompactCodexRateValue).Text+Loc.T(" 点/h"):null;
+        if(rate?.Contains('*')==true)rate+=Loc.T(" · 记录不全");
         return new(platform,data,names,minutes,ShowUsage,CloseUsage,
-            (_model.Settings.TokenTrackingEnabled?"":"统计已暂停；仅展示已保存记录。\n")+_app.TokenDetail,rate);
+            (_model.Settings.TokenTrackingEnabled?"":Loc.T("统计已暂停；仅展示已保存记录。\n"))+_app.TokenDetail,rate);
     }
 }

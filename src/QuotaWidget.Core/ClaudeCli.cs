@@ -14,6 +14,12 @@ namespace QuotaWidget.Core;
 public sealed record CliChoice(string? Path, string? Version, string? Problem, string Summary)
 {
     public bool Usable => Problem is null && Path is not null;
+    public string DisplaySummary => Problem switch
+    {
+        "cli_untrusted" => Loc.F($"{("Claude Code " + (Version ?? "?"))} 签名校验未通过"),
+        "cli_incompatible" => Loc.F($"{("Claude Code " + (Version ?? "?"))} 不支持所需的额度接口，请更新"),
+        _ => Loc.T(Summary)
+    };
 }
 
 /// <summary>Finding, trusting and launching the official Claude Code CLI.</summary>
@@ -275,7 +281,7 @@ public static class ClaudeCli
     {
         if (AuthPreflight(choice, configDir, ensurePrivate) is { } error) return error;
         using var executable = start is null ? Authenticode.OpenVerified(choice.Path!) : null;
-        if (start is null && executable is null) return "CLI 签名校验失败，已停止";
+        if (start is null && executable is null) return Loc.T("CLI 签名校验失败，已停止");
         // Start the official executable directly: no generated shell script or interpolated command.
         var psi = new ProcessStartInfo(choice.Path!) { UseShellExecute = false, CreateNoWindow = false, WorkingDirectory = paths.Root };
         psi.ArgumentList.Add("auth"); psi.ArgumentList.Add(logout ? "logout" : "login");
@@ -287,8 +293,8 @@ public static class ClaudeCli
 
     public static string? AuthPreflight(CliChoice choice, string configDir, Func<string, bool>? ensurePrivate = null)
     {
-        if (!choice.Usable) return choice.Summary;
-        return (ensurePrivate ?? EnsurePrivateDirectory)(configDir) ? null : "无法保护登录目录，已停止";
+        if (!choice.Usable) return choice.DisplaySummary;
+        return (ensurePrivate ?? EnsurePrivateDirectory)(configDir) ? null : Loc.T("无法保护登录目录，已停止");
     }
 
     /// <summary>The same auth gate as interactive login. Only the official CLI removes its credentials.</summary>
@@ -300,7 +306,7 @@ public static class ClaudeCli
         if (AuthPreflight(choice, configDir, ensurePrivate) is { } error) return error;
         ct.ThrowIfCancellationRequested();
         using var executable = run is null ? Authenticode.OpenVerified(choice.Path!) : null;
-        if (run is null && executable is null) return "CLI 签名校验失败，未退出登录";
+        if (run is null && executable is null) return Loc.T("CLI 签名校验失败，未退出登录");
         var psi = new ProcessStartInfo(choice.Path!)
         {
             UseShellExecute = false, CreateNoWindow = true, WorkingDirectory = workDir,
@@ -311,11 +317,11 @@ public static class ClaudeCli
         try
         {
             var code = await (run ?? RunQuietAuth)(psi, ct).ConfigureAwait(false);
-            if (code != 0) return "官方 CLI 退出登录失败";
-            return ClaudeConfigFiles.CredentialStamp(configDir) is null ? null : "本机凭证仍存在，未确认退出登录";
+            if (code != 0) return Loc.T("官方 CLI 退出登录失败");
+            return ClaudeConfigFiles.CredentialStamp(configDir) is null ? null : Loc.T("本机凭证仍存在，未确认退出登录");
         }
-        catch (OperationCanceledException) { return "退出登录超时，本机凭证可能仍在"; }
-        catch { return "退出登录失败，本机凭证可能仍在"; }
+        catch (OperationCanceledException) { return Loc.T("退出登录超时，本机凭证可能仍在"); }
+        catch { return Loc.T("退出登录失败，本机凭证可能仍在"); }
     }
 
     static async Task<int> RunQuietAuth(ProcessStartInfo psi, CancellationToken ct)

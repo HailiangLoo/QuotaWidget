@@ -79,7 +79,7 @@ public sealed class QuotaRing : FrameworkElement
         var fontSize = value.Length > 3 ? 17 : size < 47 ? 20 : 23;
         Text(value, center.Y - fontSize * 0.72, fontSize, m.Missing ? Theme.Brush("Muted") : Theme.QuotaUsageBrush(m.UsedPercent), FontWeights.SemiBold);
         var left = m.ResetsAt - DateTimeOffset.Now;
-        var reset = left is null ? "—" : left <= TimeSpan.Zero ? "待重置" : left.Value.TotalDays >= 1 ? $"{(int)left.Value.TotalDays}d {left.Value.Hours}h" : left.Value.TotalHours >= 1 ? $"{(int)left.Value.TotalHours}h {left.Value.Minutes}m" : $"{Math.Max(0, (int)left.Value.TotalMinutes)}m";
+        var reset = left is null ? "—" : left <= TimeSpan.Zero ? Loc.T("待重置") : left.Value.TotalDays >= 1 ? $"{(int)left.Value.TotalDays}d {left.Value.Hours}h" : left.Value.TotalHours >= 1 ? $"{(int)left.Value.TotalHours}h {left.Value.Minutes}m" : $"{Math.Max(0, (int)left.Value.TotalMinutes)}m";
         DrawReset(dc, reset);
     }
 
@@ -92,7 +92,7 @@ public sealed class QuotaRing : FrameworkElement
         var icon=ProviderIcon.Get(Platform);
         var value=SingleText(m.Value.TrimEnd('%'),Compact?20:25,m.Missing?Theme.Brush("Muted"):Theme.QuotaUsageBrush(m.UsedPercent),FontWeights.SemiBold);
         var left=m.ResetsAt-DateTimeOffset.Now;
-        var reset=left is null?"—":left<=TimeSpan.Zero?"待重置":left.Value.TotalDays>=1?$"{(int)left.Value.TotalDays}d {left.Value.Hours}h":left.Value.TotalHours>=1?$"{(int)left.Value.TotalHours}h {left.Value.Minutes}m":$"{Math.Max(0,(int)left.Value.TotalMinutes)}m";
+        var reset=left is null?"—":left<=TimeSpan.Zero?Loc.T("待重置"):left.Value.TotalDays>=1?$"{(int)left.Value.TotalDays}d {left.Value.Hours}h":left.Value.TotalHours>=1?$"{(int)left.Value.TotalHours}h {left.Value.Minutes}m":$"{Math.Max(0,(int)left.Value.TotalMinutes)}m";
         if(Compact)
         {
             dc.DrawImage(icon,new Rect(0,7,16,16));
@@ -118,7 +118,7 @@ public sealed class QuotaRing : FrameworkElement
         dc.DrawText(value,new Point(center.X-value.Width/2,center.Y-value.Height/2));
         dc.DrawImage(icon,new Rect(77,9,16,16));
         dc.DrawText(SingleText("Codex · week",12,Theme.Brush("Ink"),FontWeights.Medium),new Point(99,8));
-        dc.DrawText(SingleText("重置",10,Theme.Brush("Muted"),FontWeights.Normal),new Point(77,39));
+        dc.DrawText(SingleText(Loc.T("重置"),10,Theme.Brush("Muted"),FontWeights.Normal),new Point(77,39));
         dc.DrawText(ResetText(reset,20),new Point(106,31));
     }
 
@@ -156,7 +156,7 @@ public sealed class QuotaRing : FrameworkElement
         }
         dc.DrawText(label,new Point(x,8)); dc.DrawText(value,new Point(x+label.Width+3,0));
         var left=meter.ResetsAt-DateTimeOffset.Now;
-        var reset=left is null?"—":left<=TimeSpan.Zero?"待重置":left.Value.TotalDays>=1?$"{(int)left.Value.TotalDays}d {left.Value.Hours}h":left.Value.TotalHours>=1?$"{(int)left.Value.TotalHours}h {left.Value.Minutes}m":$"{Math.Max(0,(int)left.Value.TotalMinutes)}m";
+        var reset=left is null?"—":left<=TimeSpan.Zero?Loc.T("待重置"):left.Value.TotalDays>=1?$"{(int)left.Value.TotalDays}d {left.Value.Hours}h":left.Value.TotalHours>=1?$"{(int)left.Value.TotalHours}h {left.Value.Minutes}m":$"{Math.Max(0,(int)left.Value.TotalMinutes)}m";
         DrawReset(dc,reset);
     }
 

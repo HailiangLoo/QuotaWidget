@@ -16,6 +16,7 @@ public sealed class WidgetSettings
     public int PollIntervalSeconds { get; set; } = 300;
     public bool CollectorEnabled { get; set; } = true;
     public string Monitoring { get; set; } = "both";
+    public string Language { get; set; } = "auto";
     public bool Monitors(ChatPlatform platform) => Monitoring == "both" || Monitoring == (platform == ChatPlatform.Claude ? "claude" : "codex");
     public bool AutoLogoutOnExit { get; set; } = false;
     public bool CacheRemindersEnabled { get; set; } = true;
@@ -85,6 +86,7 @@ public sealed class WidgetSettings
 
     public void Normalize()
     {
+        if (Language is not ("auto" or "en" or "zh-CN")) Language = "auto";
         if (Monitoring is not ("both" or "claude" or "codex")) Monitoring = "both";
         if (PollIntervalSeconds < 60) PollIntervalSeconds = 60;
         if (PollIntervalSeconds > 86400) PollIntervalSeconds = 86400;

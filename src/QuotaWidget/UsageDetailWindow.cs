@@ -15,7 +15,7 @@ public sealed class UsageDetailWindow : Window
     public PlatformUsageCard Card {get;private set;}=null!;
     public UsageDetailWindow(ChatPlatform platform,PlatformUsageCard card,Func<int,PlatformUsageCard> reload)
     {
-        _reload=reload;Title=platform+" 用量 · 已固定";WindowStyle=WindowStyle.None;AllowsTransparency=true;Background=Brushes.Transparent;
+        _reload=reload;Title=platform+Loc.T(" 用量 · 已固定");WindowStyle=WindowStyle.None;AllowsTransparency=true;Background=Brushes.Transparent;
         ResizeMode=ResizeMode.NoResize;SizeToContent=SizeToContent.WidthAndHeight;ShowInTaskbar=false;WindowStartupLocation=WindowStartupLocation.Manual;
         ReplaceCard(card);
         PreviewKeyDown+=(_,e)=>{if(e.Key==Key.Escape){Close();e.Handled=true;}};

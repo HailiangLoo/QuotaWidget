@@ -39,6 +39,7 @@ public sealed class AppOptions
     public bool ChatCard { get; private set; }
     public string? UsageCard {get;private set;}
     public string? Monitoring {get;private set;}
+    public string? Language {get;private set;}
     public bool UsagePinned {get;private set;}
     public int UsageMinutes {get;private set;}
     public DateTime? HistoryDay { get; private set; }
@@ -81,6 +82,7 @@ public sealed class AppOptions
                 case "--chat-card": o.ChatCard = true; break;
                 case "--usage-card": o.UsageCard=Next();break;
                 case "--monitor": o.Monitoring=Next();break;
+                case "--language": o.Language=Next();break;
                 case "--usage-pinned": o.UsagePinned=true;break;
                 case "--usage-range": o.UsageMinutes=int.TryParse(Next(),out var um)&&new[]{0,60,120,300,720,1440,4320}.Contains(um)?um:0;break;
                 case "--history-date": o.HistoryDay = DateTime.TryParseExact(Next(),"yyyy-MM-dd",System.Globalization.CultureInfo.InvariantCulture,System.Globalization.DateTimeStyles.None,out var day) ? day : null; break;
@@ -140,6 +142,7 @@ public partial class App : Application
     {
         base.OnStartup(e);
         _opts = AppOptions.Parse(e.Args);
+        Loc.Configure(_opts.Language);
         var snapshot = _opts.Snapshot is not null;
         // A demo snapshot renders from a throwaway copy, so it never disturbs a running demo.
         var root = _opts.DataDir ?? (_opts.Demo
@@ -167,6 +170,7 @@ public partial class App : Application
             // Login needs no instance lock: it only starts the official CLI; a running widget
             // notices the new login by itself.
             var settings = WidgetSettings.Load(_paths.Settings, out _);
+            Loc.Configure(_opts.Language ?? settings.Language);
             var error = RunAuth(settings, logout: auth == "logout", confirm: auth == "logout");
             Shutdown(error is null ? 0 : 4);
             return;
@@ -190,6 +194,8 @@ public partial class App : Application
 
         _model = new WidgetModel(_paths, _opts.Demo) { ReadOnly = snapshot };
         _model.Initialize();
+        if (_opts.Language is "auto" or "en" or "zh-CN") _model.Settings.Language = _opts.Language;
+        Loc.Configure(_model.Settings.Language);
         if (_opts.Range is { } range && WidgetSettings.RangeChoices.Contains(range)) _model.Settings.RangeMinutes = range;
         if (_opts.ChartMode is "rate" or "cumulative") _model.Settings.ClaudeChartMode = _model.Settings.CodexChartMode = _opts.ChartMode;
         if (_opts.ClaudeChartMode is "rate" or "cumulative") _model.Settings.ClaudeChartMode = _opts.ClaudeChartMode;
@@ -256,7 +262,7 @@ public partial class App : Application
         Render();
         if (!_opts.Hidden) { _window.Show(); Render(); }
         var logoutResult = AtomicFile.TryReadAllText(Path.Combine(_paths.Root, "logout-result.txt"));
-        if (!_opts.Demo && logoutResult is { Length: > 0 }) _window.Flash("上次退出未确认清除登录，可在设置的数据诊断中重试");
+        if (!_opts.Demo && logoutResult is { Length: > 0 }) _window.Flash(Loc.T("上次退出未确认清除登录，可在设置的数据诊断中重试"));
     }
 
     static string InstanceId(string root) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(Path.GetFullPath(root).ToLowerInvariant())))[..12];
@@ -366,7 +372,7 @@ public partial class App : Application
     public void Render()
     {
         _codex.Settings.Display=_model.Settings.Display;
-        if ((_source?.LastChoice ?? _startupChoice) is { } c) _model.CliSummary = c.Usable ? $"{c.Summary} · 已校验签名" : c.Summary;
+        if ((_source?.LastChoice ?? _startupChoice) is { } c) _model.CliSummary = c.Usable ? Loc.F($"{c.DisplaySummary} · 已校验签名") : c.DisplaySummary;
         // A never-shown --hidden window is not IsLoaded: do not mistake that for a reason
         // to build its chart. Background mode never loads the on-demand archive.
         var view = _window.IsVisible || _opts.Snapshot is not null ? _window.Render() : _model.BuildView(DateTimeOffset.Now, 60);
@@ -410,7 +416,8 @@ public partial class App : Application
         finally { try { _chatHistory.Flush(DateTimeOffset.Now); } catch (Exception e) when (e is IOException or UnauthorizedAccessException) { } }
     }
 
-    public string? CacheWarning => _cacheWarning;
+    public string? CacheWarning => _cacheWarning is not { } warning ? null :
+        Loc.T(warning) != warning ? Loc.T(warning) : string.Join(" · ",warning.Split(" · ").Select(s=>Loc.T(s)));
     public long TokenVersion => _tokens?.Version ?? 0;
     (long Version,string Monitoring,DateTimeOffset At,TrendActivity Value)? _trendActivity;
     public TrendActivity WorkTrendActivity(DateTimeOffset now)
@@ -461,7 +468,7 @@ public partial class App : Application
         try { return _tokens?.Sum(start,end,source,chat?.Id) ?? _snapshotTokens?.Sum(start,end,source,chat?.Id) ?? TokenSummary.Empty; }
         catch { return TokenSummary.Empty; }
     }
-    public string TokenDetail => _tokenWarning ?? _tokens?.Coverage ?? _snapshotTokens?.Meta("coverage") ?? (_opts.Demo ? "演示 token 数值" : "本机已记录日志；非账号账单。IN 为未命中输入（含缓存写入），CACHE 为命中输入，OUT 已含推理输出。首次补读可能尚未完成。");
+    public string TokenDetail => (_tokenWarning is { } warning ? Loc.T(warning) : null) ?? _tokens?.Coverage ?? _snapshotTokens?.Meta(Loc.IsEnglish?"coverage.en":"coverage") ?? (_opts.Demo ? Loc.T("演示 token 数值") : Loc.T("本机已记录日志；非账号账单。IN 为未命中输入（含缓存写入），CACHE 为命中输入，OUT 已含推理输出。首次补读可能尚未完成。"));
     public TokenBreakdown TokenBreakdown(ChatPlatform platform,DateTimeOffset start,DateTimeOffset end)
     {
         if(_opts.Demo)
@@ -469,7 +476,7 @@ public partial class App : Application
             return Core.TokenBreakdown.Build(start,end,DemoTokenRows(platform,end));
         }
         try {return _tokens?.Breakdown(start,end,platform.ToString()) ?? _snapshotTokens?.Breakdown(start,end,platform.ToString()) ?? Core.TokenBreakdown.Build(start,end,[]);}
-        catch {return Core.TokenBreakdown.Build(start,end,[]) with {Error="本地用量索引暂不可读"};}
+        catch {return Core.TokenBreakdown.Build(start,end,[]) with {Error=Loc.T("本地用量索引暂不可读")};}
     }
     TokenSlice[] DemoTokenRows(ChatPlatform platform,DateTimeOffset end)=>DemoCacheEntries(end).Where(e=>e.Platform==platform).Select((e,i)=>new TokenSlice(
         platform==ChatPlatform.Claude?(i%2==0?"claude-opus-5-5":"claude-fable-5-1"):(i%2==0?"gpt-6-astra":"gpt-6-luna"),e.Id,
@@ -492,7 +499,7 @@ public partial class App : Application
                     if(item.ValueKind!=System.Text.Json.JsonValueKind.Object) return;
                     if(item.TryGetProperty("id",out var id)&&id.ValueKind==System.Text.Json.JsonValueKind.String&&id.GetString() is { } key&&(ids is null||ids.Contains(key))
                         &&item.TryGetProperty("thread_name",out var title)&&title.ValueKind==System.Text.Json.JsonValueKind.String&&title.GetString() is {Length:>0} value)
-                        names[key]=new ChatCacheEntry(platform,key,new string(value.Where(c=>!char.IsControl(c)).Take(120).ToArray()),end,30,"本地标题索引",false,names.GetValueOrDefault(key)?.Project);
+                        names[key]=new ChatCacheEntry(platform,key,new string(value.Where(c=>!char.IsControl(c)).Take(120).ToArray()),end,30,Loc.T("本地标题索引"),false,names.GetValueOrDefault(key)?.Project);
                 } catch(System.Text.Json.JsonException) {}
             },()=>{});} catch(Exception e) when(e is IOException or UnauthorizedAccessException) {}
         }
@@ -536,19 +543,19 @@ public partial class App : Application
     {
         var entries = new List<ChatCacheEntry>
         {
-        new(ChatPlatform.Codex, "demo-a", "额度挂件", now.AddMinutes(-6), 30, "演示数据", true, "QuotaWidget"),
-        new(ChatPlatform.Claude, "demo-b", "规则核对", now.AddMinutes(-34), 60, "演示 1h 缓存", false, "Demo project"),
-        new(ChatPlatform.Codex, "demo-c", "界面审查", now.AddMinutes(-26), 30, "演示数据", false, "QuotaWidget"),
-        new(ChatPlatform.Claude, "demo-d", "历史数据检查", now.AddMinutes(-51), 60, "演示 1h 缓存", false, "Demo project"),
-        new(ChatPlatform.Codex, "demo-e", "已结束的记录", now.AddMinutes(-83), 30, "演示数据", false),
-        new(ChatPlatform.Claude, "demo-f", "已经 compact 的对话", now.AddMinutes(-95), 60, "演示 compact 记录", false, "QuotaWidget", CompactedAt: now.AddMinutes(-70), Compacted: true, ActivityAt: now.AddMinutes(-70)),
+        new(ChatPlatform.Codex, "demo-a", Loc.T("额度挂件"), now.AddMinutes(-6), 30, Loc.T("演示数据"), true, "QuotaWidget"),
+        new(ChatPlatform.Claude, "demo-b", Loc.T("规则核对"), now.AddMinutes(-34), 60, Loc.T("演示 1h 缓存"), false, "Demo project"),
+        new(ChatPlatform.Codex, "demo-c", Loc.T("界面审查"), now.AddMinutes(-26), 30, Loc.T("演示数据"), false, "QuotaWidget"),
+        new(ChatPlatform.Claude, "demo-d", Loc.T("历史数据检查"), now.AddMinutes(-51), 60, Loc.T("演示 1h 缓存"), false, "Demo project"),
+        new(ChatPlatform.Codex, "demo-e", Loc.T("已结束的记录"), now.AddMinutes(-83), 30, Loc.T("演示数据"), false),
+        new(ChatPlatform.Claude, "demo-f", Loc.T("已经 compact 的对话"), now.AddMinutes(-95), 60, Loc.T("演示 compact 记录"), false, "QuotaWidget", CompactedAt: now.AddMinutes(-70), Compacted: true, ActivityAt: now.AddMinutes(-70)),
         };
         if (_opts.Scenario == "many-chats")
             for (var i = 0; i < 15; i++)
             {
                 var compact = now.AddMinutes(-(i == 14 ? 1500 : 5 + i * 110));
-                entries.Add(new(ChatPlatform.Claude, "review-" + i, "回顾记录 " + (i + 1), compact.AddMinutes(-5), 60,
-                    "离线演示", false, "QuotaWidget", CompactedAt: compact, Compacted: true, ActivityAt: compact));
+                entries.Add(new(ChatPlatform.Claude, "review-" + i, Loc.T("回顾记录 ") + (i + 1), compact.AddMinutes(-5), 60,
+                    Loc.T("离线演示"), false, "QuotaWidget", CompactedAt: compact, Compacted: true, ActivityAt: compact));
             }
         return ChatListPolicy.Merge(entries, [], now);
     }
@@ -645,7 +652,7 @@ public partial class App : Application
         if (Monitors(ChatPlatform.Codex)&&_codexCollector is not null) _ = Task.Run(() => _codexCollector.CollectOnceAsync(_cts.Token));
         if (!Monitors(ChatPlatform.Claude)||_collector is null) return;
         if (_collector.LastStatus == Statuses.AuthRequired || _collector.TriggerNow()) return;
-        _window.Flash("刚采集过或处于限流期，稍后再试");
+        _window.Flash(Loc.T("刚采集过或处于限流期，稍后再试"));
     }
 
     public void LaunchLogin() => RunAuth(_model.Settings, logout: false, confirm: false);
@@ -669,8 +676,8 @@ public partial class App : Application
     /// </summary>
     string? RunAuth(WidgetSettings settings, bool logout, bool confirm)
     {
-        if (confirm && MessageBox.Show("退出额度小挂件专用的 Claude 登录？\n官方 CLI 会删除本机凭证，之后需要重新登录才能采集。\n服务端是否撤销令牌尚未验证。",
-                "额度", MessageBoxButton.OKCancel, MessageBoxImage.Question) != MessageBoxResult.OK)
+        if (confirm && MessageBox.Show(Loc.T("退出额度小挂件专用的 Claude 登录？\n官方 CLI 会删除本机凭证，之后需要重新登录才能采集。\n服务端是否撤销令牌尚未验证。"),
+                Loc.T("额度"), MessageBoxButton.OKCancel, MessageBoxImage.Question) != MessageBoxResult.OK)
             return "cancelled";
         var choice = ClaudeCli.Resolve(settings.ClaudeExePath);
         var error = ClaudeCli.LaunchAuthConsole(_paths, choice, settings.ResolveClaudeConfigDir(_paths), logout);
@@ -678,12 +685,12 @@ public partial class App : Application
         {
             var hint = choice.Problem switch
             {
-                "cli_missing" => "\n请安装 Claude Code，或在 settings.json 的 claudeExePath 填写路径。",
-                "cli_untrusted" => "\n这个 claude.exe 没有有效的 Anthropic 数字签名，已拒绝运行。",
-                "cli_incompatible" => "\n本机可用的 claude.exe 版本太旧，缺少额度接口所需的功能。请更新 Claude Code 或 Claude 桌面版。",
+                "cli_missing" => Loc.T("\n请安装 Claude Code，或在 settings.json 的 claudeExePath 填写路径。"),
+                "cli_untrusted" => Loc.T("\n这个 claude.exe 没有有效的 Anthropic 数字签名，已拒绝运行。"),
+                "cli_incompatible" => Loc.T("\n本机可用的 claude.exe 版本太旧，缺少额度接口所需的功能。请更新 Claude Code 或 Claude 桌面版。"),
                 _ => "",
             };
-            MessageBox.Show(error + hint, "额度", MessageBoxButton.OK, MessageBoxImage.Warning);
+            MessageBox.Show(error + hint, Loc.T("额度"), MessageBoxButton.OK, MessageBoxImage.Warning);
         }
         return error;
     }
@@ -695,7 +702,7 @@ public partial class App : Application
         var model=Monitors(ChatPlatform.Claude)?_model:_codex;
         if (model.Records.Count == 0)
         {
-            _window.Flash("还没有可导出的历史");
+            _window.Flash(Loc.T("还没有可导出的历史"));
             return;
         }
         Directory.CreateDirectory(_paths.ExportDir);
@@ -749,8 +756,8 @@ public partial class App : Application
         if (_opts.Demo || !_model.Settings.AutoLogoutOnExit) return;
         var resultPath = Path.Combine(_paths.Root, "logout-result.txt");
         // Write intent first so interruption/crash does not silently look like a successful logout.
-        AtomicFile.WriteAllText(resultPath, "退出登录尚未完成");
-        string? error = "采集器未停止，未并发执行退出登录";
+        AtomicFile.WriteAllText(resultPath, Loc.T("退出登录尚未完成"));
+        string? error = Loc.T("采集器未停止，未并发执行退出登录");
         if (stopped)
         {
             using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(8));
@@ -764,7 +771,7 @@ public partial class App : Application
                     error = await ClaudeCli.LogoutQuietlyAsync(choice, config, _paths.Root, timeout.Token).ConfigureAwait(false);
                 }
             }
-            catch { error = "退出登录未完成，本机凭证可能仍在"; }
+            catch { error = Loc.T("退出登录未完成，本机凭证可能仍在"); }
         }
         AtomicFile.WriteAllText(resultPath, error ?? "");
     }

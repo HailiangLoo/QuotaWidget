@@ -20,7 +20,7 @@ public sealed class TrayIcon : IDisposable
         _menu = new TrayMenu(app.ToggleWindow,app.OpenSettings,app.ExitApp);
         _menu.Opening += (_, _) => _menu.Prepare(Theme.IsDark,app.WindowVisible);
 
-        _icon = new NotifyIcon { ContextMenuStrip = _menu, Text = "额度", Visible = true };
+        _icon = new NotifyIcon { ContextMenuStrip = _menu, Text = Loc.T("额度"), Visible = true };
         _icon.MouseClick += (_, e) => { if (e.Button == MouseButtons.Left) app.ToggleWindow(); };
         SetIcon(null,null,app.Monitors(ChatPlatform.Claude),app.Monitors(ChatPlatform.Codex));
     }
@@ -30,10 +30,10 @@ public sealed class TrayIcon : IDisposable
         var claudeEnabled=settings.Monitors(ChatPlatform.Claude);var codexEnabled=settings.Monitors(ChatPlatform.Codex);
         var claudeRemaining=Remaining(view.Week);var codexRemaining=Remaining(codex.Week);
         string P(double? value)=>value is { } n?$"{n:0.#}%":"—";
-        string Old(WidgetView v)=>v.TrayText.Contains("旧数据",StringComparison.Ordinal)?"（旧）":"";
-        var text="周剩余 · "+string.Join(" · ",new[]{claudeEnabled?$"Claude {P(claudeRemaining)}{Old(view)}":null,codexEnabled?$"Codex {P(codexRemaining)}{Old(codex)}":null}.Where(s=>s is not null));
-        if(claudeEnabled) text+=$"\n5h 剩余 {P(Remaining(view.Five))} · Fable 剩余 {P(Remaining(view.Fable))}";
-        if(codexEnabled&&!codex.Five.Missing)text+=$"\nCodex 5h 剩余 {P(Remaining(codex.Five))}";
+        string Old(WidgetView v)=>v.TrayText.Contains(Loc.T("旧数据"),StringComparison.Ordinal)?Loc.T("（旧）"):"";
+        var text=Loc.T("周剩余 · ")+string.Join(" · ",new[]{claudeEnabled?$"Claude {P(claudeRemaining)}{Old(view)}":null,codexEnabled?$"Codex {P(codexRemaining)}{Old(codex)}":null}.Where(s=>s is not null));
+        if(claudeEnabled) text+=Loc.F($"\n5h 剩余 {P(Remaining(view.Five))} · Fable 剩余 {P(Remaining(view.Fable))}");
+        if(codexEnabled&&!codex.Five.Missing)text+=Loc.F($"\nCodex 5h 剩余 {P(Remaining(codex.Five))}");
         _icon.Text = text.Length > 127 ? text[..127] : text;
         SetIcon(claudeRemaining,codexRemaining,claudeEnabled,codexEnabled);
     }

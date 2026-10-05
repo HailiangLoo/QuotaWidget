@@ -49,7 +49,14 @@ public sealed class RateChart : FrameworkElement
         FocusVisualStyle = null;
         Cursor = Cursors.Cross;
         SnapsToDevicePixels = true;
-        AutomationPropertiesHelper.SetName(this, "额度消耗图；Claude 含 Fable，Codex 独立；左右方向键查看时间点，Escape关闭读数");
+        RefreshLanguage();
+    }
+
+    public void RefreshLanguage()
+    {
+        AutomationPropertiesHelper.SetName(this, Loc.T("额度消耗图；Claude 含 Fable，Codex 独立；左右方向键查看时间点，Escape关闭读数"));
+        InvalidateVisual();
+        _inspectOverlay?.InvalidateVisual();
     }
 
     public ChartView? View
@@ -209,7 +216,7 @@ public sealed class RateChart : FrameworkElement
         string Amount(Lane lane,bool compact)
         {
             var sum=RateEngine.SumRange(lane.Source,_view!.Start,_view.End);
-            return sum.CoverageMinutes>0 ? (compact?"":"累计 ")+Number(sum.Delta)+(compact?"点":" 点") : "暂无记录";
+            return sum.CoverageMinutes>0 ? (compact?"":Loc.T("累计 "))+Number(sum.Delta)+(compact?Loc.T("点"):Loc.T(" 点")) : Loc.T("暂无记录");
         }
         var shared=lanes.Length>1;
         var left=shared?lanes[0].Name+" · "+Amount(lanes[0],false):lanes[0].Name;
@@ -235,7 +242,7 @@ public sealed class RateChart : FrameworkElement
         var line = Theme.Brush("Line");
         dc.DrawRectangle(Brushes.Transparent, null, new Rect(0, 0, ActualWidth, Height));
         if (_lanes.Count == 0)
-        { Label(dc, "点图例选择来源", muted, ActualWidth / 2, 64, 11, TextAlignment.Center); return; }
+        { Label(dc, Loc.T("点图例选择来源"), muted, ActualWidth / 2, 64, 11, TextAlignment.Center); return; }
 
         // Each panel follows its own visible peak. Claude/Fable share a panel; Codex does not.
         var allPoints = _lanes.Select(l => Collapsed(l.Panel) ? new List<IReadOnlyList<TrendPoint>>() : Points(l, v)).ToList();
@@ -302,7 +309,7 @@ public sealed class RateChart : FrameworkElement
                 dc.DrawText(label, new Point(_left + 3, labelY));
             }
             if (indices.All(j => !_lanes[j].Source.Segments.Any(s => s.Valid && s.Start >= v.Start && s.End <= v.End)))
-                Label(dc, "等待连续采样", muted, (_left + PlotRight) / 2, PlotTop(i) + 18, 11, TextAlignment.Center);
+                Label(dc, Loc.T("等待连续采样"), muted, (_left + PlotRight) / 2, PlotTop(i) + 18, 11, TextAlignment.Center);
             else if (!cumulative) DrawPeaks(dc, i, indices, allPoints, Y, labelObstacles);
             DrawTimeAxis(dc,i);
         }
@@ -343,7 +350,7 @@ public sealed class RateChart : FrameworkElement
             if (quiet) dc.PushOpacity(.3);
             dc.DrawLine(pen, new Point(boundaryX, PlotTop(panel)), new Point(boundaryX, PlotBottom(panel)));
             if (quiet) { dc.Pop(); continue; } // Small historical holes: explain on hover, not a large permanent label.
-            var caption = gap.Label == "断开" ? $"{gap.Start.ToLocalTime():HH:mm} 起未更新" : gap.Label;
+            var caption = gap.Label == "断开" ? Loc.F($"{gap.Start.ToLocalTime():HH:mm} 起未更新") : Loc.T(gap.Label);
             var text = Text(caption, Theme.Brush("Muted"), 10);
             var tx = Math.Clamp(x - text.Width / 2, _left + 28, Math.Max(_left + 28, PlotRight-text.Width-2));
             if (tx < lastLabelRight + 6) continue;
@@ -468,10 +475,10 @@ public sealed class RateChart : FrameworkElement
             var value = InspectValue(lane, view, time);
             var observed = lane.Source.SegmentAt(time);
             var gap = (lane.Name=="Codex" ? view.CodexGaps : view.ClaudeGaps).LastOrDefault(g=>time>=g.Start && time<g.End);
-            var name=lane.Name=="Fable"&&view.FableToClaudeFactor is null?"Fable 自身":lane.Name;
+            var name=lane.Name=="Fable"&&view.FableToClaudeFactor is null?Loc.T("Fable 自身"):lane.Name;
             var missing = observed?.Label ?? (gap?.Label=="断开" ? "未更新" : gap?.Label) ?? "未记录";
             if (missing == "已暂停") missing = "监听切换";
-            rows.Add(new(name, value is { } reading ? cumulative?Number(reading):RatePresentation.Estimate(reading) : missing, color));
+            rows.Add(new(name, value is { } reading ? cumulative?Number(reading):RatePresentation.Estimate(reading) : Loc.T(missing), color));
         }
         // The window overlay can use space beyond the chart without covering the active plot
         // or intercepting the pointer. Fall back to the other side near the window edge.
@@ -486,7 +493,7 @@ public sealed class RateChart : FrameworkElement
         if (top < 4 || top + height > surface.ActualHeight - 4) top = preferBelow ? above : below;
         if (top < 4 || top + height > surface.ActualHeight - 4) return null;
         var rect = new Rect(Math.Clamp(at.X + 8, 4, surface.ActualWidth - width - 4), top, width, height);
-        return new(rect, plot, Clock(time) + (cumulative ? " · 累计点" : view.Smooth ? " · 估计点/h" : " · 点/h"), rows);
+        return new(rect, plot, Clock(time) + (cumulative ? Loc.T(" · 累计点") : view.Smooth ? Loc.T(" · 估计点/h") : Loc.T(" · 点/h")), rows);
     }
     internal void DrawInspectCard(DrawingContext dc, FrameworkElement surface)
     {

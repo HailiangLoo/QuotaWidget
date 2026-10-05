@@ -39,6 +39,8 @@ public partial class MainWindow : Window
         _model = model;
         _codex = codex;
         _opts = opts;
+        Loc.Configure(opts.Language ?? model.Settings.Language);
+        Translate.RefreshResources();
         InitializeComponent();
         Chart.AttachInspectOverlay(ChartInspection);
         Chart.SizeChanged += (_,_) => PlaceChartButtons();
@@ -53,11 +55,12 @@ public partial class MainWindow : Window
         PlaceInitially();
 
         DisplayCombo.SelectedIndex = s.Display == "remaining" ? 1 : 0;
+        LanguageCombo.SelectedIndex = Array.IndexOf(new[]{"auto","zh-CN","en"},s.Language);
         MonitoringCombo.SelectedIndex=Array.IndexOf(new[]{"both","claude","codex"},s.Monitoring);
         var poll = Array.IndexOf(WidgetSettings.PollChoices, s.PollIntervalSeconds);
         if (poll < 0)
         {
-            IntervalCombo.Items.Add(new ComboBoxItem { Tag = s.PollIntervalSeconds.ToString(CultureInfo.InvariantCulture), Content = $"{s.PollIntervalSeconds / 60.0:0.#} 分钟" });
+            IntervalCombo.Items.Add(new ComboBoxItem { Tag = s.PollIntervalSeconds.ToString(CultureInfo.InvariantCulture), Content = Loc.F($"{s.PollIntervalSeconds / 60.0:0.#} 分钟") });
             poll = IntervalCombo.Items.Count - 1;
         }
         IntervalCombo.SelectedIndex = poll;
@@ -107,6 +110,31 @@ public partial class MainWindow : Window
         };
     }
 
+    void LanguageCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_suppress || LanguageCombo.SelectedItem is not ComboBoxItem { Tag: string language }) return;
+        _model.Settings.Language = language;
+        _model.SaveSettings();
+        Loc.Configure(language);
+        Translate.RefreshResources();
+        CloseUsage();
+        CacheDiagnosticsText.Text = _app.CacheWarning ?? Loc.T("状态读取正常");
+        _flash = null;
+        _cacheSignature = _compactChatSignature = _historySignature = null;
+        ApplyCompactLayout();
+        foreach (var (platform, window) in _usageWindows)
+        {
+            window.Title = platform + Loc.T(" 用量 · 已固定");
+            window.ReplaceCard(CreateUsageCard(platform,window.Card.Minutes));
+        }
+        Render();
+        _app.Render();
+        Chart.RefreshLanguage();
+        UpdateLayout();
+        if (_opts.Snapshot is null && IsVisible)
+            NativePlacement.FitToWorkArea(new WindowInteropHelper(this).Handle);
+    }
+
     public void PersistPlacement()
     {
         if (_opts.Snapshot is not null || !IsLoaded) return;
@@ -150,8 +178,8 @@ public partial class MainWindow : Window
         _suppress = true;
         TagText.Text = v.Tag ?? "";
         TagText.Visibility = v.Tag is null||_model.DemoMode ? Visibility.Collapsed : Visibility.Visible;
-        DisplayLabelText.Text = _model.DemoMode?"演示 %":s.Display == "used" ? "已用 %" : "剩余 %";
-        DisplayLabelText.ToolTip = string.Join(" · ",new[]{watchClaude?v.PlanLabel:null,watchCodex?cv.PlanLabel:null}.Where(p=>p is not null));
+        DisplayLabelText.Text = _model.DemoMode?Loc.T("演示 %"):s.Display == "used" ? Loc.T("已用 %") : Loc.T("剩余 %");
+        DisplayLabelText.ToolTip = string.Join(" · ",new[]{watchClaude?v.PlanLabel:null,watchCodex?Loc.T(cv.PlanLabel):null}.Where(p=>p is not null));
         FiveMeter.Show(v.Five);
         WeekMeter.Show(v.Week);
         FableMeter.Show(v.Fable);
@@ -166,8 +194,8 @@ public partial class MainWindow : Window
         NoteBar.Cursor = _noteAction == NoteAction.None ? null : Cursors.Hand;
         NoteBar.ToolTip = _noteAction switch
         {
-            NoteAction.Login => "登录 Claude",
-            NoteAction.Retry => "点击立即重试",
+            NoteAction.Login => Loc.T("登录 Claude"),
+            NoteAction.Retry => Loc.T("点击立即重试"),
             _ => null,
         };
 
@@ -178,7 +206,7 @@ public partial class MainWindow : Window
         CumulativeMode.IsChecked = s.ChartModeFor(ChatPlatform.Claude) == "cumulative";
         CodexRateMode.IsChecked = s.ChartModeFor(ChatPlatform.Codex) == "rate";
         CodexCumulativeMode.IsChecked = s.ChartModeFor(ChatPlatform.Codex) == "cumulative";
-        FableLegendText.Text = dashboard.Chart.FableToClaudeFactor is not null ? v.FableLegend : v.FableLegend + " 自身";
+        FableLegendText.Text = dashboard.Chart.FableToClaudeFactor is not null ? v.FableLegend : v.FableLegend + Loc.T(" 自身");
         foreach (var tab in RangeTabs.Children.OfType<ToggleButton>())
         {
             var minutes = int.Parse((string)tab.Tag, CultureInfo.InvariantCulture);
@@ -193,11 +221,11 @@ public partial class MainWindow : Window
         // The chart already draws a point-readout card; never cover it with a second tooltip.
         Chart.ToolTip = null;
         LegendBar.ToolTip = null;
-        ChartDiagnosticsText.Text = dashboard.Detail+(dashboard.Chart.MergesFable?"\n本机模型记录仅Fable的片段只画Fable折合周额度曲线；混用/未知模型的平滑邻域保留两线。顶部累计始终取各自实际读数；本机模型记录不覆盖其他设备。":"");
-        CumulativeMode.ToolTip = "所选时段累计 · 点";
-        RateMode.ToolTip = "消耗速率 · 点/h";
-        CollectorText.Text = _model.DemoMode ? "演示数据" : string.Join("\n",new[]{watchClaude?"Claude · "+v.CollectorLine.Split('\n')[0]:null,watchCodex?dashboard.CodexStatus??"Codex · 采集正常":null}.Where(p=>p is not null));
-        CollectorDiagnosticsText.Text="Claude · "+v.CollectorLine+"\n"+(dashboard.CodexStatus??"Codex · 采集正常");
+        ChartDiagnosticsText.Text = dashboard.Detail+(dashboard.Chart.MergesFable?Loc.T("\n本机模型记录仅Fable的片段只画Fable折合周额度曲线；混用/未知模型的平滑邻域保留两线。顶部累计始终取各自实际读数；本机模型记录不覆盖其他设备。"):"");
+        CumulativeMode.ToolTip = Loc.T("所选时段累计 · 点");
+        RateMode.ToolTip = Loc.T("消耗速率 · 点/h");
+        CollectorText.Text = _model.DemoMode ? Loc.T("演示数据") : string.Join("\n",new[]{watchClaude?"Claude · "+v.CollectorLine.Split('\n')[0]:null,watchCodex?dashboard.CodexStatus??Loc.T("Codex · 采集正常"):null}.Where(p=>p is not null));
+        CollectorDiagnosticsText.Text="Claude · "+v.CollectorLine+"\n"+(dashboard.CodexStatus??Loc.T("Codex · 采集正常"));
         Title = watchClaude?v.TrayText:"Codex · "+cv.Week.Value;
         RenderCache();
         _suppress = false;
@@ -226,13 +254,13 @@ public partial class MainWindow : Window
         CodexFiveMeter.Show(codex.Five, codexStatus);
         CodexMeter.Show(codex.Week, codexStatus);
         CodexInlineMeter.Show(codex.Week,codexStatus);
-        DisplayLabelText.Text = s.Display == "used" ? "已用 %" : "剩余 %";
-        if(_model.DemoMode) DisplayLabelText.Text="演示 %";
-        DisplayLabelText.ToolTip = string.Join(" · ",new[]{s.Monitors(ChatPlatform.Claude)?view.PlanLabel:null,s.Monitors(ChatPlatform.Codex)?codex.PlanLabel:null}.Where(p=>p is not null));
+        DisplayLabelText.Text = s.Display == "used" ? Loc.T("已用 %") : Loc.T("剩余 %");
+        if(_model.DemoMode) DisplayLabelText.Text=Loc.T("演示 %");
+        DisplayLabelText.ToolTip = string.Join(" · ",new[]{s.Monitors(ChatPlatform.Claude)?view.PlanLabel:null,s.Monitors(ChatPlatform.Codex)?Loc.T(codex.PlanLabel):null}.Where(p=>p is not null));
         var note = _flashUntil > now && _flash is not null ? _flash : (s.Monitors(ChatPlatform.Claude)?view.Note:null) ?? (s.Monitors(ChatPlatform.Codex)?codexStatus:null);
         CompactStatus.Visibility = note is null ? Visibility.Collapsed : Visibility.Visible;
-        CompactStatus.ToolTip = note is null ? null : note + "\n点击展开查看";
-        System.Windows.Automation.AutomationProperties.SetName(CompactStatus, note ?? "采集正常");
+        CompactStatus.ToolTip = note is null ? null : note + Loc.T("\n点击展开查看");
+        System.Windows.Automation.AutomationProperties.SetName(CompactStatus, note ?? Loc.T("采集正常"));
         RenderCompactRate(CompactClaudeRate,CompactClaudeRateValue,CompactClaudePoints,"Claude",view.Chart.Total,_model,now);
         RenderCompactRate(CompactCodexRate,CompactCodexRateValue,CompactCodexPoints,"Codex",codex.Chart.Total,_codex,now);
         if(CodexCompactSummary.Visibility==Visibility.Visible)
@@ -247,9 +275,9 @@ public partial class MainWindow : Window
     {
         var rate=RecentUsageRate.Build(series,now,model.LastEnvelope?.EffectivePollIntervalSeconds??model.Settings.PollIntervalSeconds);
         text.Text=rate.Rate is { } number ? RatePresentation.Estimate(number)+(rate.Partial?"*":"") : "—";
-        points.Text="近1h · "+(rate.CoverageMinutes>0?rate.Points.ToString("0.#",CultureInfo.InvariantCulture)+"点"+(rate.Partial?"*":""):"—");
-        host.ToolTip=$"{platform} · 近 1h\n"+(rate.Rate is { } r?$"{RatePresentation.Estimate(r)} 点/h · {rate.Points:0.##} 点 / {rate.CoverageMinutes:0}m":"等待约一小时的连续采样")
-            +(rate.LastObserved is { } at?$"\n截至 {at.ToLocalTime():HH:mm}":"")+(rate.Partial?" · 记录不全":"");
+        points.Text=Loc.T("近1h · ")+(rate.CoverageMinutes>0?rate.Points.ToString("0.#",CultureInfo.InvariantCulture)+Loc.T("点")+(rate.Partial?"*":""):"—");
+        host.ToolTip=Loc.F($"{platform} · 近 1h\n")+(rate.Rate is { } r?Loc.F($"{RatePresentation.Estimate(r)} 点/h · {rate.Points:0.##} 点 / {rate.CoverageMinutes:0}m"):Loc.T("等待约一小时的连续采样"))
+            +(rate.LastObserved is { } at?Loc.F($"\n截至 {at.ToLocalTime():HH:mm}"):"")+(rate.Partial?Loc.T(" · 记录不全"):"");
         System.Windows.Automation.AutomationProperties.SetName(host,host.ToolTip.ToString());
     }
 
@@ -267,8 +295,8 @@ public partial class MainWindow : Window
         CompactChatRows.Children.Clear();
         foreach(var entry in active) CompactChatRows.Children.Add(CacheRow(entry,now,dense:true));
         CompactChatsEmpty.Visibility=active.Length==0?Visibility.Visible:Visibility.Collapsed;
-        CompactChatsEmpty.Text=_app.CacheWarning is null?"暂无计时 chat":"chat 记录暂不可用";
-        CompactChatsEmpty.ToolTip=_app.CacheWarning is null?null:"部分 chat 状态暂不可读";
+        CompactChatsEmpty.Text=_app.CacheWarning is null?Loc.T("暂无计时 chat"):Loc.T("chat 记录暂不可用");
+        CompactChatsEmpty.ToolTip=_app.CacheWarning is null?null:Loc.T("部分 chat 状态暂不可读");
         if(_opts.Snapshot is null&&IsVisible) Dispatcher.BeginInvoke(DispatcherPriority.Loaded,()=>NativePlacement.FitToWorkArea(new WindowInteropHelper(this).Handle));
     }
 
@@ -277,8 +305,8 @@ public partial class MainWindow : Window
         var compact = _model.Settings.CompactMode;
         Width = (compact ? 240 : _model.Settings.Width) + 2 * ShadowMargin;
         CompactButton.IsChecked = compact;
-        CompactButton.ToolTip = compact ? "展开" : "精简模式";
-        System.Windows.Automation.AutomationProperties.SetName(CompactButton, compact ? "展开完整模式" : "切换精简模式");
+        CompactButton.ToolTip = compact ? Loc.T("展开") : Loc.T("精简模式");
+        System.Windows.Automation.AutomationProperties.SetName(CompactButton, compact ? Loc.T("展开完整模式") : Loc.T("切换精简模式"));
         CompactGlyph.Data = Geometry.Parse(compact ? "M4,4 H20 V20 H4 Z M4,10 H20 M9,17 L12,14 L15,17" : "M4,4 H20 V20 H4 Z M4,10 H20 M9,14 L12,17 L15,14");
         HistoryButton.Visibility = SettingsButton.Visibility = WidthGrip.Visibility = compact ? Visibility.Collapsed : Visibility.Visible;
         SessionStartText.Visibility = Visibility.Visible;
@@ -344,14 +372,14 @@ public partial class MainWindow : Window
         var signature = Theme.IsDark + "|" + _app.CacheWarning + "|" + string.Join("|", entries.Select(e => $"{e.Platform}:{e.Id}:{e.Title}:{e.Project}:{Math.Floor(e.AgeMinutes(now))}:{Math.Floor((now - (e.CompactedAt ?? now)).TotalMinutes)}:{e.WindowMinutes}:{e.Running}:{e.ActivityUncertain}:{e.Compacted}:{e.CompactedAt}:{e.Basis}"));
         if (signature == _cacheSignature) return;
         _cacheSignature = signature;
-        CachePanel.ToolTip = _app.CacheWarning is null?null:"部分 chat 状态暂不可读";
+        CachePanel.ToolTip = _app.CacheWarning is null?null:Loc.T("部分 chat 状态暂不可读");
         CacheEmpty.Visibility = active.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
         CacheRows.Children.Clear(); ExpiredRows.Children.Clear();
         foreach (var entry in active) CacheRows.Children.Add(CacheRow(entry, now));
         foreach (var entry in expired) ExpiredRows.Children.Add(CacheRow(entry, now));
         ExpiredChats.Visibility = expired.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
-        ExpiredChats.Header = $"已收起 · {expired.Count}";
-        ExpiredChats.ToolTip = "compact / 超时 / 状态未确认";
+        ExpiredChats.Header = Loc.F($"已收起 · {expired.Count}");
+        ExpiredChats.ToolTip = Loc.T("compact / 超时 / 状态未确认");
     }
 
     FrameworkElement CacheRow(ChatCacheEntry e, DateTimeOffset now, bool historical = false,bool dense=false)
@@ -412,7 +440,7 @@ public partial class MainWindow : Window
         else if (historical)
             minutes.Inlines.Add(new Run((e.ActivityAt ?? e.RequestAt).ToLocalTime().ToString("HH:mm")) { FontSize = 12 });
         else if (e.WorkPending)
-            minutes.Inlines.Add(new Run(e.Running ? (dense?"运行":"进行中") : "未确认") { FontSize = 11, FontWeight = FontWeights.SemiBold });
+            minutes.Inlines.Add(new Run(e.Running ? (dense?Loc.T("运行"):Loc.T("进行中")) : Loc.T("未确认")) { FontSize = 11, FontWeight = FontWeights.SemiBold });
         else
         {
             minutes.Inlines.Add(new Run($"{Math.Floor(age):0}") { FontSize = dense?14:20, FontWeight = FontWeights.SemiBold });
@@ -435,10 +463,10 @@ public partial class MainWindow : Window
         TextBlock Text(string value,double size,string color="Ink") => new() {Text=value,FontSize=size,Foreground=Theme.Brush(color),TextWrapping=TextWrapping.NoWrap,TextTrimming=TextTrimming.CharacterEllipsis};
         var title=Text(entry.Title,12); title.FontWeight=FontWeights.SemiBold; panel.Children.Add(title);
         panel.Children.Add(Text(entry.Platform + (entry.Project is {Length:>0} project ? " · "+project : ""),10,"Muted"));
-        var status=entry.Compacted ? $"已 compact · {entry.CompactedAt?.ToLocalTime():M/d HH:mm}"
-            : entry.Running ? "进行中" : entry.ActivityUncertain ? "状态未确认" : "本轮已结束";
-        if(historical) status="末次状态 · "+status;
-        else if(!entry.Compacted) status+=$" · 最近请求 {Math.Floor(entry.AgeMinutes(now)):0}m 前";
+        var status=entry.Compacted ? Loc.F($"已 compact · {entry.CompactedAt?.ToLocalTime():M/d HH:mm}")
+            : entry.Running ? Loc.T("进行中") : entry.ActivityUncertain ? Loc.T("状态未确认") : Loc.T("本轮已结束");
+        if(historical) status=Loc.T("末次状态 · ")+status;
+        else if(!entry.Compacted) status+=Loc.F($" · 最近请求 {Math.Floor(entry.AgeMinutes(now)):0}m 前");
         var statusText=Text(status,10,"Muted"); statusText.Margin=new Thickness(0,5,0,7); panel.Children.Add(statusText);
         if (_model.Settings.TokenTrackingEnabled)
         {
@@ -450,9 +478,9 @@ public partial class MainWindow : Window
                 var number=Text(tokens.Requests==0?"—":TokenSummary.Number(value),16); number.FontWeight=FontWeights.SemiBold; cell.Children.Add(number); grid.Children.Add(cell);
             }
             panel.Children.Add(grid);
-            var footer=Text(tokens.Requests==0 ? "暂无用量记录" : $"本机累计 · {tokens.Requests:N0} 请求",10,"Muted");
+            var footer=Text(tokens.Requests==0 ? Loc.T("暂无用量记录") : Loc.F($"本机累计 · {tokens.Requests:N0} 请求"),10,"Muted");
             footer.Margin=new Thickness(0,7,0,0); panel.Children.Add(footer);
-            if(tokens.Conflicts>0) panel.Children.Add(Text("记录冲突 · 详见数据诊断",10,"Muted"));
+            if(tokens.Conflicts>0) panel.Children.Add(Text(Loc.T("记录冲突 · 详见数据诊断"),10,"Muted"));
         }
         return panel;
     }
@@ -473,7 +501,7 @@ public partial class MainWindow : Window
             if(top is { } y) Canvas.SetTop(button,y);
             var collapsed=codex ? _model.Settings.CodexChartCollapsed : _model.Settings.ClaudeChartCollapsed;
             button.IsChecked=collapsed; button.Content=collapsed ? "›" : "⌄";
-            button.ToolTip=(collapsed?"展开 ":"收起 ")+(codex?"Codex":"Claude / Fable")+" 图表";
+            button.ToolTip=(collapsed?Loc.T("展开 "):Loc.T("收起 "))+(codex?"Codex":"Claude / Fable")+Loc.T(" 图表");
             System.Windows.Automation.AutomationProperties.SetName(button,button.ToolTip.ToString());
         }
     }
@@ -488,7 +516,7 @@ public partial class MainWindow : Window
     public void RenderTokens()
     {
         var detail=_app.TokenDetail;
-        TokenDiagnosticsText.Text=(_model.Settings.TokenTrackingEnabled?"":"统计已暂停。\n")+"IN：未缓存输入，含已报告的缓存写入。\nCACHE：各请求累计读取的缓存 token，不是缓存占用大小。\nOUT：输出，已包含推理。\n1B = 10亿，1M = 100万，1k = 1000 token。\n平台表跟随所选时间范围；chat 卡片为该 chat 累计，含已确认归属的子代理，不混入无关 chat。\n两种分组使用同一批记录，不能重复相加。\n\n"+detail;
+        TokenDiagnosticsText.Text=(_model.Settings.TokenTrackingEnabled?"":Loc.T("统计已暂停。\n"))+Loc.T("IN：未缓存输入，含已报告的缓存写入。\nCACHE：各请求累计读取的缓存 token，不是缓存占用大小。\nOUT：输出，已包含推理。\n1B = 10亿，1M = 100万，1k = 1000 token。\n平台表跟随所选时间范围；chat 卡片为该 chat 累计，含已确认归属的子代理，不混入无关 chat。\n两种分组使用同一批记录，不能重复相加。\n\n")+detail;
         if (_model.Settings.CompactMode) return;
         var claudeVisible=_model.Settings.Monitors(ChatPlatform.Claude)&&!_model.Settings.ClaudeChartCollapsed;
         var codexVisible=_model.Settings.Monitors(ChatPlatform.Codex)&&!_model.Settings.CodexChartCollapsed;
@@ -501,7 +529,7 @@ public partial class MainWindow : Window
         var now=DateTimeOffset.Now;
         var range=ChartRanges.Select(_model.Settings.RangeMinutes,AvailableRanges());
         var start=range==0 ? DateTimeOffset.UnixEpoch : now.AddMinutes(-range);
-        var suffix=detail.Contains("正在补读")?"…":detail.Contains("未计入")||detail.Contains("未包含")?"*":"";
+        var suffix=detail.Contains(Loc.T("正在补读"))?"…":detail.Contains(Loc.T("未计入"))||detail.Contains(Loc.T("未包含"))?"*":"";
         TokenScope.Content="TOKEN"+suffix;
         foreach(var (platform,label,input,cached,output) in new[] {
             (ChatPlatform.Claude,ClaudeTokenLabel,ClaudeInput,ClaudeCached,ClaudeOutput),
@@ -514,7 +542,7 @@ public partial class MainWindow : Window
             input.Text=totals.Requests==0?"—":TokenSummary.Number(totals.Input);
             cached.Text=totals.Requests==0?"—":TokenSummary.Number(totals.Cached);
             output.Text=totals.Requests==0?"—":TokenSummary.Number(totals.Output);
-            label.ToolTip=$"{platform} · {ChartRanges.Label(range)} · {totals.Requests:N0} 请求";
+            label.ToolTip=Loc.F($"{platform} · {ChartRanges.Label(range)} · {totals.Requests:N0} 请求");
             input.ToolTip=$"IN · {totals.Input:N0} token";
             cached.ToolTip=$"CACHE · {totals.Cached:N0} token";
             output.ToolTip=$"OUT · {totals.Output:N0} token";
@@ -547,8 +575,8 @@ public partial class MainWindow : Window
         var start = _model.DemoMode ? _demoSessionStart : session?.Start;
         if (start is not { } at) { SessionStartText.Text = ""; return; }
         var local = at.ToLocalTime(); var today = now.ToLocalTime().Date;
-        SessionStartText.Text = local.Date == today ? $"{local:HH:mm} 起" : local.Date == today.AddDays(-1) ? $"昨{local:HH:mm} 起" : $"{local:M/d HH:mm} 起";
-        SessionStartText.ToolTip = $"开始 · {local:M/d HH:mm}" + (session?.Recovered == true ? " · 恢复记录" : "");
+        SessionStartText.Text = local.Date == today ? Loc.F($"{local:HH:mm} 起") : local.Date == today.AddDays(-1) ? Loc.F($"昨{local:HH:mm} 起") : Loc.F($"{local:M/d HH:mm} 起");
+        SessionStartText.ToolTip = Loc.F($"开始 · {local:M/d HH:mm}") + (session?.Recovered == true ? Loc.T(" · 恢复记录") : "");
     }
 
     string? _historySignature, _selectedSession;
@@ -561,7 +589,7 @@ public partial class MainWindow : Window
         NoteBar.Visibility = Visibility.Collapsed;
         HistoryButton.Background = open ? Theme.Brush("Raised") : Brushes.Transparent;
         SettingsButton.Background = Brushes.Transparent;
-        DisplayLabelText.Text = open ? "回顾" : _model.Settings.Display == "used" ? "已用 %" : "剩余 %";
+        DisplayLabelText.Text = open ? Loc.T("回顾") : _model.Settings.Display == "used" ? Loc.T("已用 %") : Loc.T("剩余 %");
         if (open) { ReleaseChart(); RenderHistory(force: true); }
         else { _model.ReleaseCalendar(); _codex.ReleaseCalendar(); if (!_suppress) _app.Render(); }
     }
@@ -569,7 +597,7 @@ public partial class MainWindow : Window
     void RenderHistory(bool force = false)
     {
         RenderSessionStart(DateTimeOffset.Now);
-        TagText.Text = _model.DemoMode ? "演示数据" : "";
+        TagText.Text = _model.DemoMode ? Loc.T("演示数据") : "";
         TagText.Visibility = _model.DemoMode ? Visibility.Visible : Visibility.Collapsed;
         var now=DateTimeOffset.Now;
         var date = _historyDay;
@@ -592,8 +620,8 @@ public partial class MainWindow : Window
         _historySignature = signature;
         RenderCalendar(claudeDays,codexDays,monthSessions);
         var sessions = monthSessions.Where(s=>s.Start.ToLocalTime().Date<=date && s.End.ToLocalTime().Date>=date).ToArray();
-        HistoryDayTitle.Text=date.ToString("M月d日")+(date==DateTime.Today?" · 今天":"");
-        HistoryDayCount.Text=sessions.Length==0?"无使用段":$"{sessions.Length} 个使用段";
+        HistoryDayTitle.Text=date.ToString(Loc.T("M月d日"),CultureInfo.InvariantCulture)+(date==DateTime.Today?Loc.T(" · 今天"):"");
+        HistoryDayCount.Text=sessions.Length==0?Loc.T("无使用段"):Loc.F($"{sessions.Length} 个使用段");
         var selected = sessions.FirstOrDefault(s => s.Id == _selectedSession) ?? sessions.FirstOrDefault();
         _selectedSession = selected?.Id;
         HistorySessions.Children.Clear(); HistoryChats.Children.Clear();
@@ -609,8 +637,8 @@ public partial class MainWindow : Window
             button.Click += (_, _) => { _selectedSession = session.Id; RenderHistory(force: true); };
             HistorySessions.Children.Add(button);
         }
-        if (selected is null) { HistoryPeriod.Text = "当天暂无可回顾的 chat 记录"; HistoryPeriod.ToolTip=null; return; }
-        HistoryPeriod.Text = (selected.Start.ToLocalTime().Date!=selected.End.ToLocalTime().Date ? "跨日使用段 · " : "使用段 · ") + (selected.Id == current?.Id ? "本次使用":"已保存") + (selected.Recovered ? " · 含恢复记录":"");
+        if (selected is null) { HistoryPeriod.Text = Loc.T("当天暂无可回顾的 chat 记录"); HistoryPeriod.ToolTip=null; return; }
+        HistoryPeriod.Text = (selected.Start.ToLocalTime().Date!=selected.End.ToLocalTime().Date ? Loc.T("跨日使用段 · ") : Loc.T("使用段 · ")) + (selected.Id == current?.Id ? Loc.T("本次使用"):Loc.T("已保存")) + (selected.Recovered ? Loc.T(" · 含恢复记录"):"");
         HistoryPeriod.ToolTip=$"{selected.Start.ToLocalTime():M/d HH:mm} → {selected.End.ToLocalTime():M/d HH:mm}";
         foreach (var chat in selected.Chats.OrderBy(c => c.FirstAt))
         {
@@ -618,7 +646,7 @@ public partial class MainWindow : Window
             block.Children.Add(CacheRow(chat.Last, selected.End, historical: true));
             var last = chat.Last.ActivityAt ?? chat.Last.RequestAt;
             var detail = new WrapPanel { Margin = new Thickness(29,0,0,0),
-                ToolTip = "首次 / 最近活动" + (chat.Compactions.Count > 0 ? $"\ncompact {chat.Compactions.Count} 次 · 最近 {chat.Compactions.Max().ToLocalTime():M/d HH:mm}" : "") };
+                ToolTip = Loc.T("首次 / 最近活动") + (chat.Compactions.Count > 0 ? Loc.F($"\ncompact {chat.Compactions.Count} 次 · 最近 {chat.Compactions.Max().ToLocalTime():M/d HH:mm}") : "") };
             detail.Children.Add(new TextBlock { Text = $"{chat.FirstAt.ToLocalTime():M/d HH:mm} – {last.ToLocalTime():M/d HH:mm}", FontSize = 9, Foreground = Theme.Brush("Muted") });
             if (chat.Compactions.Count > 0)
             {
@@ -634,7 +662,7 @@ public partial class MainWindow : Window
 
     void RenderCalendar(IReadOnlyList<DayQuota> claude,IReadOnlyList<DayQuota> codex,IReadOnlyList<ChatSession> sessions)
     {
-        HistoryMonthTitle.Text=_historyMonth.ToString("yyyy年M月");
+        HistoryMonthTitle.Text=_historyMonth.ToString(Loc.T("yyyy年M月"),CultureInfo.InvariantCulture);
         PreviousMonthButton.IsEnabled=_historyMonth>new DateTime(1,1,1);
         NextMonthButton.IsEnabled=_historyMonth<new DateTime(DateTime.Today.Year,DateTime.Today.Month,1);
         PreviousMonthButton.Opacity=PreviousMonthButton.IsEnabled?1:.3;
@@ -642,11 +670,11 @@ public partial class MainWindow : Window
         string Number(double? value) => value is not { } v ? "—" : v>=100 ? v.ToString("0",CultureInfo.InvariantCulture) : v.ToString("0.#",CultureInfo.InvariantCulture);
         double? Total(IReadOnlyList<DayQuota> days) => days.Any(d=>d.Points is not null) ? days.Sum(d=>d.Points??0) : null;
         MonthQuotaSummary.Inlines.Clear();
-        MonthQuotaSummary.Inlines.Add(new Run("已记录  "){Foreground=Theme.Brush("Muted")});
+        MonthQuotaSummary.Inlines.Add(new Run(Loc.T("已记录  ")){Foreground=Theme.Brush("Muted")});
         MonthQuotaSummary.Inlines.Add(new Run($"Claude {Number(Total(claude))}"){Foreground=Theme.Brush("Claude")});
         MonthQuotaSummary.Inlines.Add(new Run("   "));
         MonthQuotaSummary.Inlines.Add(new Run($"Codex {Number(Total(codex))}"){Foreground=Theme.Brush("Violet")});
-        MonthQuotaSummary.ToolTip="本月已记录 · 各平台周额度点";
+        MonthQuotaSummary.ToolTip=Loc.T("本月已记录 · 各平台周额度点");
         var c=claude.ToDictionary(d=>d.Day); var x=codex.ToDictionary(d=>d.Day);
         var offset=((int)_historyMonth.DayOfWeek+6)%7;
         var first=_historyMonth.AddDays(-offset);
@@ -673,11 +701,11 @@ public partial class MainWindow : Window
             var codexNumber=Text(!own||future?" ":Number(b.Points),b.Points is null?"Muted":"Violet",11);
             Grid.SetRow(claudeNumber,1); Grid.SetRow(codexNumber,2); stack.Children.Add(claudeNumber); stack.Children.Add(codexNumber);
             string Metric(string name,DayQuota d) => d.Points is { } points
-                ? $"{name} {(d.SplitAtMidnight?"≈":"")}{points:0.##} 点 · {d.CoverageMinutes/60:0.#}h记录"+(d.HasGap?" · 缺采样":"")
-                : name+" — · 无记录";
+                ? Loc.F($"{name} {(d.SplitAtMidnight?"≈":"")}{points:0.##} 点 · {d.CoverageMinutes/60:0.#}h记录")+(d.HasGap?Loc.T(" · 缺采样"):"")
+                : name+Loc.T(" — · 无记录");
             var button=new Button {Style=(Style)FindResource("FlatButton"),Content=stack,Padding=new Thickness(0,2,0,2),HorizontalContentAlignment=HorizontalAlignment.Stretch,
-                IsEnabled=!future, ToolTip=$"{day:yyyy/M/d} · {linked} 个使用段\n{Metric("Claude",a)}\n{Metric("Codex",b)}"};
-            System.Windows.Automation.AutomationProperties.SetName(button,$"{day:yyyy年M月d日}，{Metric("Claude",a)}，{Metric("Codex",b)}，{linked}个使用段");
+                IsEnabled=!future, ToolTip=Loc.F($"{day:yyyy/M/d} · {linked} 个使用段\n{Metric("Claude",a)}\n{Metric("Codex",b)}")};
+            System.Windows.Automation.AutomationProperties.SetName(button,Loc.F($"{day:yyyy年M月d日}，{Metric("Claude",a)}，{Metric("Codex",b)}，{linked}个使用段"));
             button.Click+=(_,_)=>SelectHistoryDay(day);
             HistoryCalendar.Children.Add(new Border {Child=button,Height=54,Margin=new Thickness(1),CornerRadius=new CornerRadius(5),BorderThickness=new Thickness(selected?1.4:1),
                 BorderBrush=Theme.Brush(selected?"Ink":today?"Blue":"Line"),Background=Theme.Brush(hasRecord&&own?"Raised":"Bg"),Opacity=future ? .32 : own ? 1 : .5});
@@ -740,11 +768,11 @@ public partial class MainWindow : Window
     void ShowSettings(bool open)
     {
         CloseUsage();
-        CacheDiagnosticsText.Text=_app.CacheWarning??"状态读取正常";
+        CacheDiagnosticsText.Text=_app.CacheWarning??Loc.T("状态读取正常");
         ClaudeLoginButton.IsEnabled=ClaudeLogoutButton.IsEnabled=_app.CollectorAvailable&&_model.Settings.Monitors(ChatPlatform.Claude);
         HistoryPanel.Visibility = Visibility.Collapsed;
         HistoryButton.Background = Brushes.Transparent;
-        DisplayLabelText.Text = _model.Settings.Display == "used" ? "已用 %" : "剩余 %";
+        DisplayLabelText.Text = _model.Settings.Display == "used" ? Loc.T("已用 %") : Loc.T("剩余 %");
         MainPanel.Visibility = open ? Visibility.Collapsed : Visibility.Visible;
         SettingsPanel.Visibility = open ? Visibility.Visible : Visibility.Collapsed;
         SettingsButton.Background = open ? Theme.Brush("Raised") : Brushes.Transparent;

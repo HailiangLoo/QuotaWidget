@@ -17,7 +17,7 @@ static class Probe
         {
             var app=new App(); app.InitializeComponent(); Theme.Apply(true);
             var opts=AppOptions.Parse(["--compact","--snapshot","unused"]);
-            var model=new WidgetModel(new DataPaths(root),false){ReadOnly=true};model.Initialize();model.Settings.CompactMode=true;model.Settings.Width=318;
+            var model=new WidgetModel(new DataPaths(root),false){ReadOnly=true};model.Initialize();model.Settings.Language="zh-CN";model.Settings.CompactMode=true;model.Settings.Width=318;
             var codex=new WidgetModel(new DataPaths(Path.Combine(root,"codex")),false){ReadOnly=true};codex.Initialize();
             void Set(string name,object value)=>typeof(App).GetField(name,BindingFlags.NonPublic|BindingFlags.Instance)!.SetValue(app,value);
             Set("_opts",opts);Set("_model",model);Set("_codex",codex);Set("_paths",model.Paths);Set("_chatHistory",new ChatSessionHistory(root));
@@ -227,6 +227,7 @@ static class Probe
             Console.WriteLine("Chart axes: each expanded provider has its own axis; collapsed providers reserve no axis space; headers never overlap either axis.");
             ChartInspectProbe.Run();
             MonitoringRefreshProbe.Run(app);
+            LocalizationProbe.Run(app);
             Console.WriteLine("Monitoring UI: real selector transitions both/Claude/Codex; live meters/chart/tokens/chats and compact rows follow; paused-provider status suppressed; both restores; corner icons and palette roles verified.");
             Console.WriteLine("PASS: full-row geometry and hover, table/card same snapshot with platform/scope isolation, fixed window snapshot/drag handle/close, reused-window refresh scope, demo totals consistent. No native windows shown.");
             Console.WriteLine("PASS: both usage groupings visible (2 models / 80 chats), title mapping, no switches, refresh/close actions, provider hover entry/leave wiring.");

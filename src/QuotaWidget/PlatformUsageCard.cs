@@ -26,7 +26,7 @@ public sealed class PlatformUsageCard : Border
     public FrameworkElement DragHandle {get;}
     public bool IsPinned {get;private set;}
     public void SetActions(Action refresh,Action close){_refresh=refresh;_close=close;}
-    public void SetPinned(bool value){IsPinned=value;_mode.Text=value?"已固定 · 拖动标题":"点击卡片固定";_mode.Foreground=Theme.Brush(value?_accent:"Muted");}
+    public void SetPinned(bool value){IsPinned=value;_mode.Text=value?Loc.T("已固定 · 拖动标题"):Loc.T("点击卡片固定");_mode.Foreground=Theme.Brush(value?_accent:"Muted");}
     public bool IsCommandHit(DependencyObject? source)
     {
         while(source is not null&&source!=this)
@@ -52,12 +52,12 @@ public sealed class PlatformUsageCard : Border
         TextElement.SetFontFamily(this,new FontFamily("Segoe UI, Microsoft YaHei UI"));
         var body=new StackPanel();Child=body;
         var header=new DockPanel{Background=Brushes.Transparent};DragHandle=header;
-        var exit=new Button{Content="×",Style=ResourceStyle("FlatButton"),Width=23,Height=24,Padding=new Thickness(0),FontSize=18,ToolTip="关闭明细"};exit.Click+=(_,_)=>_close();DockPanel.SetDock(exit,Dock.Right);header.Children.Add(exit);
-        var scope=Text(minutes==0?"全部记录":$"近 {minutes/60}h",11,"Muted");scope.Margin=new Thickness(0,0,10,0);DockPanel.SetDock(scope,Dock.Right);header.Children.Add(scope);
-        var reload=new Button{Content="刷新",FontSize=10,Style=ResourceStyle("FlatButton"),Padding=new Thickness(5,3,5,3),Margin=new Thickness(0,0,5,0),ToolTip="刷新本地记录"};reload.Click+=(_,_)=>_refresh();DockPanel.SetDock(reload,Dock.Right);header.Children.Add(reload);
-        _mode=Text("点击卡片固定",10,"Muted");_mode.Margin=new Thickness(0,0,9,0);DockPanel.SetDock(_mode,Dock.Right);header.Children.Add(_mode);
-        var title=Text(platform+" 用量",16,_accent);title.FontWeight=FontWeights.SemiBold;header.Children.Add(title);body.Children.Add(header);
-        var period=Text($"{data.Start.ToLocalTime():M/d HH:mm} – {data.End.ToLocalTime():M/d HH:mm:ss} · {data.Total.Requests:N0} 请求",10,"Muted");period.Margin=new Thickness(0,5,0,0);body.Children.Add(period);
+        var exit=new Button{Content="×",Style=ResourceStyle("FlatButton"),Width=23,Height=24,Padding=new Thickness(0),FontSize=18,ToolTip=Loc.T("关闭明细")};exit.Click+=(_,_)=>_close();DockPanel.SetDock(exit,Dock.Right);header.Children.Add(exit);
+        var scope=Text(minutes==0?Loc.T("全部记录"):Loc.F($"近 {minutes/60}h"),11,"Muted");scope.Margin=new Thickness(0,0,10,0);DockPanel.SetDock(scope,Dock.Right);header.Children.Add(scope);
+        var reload=new Button{Content=Loc.T("刷新"),FontSize=10,Style=ResourceStyle("FlatButton"),Padding=new Thickness(5,3,5,3),Margin=new Thickness(0,0,5,0),ToolTip=Loc.T("刷新本地记录")};reload.Click+=(_,_)=>_refresh();DockPanel.SetDock(reload,Dock.Right);header.Children.Add(reload);
+        _mode=Text(Loc.T("点击卡片固定"),10,"Muted");_mode.Margin=new Thickness(0,0,9,0);DockPanel.SetDock(_mode,Dock.Right);header.Children.Add(_mode);
+        var title=Text(platform+Loc.T(" 用量"),16,_accent);title.FontWeight=FontWeights.SemiBold;header.Children.Add(title);body.Children.Add(header);
+        var period=Text(Loc.F($"{data.Start.ToLocalTime():M/d HH:mm} – {data.End.ToLocalTime():M/d HH:mm:ss} · {data.Total.Requests:N0} 请求"),10,"Muted");period.Margin=new Thickness(0,5,0,0);body.Children.Add(period);
         if(!string.IsNullOrEmpty(rateNote)){var rate=Text(rateNote,10,"Muted");rate.Margin=new Thickness(0,4,0,0);body.Children.Add(rate);}
         var summary=new UniformGrid{Columns=3,Margin=new Thickness(0,13,0,12)};
         foreach(var (label,number) in new[]{("IN",data.Total.Input),("CACHE",data.Total.Cached),("OUT",data.Total.Output)})
@@ -67,30 +67,30 @@ public sealed class PlatformUsageCard : Border
         }
         body.Children.Add(summary);
         var tables=new StackPanel();
-        AddSection(tables,"按模型",data.Models.Count,ModelRows);FillRows(ModelRows,false);
-        AddSection(tables,"按 chat / 模型",data.Chats.Count,ChatRows);FillRows(ChatRows,true);
+        AddSection(tables,Loc.T("按模型"),data.Models.Count,ModelRows);FillRows(ModelRows,false);
+        AddSection(tables,Loc.T("按 chat / 模型"),data.Chats.Count,ChatRows);FillRows(ChatRows,true);
         var scroll=new ScrollViewer{MaxHeight=Math.Max(200,Math.Min(640,SystemParameters.WorkArea.Height-240)),VerticalScrollBarVisibility=ScrollBarVisibility.Hidden,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled,PanningMode=PanningMode.VerticalOnly,Content=tables};body.Children.Add(scroll);
-        var footer=Text("本机记录 · IN 未缓存 / CACHE 命中 / OUT 输出",10,"Muted");footer.Margin=new Thickness(0,9,0,0);footer.ToolTip="详细口径：设置 → 数据诊断";body.Children.Add(footer);
-        if(data.Total.Conflicts>0){var warning=Text($"{data.Total.Conflicts} 条记录存在冲突 · 详见数据诊断",10,"Muted");body.Children.Add(warning);}
+        var footer=Text(Loc.T("本机记录 · IN 未缓存 / CACHE 命中 / OUT 输出"),10,"Muted");footer.Margin=new Thickness(0,9,0,0);footer.ToolTip=Loc.T("详细口径：设置 → 数据诊断");body.Children.Add(footer);
+        if(data.Total.Conflicts>0){var warning=Text(Loc.F($"{data.Total.Conflicts} 条记录存在冲突 · 详见数据诊断"),10,"Muted");body.Children.Add(warning);}
     }
     void AddSection(StackPanel parent,string title,int count,StackPanel rows)
     {
         var labels=Columns();labels.Margin=new Thickness(0,parent.Children.Count==0?0:14,0,5);
-        var name=Text($"{title} · {count}",13,_accent);name.FontWeight=FontWeights.SemiBold;name.ToolTip="按 token 用量排序";labels.Children.Add(name);
+        var name=Text($"{title} · {count}",13,_accent);name.FontWeight=FontWeights.SemiBold;name.ToolTip=Loc.T("按 token 用量排序");labels.Children.Add(name);
         for(var i=0;i<3;i++){var label=Text(new[]{"IN","CACHE","OUT"}[i],11,"Muted");label.HorizontalAlignment=HorizontalAlignment.Right;Grid.SetColumn(label,i+1);labels.Children.Add(label);}
         parent.Children.Add(labels);parent.Children.Add(rows);
     }
     void FillRows(StackPanel rows,bool byChat)
     {
         var groups=byChat?_data.Chats:_data.Models;
-        if(_data.Error is not null||groups.Count==0){rows.Children.Add(new TextBlock{Text=_data.Error??"这个时间范围暂无已记录用量",Margin=new Thickness(0,16,0,16),Foreground=Theme.Brush("Muted"),FontSize=12});return;}
+        if(_data.Error is not null||groups.Count==0){rows.Children.Add(new TextBlock{Text=_data.Error??Loc.T("这个时间范围暂无已记录用量"),Margin=new Thickness(0,16,0,16),Foreground=Theme.Brush("Muted"),FontSize=12});return;}
         foreach(var group in groups)
         {
-            var title=group.Key;string? project=null;
+            var title=byChat?group.Key:Loc.T(group.Key);string? project=null;
             if(byChat)
             {
                 if(_names.TryGetValue(group.Key,out var chat)){title=chat.Title;project=chat.Project;}
-                else title="未命名 chat · "+(group.Key.Length==0?"未知 ID":group.Key[..Math.Min(10,group.Key.Length)]);
+                else title=Loc.T("未命名 chat · ")+(group.Key.Length==0?Loc.T("未知 ID"):group.Key[..Math.Min(10,group.Key.Length)]);
             }
             var entries=byChat?group.ModelBreakdown:new[]{new TokenChatModel(group.Key,group.Usage,0)};
             var first=true;
@@ -99,13 +99,13 @@ public sealed class PlatformUsageCard : Border
                 var row=Columns();row.MinHeight=32;row.Background=Brushes.Transparent;
                 var name=new DockPanel{Margin=new Thickness(0,5,9,5),HorizontalAlignment=HorizontalAlignment.Left,VerticalAlignment=VerticalAlignment.Center};
                 var label=Text(title,14);label.ToolTip=title+(project is {Length:>0}?"\n"+project:"");
-                var metadata=$"{entry.Usage.Requests:N0} 请求"+(byChat?(entry.Subagents>0?$" · {entry.Subagents} subagent":""):$" · {group.Members} chats");
+                var metadata=Loc.F($"{entry.Usage.Requests:N0} 请求")+(byChat?(entry.Subagents>0?$" · {entry.Subagents} subagent":""):$" · {group.Members} chats");
                 var detail=Text(" · "+metadata,13,"Muted");detail.MaxWidth=190;detail.ToolTip=metadata;
                 DockPanel.SetDock(detail,Dock.Right);name.Children.Add(detail);
                 if(byChat)
                 {
                     // Reserve model and metadata widths; only the remaining title space can shrink.
-                    var model=Text(" · "+entry.Model,14,_accent);model.MaxWidth=145;model.ToolTip=entry.Model;
+                    var model=Text(" · "+Loc.T(entry.Model),14,_accent);model.MaxWidth=145;model.ToolTip=entry.Model;
                     DockPanel.SetDock(model,Dock.Right);name.Children.Add(model);
                 }
                 name.Children.Add(label);row.Children.Add(name);
