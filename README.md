@@ -8,23 +8,32 @@ A small Windows desktop widget for Claude and Codex quota, usage trends, and loc
 
 ## Screenshots
 
-All screenshots use synthetic demo data. Supports light and dark themes, full and compact modes, and Claude, Codex, or both.
+All screenshots use synthetic demo data. Supports light and dark themes, full and compact modes, and Claude, Codex, or both. **Click any image to view it at full size.**
 
-### Full mode
-
-<img src="docs/images/both-expanded-en.png" width="324" alt="Full mode with Claude and Codex" />
-<img src="docs/images/codex-expanded-en.png" width="324" alt="Full mode with Codex only" />
-
-### Cumulative view
-
-<img src="docs/images/both-cumulative-en.png" width="324" alt="Cumulative Claude, Fable and Codex usage" />
+<table>
+  <tr>
+    <th width="33%">Claude + Codex · Full</th>
+    <th width="33%">Codex · Full</th>
+    <th width="33%">Cumulative view</th>
+  </tr>
+  <tr>
+    <td align="center" valign="top"><a href="docs/images/both-expanded-en.png"><img src="docs/images/both-expanded-en.png" width="220" alt="Full mode with Claude and Codex" /></a></td>
+    <td align="center" valign="top"><a href="docs/images/codex-expanded-en.png"><img src="docs/images/codex-expanded-en.png" width="220" alt="Full mode with Codex only" /></a></td>
+    <td align="center" valign="top"><a href="docs/images/both-cumulative-en.png"><img src="docs/images/both-cumulative-en.png" width="220" alt="Cumulative Claude, Fable and Codex usage" /></a></td>
+  </tr>
+  <tr>
+    <th>Compact modes</th>
+    <th>Usage details</th>
+    <th>Settings</th>
+  </tr>
+  <tr>
+    <td align="center" valign="top"><strong>Claude + Codex</strong><br /><a href="docs/images/both-compact-en.png"><img src="docs/images/both-compact-en.png" width="220" alt="Compact mode with Claude and Codex" /></a><br /><strong>Codex</strong><br /><a href="docs/images/codex-compact-en.png"><img src="docs/images/codex-compact-en.png" width="220" alt="Compact mode with Codex only" /></a></td>
+    <td align="center" valign="top"><strong>Claude</strong><br /><a href="docs/images/claude-usage-en.png"><img src="docs/images/claude-usage-en.png" width="220" alt="Claude usage grouped by model and chat" /></a><br /><strong>Codex</strong><br /><a href="docs/images/codex-usage-en.png"><img src="docs/images/codex-usage-en.png" width="220" alt="Codex usage grouped by model and chat" /></a></td>
+    <td align="center" valign="top"><a href="docs/images/settings-en.png"><img src="docs/images/settings-en.png" width="220" alt="Provider connections, sampling and smoothing settings" /></a></td>
+  </tr>
+</table>
 
 Each chart chooses Rate or Total independently. The numbers in its header remain recorded totals.
-
-### Compact mode
-
-<img src="docs/images/both-compact-en.png" width="264" alt="Compact mode with Claude and Codex" />
-<img src="docs/images/codex-compact-en.png" width="264" alt="Compact mode with Codex only" />
 
 ### Local usage details
 
@@ -32,14 +41,9 @@ Hover a provider's token row or usage heading, then click the card to pin it. Ea
 
 Visible pinned windows automatically refresh at the configured polling interval (5 minutes by default), preserving their range and scroll position. This only reads existing local records; it does not trigger quota requests or model calls. Hidden or closed windows do not refresh, and dragging or recent interaction briefly defers an update. **Refresh** remains available for an immediate update.
 
-<img src="docs/images/claude-usage-en.png" width="660" alt="Synthetic Claude usage grouped by model and chat" />
-<img src="docs/images/codex-usage-en.png" width="660" alt="Synthetic Codex usage grouped by model and chat" />
-
 These are local records, not a bill or an estimate of each chat's weekly quota. All names, projects and numbers shown here are synthetic.
 
 ### Settings
-
-<img src="docs/images/settings-en.png" width="324" alt="Demo settings with provider connections, sampling and smoothing preferences" />
 
 The gear is available in full and compact modes. Settings includes language, provider connections, display units, polling, smoothing, chat cache reminders and local token tracking. Smoothing caps are **60, 90, 120 (default), and 150 minutes**. The estimator adapts below that cap, so choosing 150 does not force every curve to use a 150-minute window. This preference affects the rate curve, not recorded cumulative points or the observed one-hour average.
 

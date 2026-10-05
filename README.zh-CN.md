@@ -10,23 +10,32 @@ A small Windows desktop widget for Claude and Codex quota, usage trends, and loc
 
 ## 界面
 
-截图全部使用合成演示数据。支持深浅主题、完整/精简模式，以及仅 Claude、仅 Codex 或同时监听。
+截图全部使用合成演示数据。支持深浅主题、完整/精简模式，以及仅 Claude、仅 Codex 或同时监听。**点击任意图片可查看原图。**
 
-### 完整模式
-
-<img src="docs/images/both-expanded.png" width="324" alt="Claude 与 Codex 完整模式" />
-<img src="docs/images/codex-expanded.png" width="324" alt="仅 Codex 完整模式" />
-
-### 累计视图
-
-<img src="docs/images/both-cumulative.png" width="324" alt="Claude、Fable 和 Codex 的累计消耗" />
+<table>
+  <tr>
+    <th width="33%">Claude + Codex · 完整模式</th>
+    <th width="33%">Codex · 完整模式</th>
+    <th width="33%">累计视图</th>
+  </tr>
+  <tr>
+    <td align="center" valign="top"><a href="docs/images/both-expanded.png"><img src="docs/images/both-expanded.png" width="220" alt="Claude 与 Codex 完整模式" /></a></td>
+    <td align="center" valign="top"><a href="docs/images/codex-expanded.png"><img src="docs/images/codex-expanded.png" width="220" alt="仅 Codex 完整模式" /></a></td>
+    <td align="center" valign="top"><a href="docs/images/both-cumulative.png"><img src="docs/images/both-cumulative.png" width="220" alt="Claude、Fable 和 Codex 累计消耗" /></a></td>
+  </tr>
+  <tr>
+    <th>精简模式</th>
+    <th>用量明细</th>
+    <th>设置</th>
+  </tr>
+  <tr>
+    <td align="center" valign="top"><strong>Claude + Codex</strong><br /><a href="docs/images/both-compact.png"><img src="docs/images/both-compact.png" width="220" alt="Claude 与 Codex 精简模式" /></a><br /><strong>Codex</strong><br /><a href="docs/images/codex-compact.png"><img src="docs/images/codex-compact.png" width="220" alt="仅 Codex 精简模式" /></a></td>
+    <td align="center" valign="top"><strong>Claude</strong><br /><a href="docs/images/claude-usage.png"><img src="docs/images/claude-usage.png" width="220" alt="Claude 用量：按模型和 chat 分组" /></a><br /><strong>Codex</strong><br /><a href="docs/images/codex-usage.png"><img src="docs/images/codex-usage.png" width="220" alt="Codex 用量：按模型和 chat 分组" /></a></td>
+    <td align="center" valign="top"><a href="docs/images/settings.png"><img src="docs/images/settings.png" width="220" alt="平台连接、采样与平滑设置" /></a></td>
+  </tr>
+</table>
 
 每个图可以独立选择速率或累计，顶部数字始终保留已记录累计。
-
-### 精简模式
-
-<img src="docs/images/both-compact.png" width="264" alt="精简模式：按平台显示额度和 chat 活动" />
-<img src="docs/images/codex-compact.png" width="264" alt="仅 Codex 精简模式" />
 
 ### 本机用量明细
 
@@ -34,14 +43,9 @@ A small Windows desktop widget for Claude and Codex quota, usage trends, and loc
 
 可见的固定窗口会按采集间隔自动刷新，默认每 5 分钟一次，保留时间范围和滚动位置。刷新只读取已有本地记录，不触发额外额度请求或模型调用；隐藏、关闭后不刷新，拖动或刚操作时会稍后更新。仍可点击“刷新”立即更新。
 
-<img src="docs/images/claude-usage.png" width="660" alt="合成 Claude 用量：按模型和 chat 分组" />
-<img src="docs/images/codex-usage.png" width="660" alt="合成 Codex 用量：按模型和 chat 分组" />
-
 这些是本机记录，不是账单，也不换算成每个 chat 的周额度。上图的名称、项目和数值全部来自合成演示数据。
 
 ### 设置
-
-<img src="docs/images/settings.png" width="324" alt="演示设置：平台连接、采样与平滑选项" />
 
 完整和精简模式都可通过齿轮进入设置，调整语言、平台连接、显示方式、采样、平滑、chat 缓存提醒和本机 token 统计。平滑上限提供 **60、90、120（默认）、150 分钟**。算法在上限内自适应，选择 150 不代表每段曲线都强制使用 150 分钟；这个设置只影响速率曲线，不改变实际累计点数或近一小时观测均速。
 
