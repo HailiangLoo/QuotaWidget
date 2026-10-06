@@ -39,7 +39,19 @@ There is no provider-supplied instantaneous ground truth here, so the app cannot
 
 For scale, **if a counter is quantized in 1-point steps**, endpoint quantization alone can cause a difference of about 1 point/hour in an hour-long average, or about 6 points/hour over ten minutes. This assumes a consistent quantizer and excludes reporting delay and missing data; it is an illustration, not an error guarantee. A converted Fable counter moving in half-point steps has correspondingly finer quantization. Sampling more often reduces detection delay, but cannot recover precision absent from the counter.
 
-Use gauges and header totals for observed quota, the hourly average for recent consumption, and the curve for broad changes in intensity. Do not treat a curve peak as an exact bill for that minute. Local token records help identify work and models; QuotaWidget does not convert tokens into supposedly exact per-chat quota costs.
+Use gauges and header totals for observed quota, the hourly average for recent consumption, and the curve for broad changes in intensity. Do not treat a curve peak as an exact bill for that minute. Local token records help identify work and models. The per-chat estimate below is an allocation, not exact billing.
+
+## Per-chat quota allocation
+
+Observed weekly increments supply the total to allocate. A nonnegative fit learns separate IN, CACHE and OUT weights per model from up to eight days of local history. IN includes cache writes. Public API prices are not subscription quota prices; speed, context and provider policy can change the relationship.
+
+Calibration uses roughly hourly blocks bounded by actual readings, without crossing gaps, resets or saturated counters. It requires at least eight informative blocks (four per model when larger) and twelve observed points. Three contiguous held-out folds test predictions; twelve component/model order and regularization variants test whether chat shares depend on an arbitrary fit. Validation mean error must be at most max(0.8 points, 25% of mean observed hourly usage). An individual held-out error above max(2 points, 50% of that block plus 1 point) rejects a candidate. These are acceptance heuristics, not confidence intervals.
+
+Within each continuous valid part of the selected range, weights distribute the observed total according to each chat/model's tokens. Confirmed subagents use the token table's parent mapping. Unrounded shares sum to the observed total; one-decimal values may differ slightly after rounding. At least three points and 45 minutes are required. Incomplete imports, conflicting records, history beyond the eight-day horizon, prediction disagreement or a share spread above max(0.75 points, 30% of that share) produce a dash. Unknown is never zero.
+
+This assumes relevant consumption is represented in local logs. Correlated off-device activity can still pass validation; account-level validation error does not establish each chat's accuracy. Partial observation intervals and pending consumption are not allocated. Calibration runs off the UI thread when details open or refresh, without provider requests. Token columns retain their original scope and counters.
+
+Compact Fable shows an observed recent-hour average, converted to Claude weekly units where supported, otherwise in Fable's own units. Zero, stale or insufficient recent-hour coverage hides it, as does the end of all explicitly identified Fable work. Opus activity does not extend a completed Fable turn. Historical consumption stays intact; missing completion is not replaced with an invented timeout.
 
 ## Sharing the Fable stroke
 

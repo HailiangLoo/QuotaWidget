@@ -135,6 +135,8 @@ public sealed class TokenIndex : IDisposable
     public long LastReadBytes { get; private set; }
     public int PendingFiles { get; private set; }
     public bool LimitedDiscovery { get; private set; }
+    readonly Dictionary<string,DateTimeOffset> _unindexedQuotaFiles=new();
+    HashSet<string> _quotaReadFailures=new();
     public int Skipped { get { lock(_gate) return _sources.Values.Sum(c => c.Skipped); } }
     public TokenIndex(string root, string codexHome, string claudeHome, DateTimeOffset now)
     {
@@ -170,6 +172,16 @@ public sealed class TokenIndex : IDisposable
         }
     }
     public bool WorkActivityReady(string platform) { lock(_gate) return _publishedWork.ContainsKey(platform); }
+    public IReadOnlyList<QuotaToken>? QuotaTokens(DateTimeOffset start,DateTimeOffset end,string platform)
+    {
+        lock(_gate)
+        {
+            var from=start>Since?start:Since;
+            if(_discovered==default||_quotaReadFailures.Contains(platform)||_unindexedQuotaFiles.TryGetValue(platform,out var omitted)&&omitted>=from||
+                _active.Any(p=>_sources[p].Platform==platform&&_sources[p].Offset<_sources[p].Length))return null;
+            return _store.QuotaTokens(start,end,platform);
+        }
+    }
     public string Coverage { get { lock(_gate) return CoverageText(Loc.IsEnglish); } }
     string CoverageText(bool english) => Loc.F($"本机日志 · 自 {Since.ToLocalTime():M/d HH:mm}；仅已记录用量，非账号账单。",english) +
         (PendingFiles > 0 ? Loc.F($"\n正在补读 {PendingFiles} 个文件。",english) : "") +
@@ -220,6 +232,7 @@ public sealed class TokenIndex : IDisposable
                 _discovered=_parentsRead=default; _active=[]; throw;
             }
             var pending = _active.Count(p => _sources[p].Offset < _sources[p].Length);
+            _quotaReadFailures=failedPlatforms;
             foreach(var platform in new[]{"Claude","Codex"})
                 if((platform=="Claude"?claude:codex)&&!failedPlatforms.Contains(platform)&&
                     !_active.Any(p=>_sources[p].Platform==platform&&_sources[p].Offset<_sources[p].Length)&&
@@ -238,7 +251,7 @@ public sealed class TokenIndex : IDisposable
     }
     void Discover(DateTimeOffset now,bool claude,bool codex)
     {
-        var files = new List<(string Path, string Platform, long Write)>();
+        var files = new List<(string Path, string Platform, long Write,long Length,long Created)>();
         foreach (var (root, platform) in new[] { (Path.Combine(_codexHome,"sessions"),"Codex"), (Path.Combine(_codexHome,"archived_sessions"),"Codex"), (Path.Combine(_claudeHome,"projects"),"Claude") })
         {
             if(platform=="Codex"?!codex:!claude) continue;
@@ -246,11 +259,22 @@ public sealed class TokenIndex : IDisposable
             foreach (var path in Directory.EnumerateFiles(root,"*.jsonl",new EnumerationOptions { RecurseSubdirectories=true, IgnoreInaccessible=true, AttributesToSkip=FileAttributes.ReparsePoint }))
             {
                 var f = new FileInfo(path);
-                files.Add((path,platform,f.LastWriteTimeUtc.Ticks));
+                files.Add((path,platform,f.LastWriteTimeUtc.Ticks,f.Length,f.CreationTimeUtc.Ticks));
             }
         }
         LimitedDiscovery = files.Count > 256;
-        _active = files.OrderByDescending(f=>f.Write).Take(256).Select(f=>
+        var ordered=files.OrderByDescending(f=>f.Write).ToArray();
+        var saved=_store.Sources();_unindexedQuotaFiles.Clear();
+        // A discovery cap need not invalidate already imported, unchanged old logs.
+        // Only omitted files which may contain unindexed usage block this provider's
+        // calibration horizon. Keep the normal 256-file read budget unchanged.
+        foreach(var f in ordered.Skip(256).Where(f=>f.Write>=Math.Max(Since.UtcTicks,now.Add(-WidgetModel.Lookback).UtcTicks)))
+            if(!saved.TryGetValue(f.Path,out var cursor)||cursor.Offset<f.Length||cursor.Length!=f.Length||cursor.WriteTicks!=f.Write||cursor.CreatedTicks!=f.Created)
+            {
+                var at=new DateTimeOffset(f.Write,TimeSpan.Zero);
+                if(!_unindexedQuotaFiles.TryGetValue(f.Platform,out var latest)||at>latest)_unindexedQuotaFiles[f.Platform]=at;
+            }
+        _active = ordered.Take(256).Select(f=>
         {
             if (!_sources.ContainsKey(f.Path))
             {

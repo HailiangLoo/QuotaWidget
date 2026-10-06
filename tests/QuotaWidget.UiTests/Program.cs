@@ -109,7 +109,7 @@ static class Probe
                 Check(!visible.Contains(slice.Model)&&visible.Contains($"{slice.Subagents} subagent"),"model retained in small metadata or subagents hidden: "+visible);
                 Check(name.Children.OfType<TextBlock>().All(t=>Math.Abs(t.TransformToAncestor(name).Transform(new Point(0,t.ActualHeight/2)).Y-name.ActualHeight/2)<1)&&familyRow.ActualHeight<=32,"fields wrap or are not centered on one line");
                 Check(familyRow.ToolTip is null,"nested breakdown tooltip retained");
-                Check(familyRow.Children.OfType<TextBlock>().Select(t=>t.Text).SequenceEqual(new[]{slice.Usage.Input,slice.Usage.Cached,slice.Usage.Output}.Select(TokenSummary.Number)),"model row shows mixed totals");
+                Check(familyRow.Children.OfType<TextBlock>().Where(t=>Grid.GetColumn(t)<4).Select(t=>t.Text).SequenceEqual(new[]{slice.Usage.Input,slice.Usage.Cached,slice.Usage.Output}.Select(TokenSummary.Number)),"model row shows mixed totals");
             }
             var multi=TokenBreakdown.Build(now.AddHours(-2),now,[new("Opus","chat-a",new(30,40,50,0,1,0)),new("Fable","chat-a",new(1,2,3,0,1,0)),new("Opus","chat-b",new(10,20,30,0,1,0))]);
             var multiCard=new PlatformUsageCard(ChatPlatform.Claude,multi,new Dictionary<string,ChatCacheEntry>{{"chat-a",Entry("Chat A",1)},{"chat-b",Entry("Chat B",1)}},120,()=>{},()=>{},"fixture");
@@ -151,7 +151,7 @@ static class Probe
             var popup=(Popup)typeof(MainWindow).GetField("_usagePopup",BindingFlags.NonPublic|BindingFlags.Instance)!.GetValue(window)!;
             void Pin(string name)
             {
-                var click=new System.Windows.Input.MouseButtonEventArgs(System.Windows.Input.Mouse.PrimaryDevice,0,System.Windows.Input.MouseButton.Left){RoutedEvent=UIElement.PreviewMouseLeftButtonDownEvent};
+                var click=new System.Windows.Input.MouseButtonEventArgs(System.Windows.Input.Mouse.PrimaryDevice,0,System.Windows.Input.MouseButton.Left){RoutedEvent=UIElement.PreviewMouseLeftButtonUpEvent};
                 Control<FrameworkElement>(name).RaiseEvent(click);Check(click.Handled,"direct pin did not handle click");
                 Check(!popup.IsOpen&&!openTimer.IsEnabled,"direct pin flashed or left a pending hover");
             }
@@ -171,7 +171,7 @@ static class Probe
             typeof(MainWindow).GetField("_hoverCard",BindingFlags.NonPublic|BindingFlags.Instance)!.SetValue(window,frozen);
             Pin("CodexTokenHitArea");Check(ReferenceEquals(windows[ChatPlatform.Codex].Card,frozen),"click discarded visible hover snapshot");
             model.Settings.CompactMode=true;window.Render();Pin("CompactCodexRate");
-            Check(windows[ChatPlatform.Codex].Card.Minutes==60,"compact direct pin reused expanded scope");
+            Check(windows[ChatPlatform.Codex].Card.Minutes==0,"compact re-open reset the independent pinned scope");
             Check(windows.Values.All(w=>!w.IsVisible),"isolated handler probe displayed a native window");
             var hiddenSnapshot=windows[ChatPlatform.Codex].Card;
             window.RefreshPinnedUsage(now.AddDays(1));
@@ -235,6 +235,7 @@ static class Probe
             LocalizationProbe.Run(app);
             ConnectionProbe.Run(app);
             UsageRefreshProbe.Run();
+            UsageInteractionProbe.Run();
             Console.WriteLine("Monitoring UI: real selector transitions both/Claude/Codex; live meters/chart/tokens/chats and compact rows follow; paused-provider status suppressed; both restores; corner icons and palette roles verified.");
             Console.WriteLine("PASS: full-row geometry and hover, table/card same snapshot with platform/scope isolation, fixed window snapshot/drag handle/close, reused-window refresh scope, demo totals consistent. No native windows shown.");
             Console.WriteLine("PASS: both usage groupings visible (2 models / 80 chats), title mapping, no switches, refresh/close actions, provider hover entry/leave wiring.");

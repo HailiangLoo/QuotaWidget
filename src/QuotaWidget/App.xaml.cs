@@ -448,10 +448,11 @@ public partial class App : Application
             bool Ready(string platform)=>_tokens?.WorkActivityReady(platform)??(_snapshotTokens is not null);
             var value=new TrendActivity(WorkActivity.Merge(claude,cadence),
                 WorkActivity.Merge(claude.Where(s=>s.Model is null||FableDisplay.IsFable(s.Model)),cadence),WorkActivity.Merge(codex,cadence),
-                !Monitors(ChatPlatform.Claude)||Ready("Claude"),!Monitors(ChatPlatform.Codex)||Ready("Codex"));
+                !Monitors(ChatPlatform.Claude)||Ready("Claude"),!Monitors(ChatPlatform.Codex)||Ready("Codex"))
+                {FableRunning=WorkActivity.FableRunning(claude,now)};
             _trendActivity=(version,mode,now,value);return value;
         }
-        catch{return _trendActivity?.Value??new TrendActivity([],[],[],false,false);}
+        catch{return _trendActivity is {} last?last.Value with{FableRunning=false}:new TrendActivity([],[],[],false,false);}
     }
     (DateTimeOffset Start,DateTimeOffset End,long Version,IReadOnlyList<ModelActivity> Rows)? _modelActivity;
     public IReadOnlyList<ModelActivity> ClaudeModelActivity(DateTimeOffset start,DateTimeOffset end)
@@ -482,6 +483,22 @@ public partial class App : Application
         catch { return TokenSummary.Empty; }
     }
     public string TokenDetail => (_tokenWarning is { } warning ? Loc.T(warning) : null) ?? _tokens?.Coverage ?? _snapshotTokens?.Meta(Loc.IsEnglish?"coverage.en":"coverage") ?? (_opts.Demo ? Loc.T("演示 token 数值") : Loc.T("本机已记录日志；非账号账单。IN 为未命中输入（含缓存写入），CACHE 为命中输入，OUT 已含推理输出。首次补读可能尚未完成。"));
+    public Task<ChatQuotaEstimate> EstimateChatQuota(ChatPlatform platform,SeriesData quota,DateTimeOffset start,DateTimeOffset end)
+    {
+        if(_opts.Demo)return Task.FromResult(ChatQuotaEstimate.Unknown("演示数据不参与校准"));
+        if(!_model.Settings.TokenTrackingEnabled)return Task.FromResult(ChatQuotaEstimate.Unknown("本机记录尚未完整"));
+        return Task.Run(()=>
+        {
+            try
+            {
+                var rows=_tokens?.QuotaTokens(end.AddDays(-8),end,platform.ToString());
+                return rows is null?ChatQuotaEstimate.Unknown("本机记录尚未完整"):
+                    ChatQuotaEstimator.Build(quota,rows,start,end);
+            }
+            catch(Exception e) when(e is IOException or UnauthorizedAccessException or InvalidOperationException)
+            {return ChatQuotaEstimate.Unknown("本地用量索引暂不可读");}
+        });
+    }
     public TokenBreakdown TokenBreakdown(ChatPlatform platform,DateTimeOffset start,DateTimeOffset end)
     {
         if(_opts.Demo)

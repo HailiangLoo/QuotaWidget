@@ -1115,6 +1115,7 @@ ContinuousResetTests.Register(tests);
 TimeAxisTests.Register(tests);
 LocalizationTests.Register(tests);
 ConnectionTests.Register(tests);
+ChatQuotaTests.Register(tests);
 var failed = 0; var skipped = 0;
 foreach (var (name, body) in tests)
 {

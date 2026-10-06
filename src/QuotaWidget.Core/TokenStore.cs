@@ -124,6 +124,16 @@ public sealed class TokenStore : IDisposable
         if(rows.Count>20000)return []; // too much history to classify cheaply: retain both curves
         return rows.Select(r=>new ModelActivity(DateTimeOffset.FromUnixTimeMilliseconds((long)r[0]!),DateTimeOffset.FromUnixTimeMilliseconds(Math.Max((long)r[0]!,r[1] is long last?last:(long)r[0]!)),(long)r[3]! == 0?r[2] as string:null)).ToArray();
     }
+    public IReadOnlyList<QuotaToken>? QuotaTokens(DateTimeOffset start,DateTimeOffset end,string platform)
+    {
+        if(_scope is {} scope&&start<scope)start=scope;
+        var rows=_db.Query("SELECT t,last_t,chat,model,i,c,o,conflict FROM requests WHERE platform=? AND t>=? AND t<=? ORDER BY t LIMIT 50001",platform,start.ToUnixTimeMilliseconds(),end.ToUnixTimeMilliseconds());
+        if(rows.Count>50000)return null;
+        var parents=Parents(platform);
+        return rows.Select(r=>new QuotaToken(DateTimeOffset.FromUnixTimeMilliseconds((long)r[0]!),
+            DateTimeOffset.FromUnixTimeMilliseconds(r[1] is long last?last:(long)r[0]!),ChatOwnership.Root((string)r[2]!,parents),
+            r[3] as string??"",(long)r[4]!, (long)r[5]!, (long)r[6]!, (long)r[7]!!=0)).ToArray();
+    }
     public bool PutWorkEvent(string platform,WorkEvent e)
     {
         _db.Run("INSERT OR IGNORE INTO work_events VALUES(?,?,?,?,?,?)",platform,e.Stream,e.At.ToUnixTimeMilliseconds(),e.Kind,e.Id??"",e.Model);

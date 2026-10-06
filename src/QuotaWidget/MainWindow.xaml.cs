@@ -42,6 +42,7 @@ public partial class MainWindow : Window
         Loc.Configure(opts.Language ?? model.Settings.Language);
         Translate.RefreshResources();
         InitializeComponent();
+        WindowDrag.Attach(this,Frame,moved:PersistPlacement);
         InitializeConnections();
         Chart.AttachInspectOverlay(ChartInspection);
         Chart.SizeChanged += (_,_) => PlaceChartButtons();
@@ -267,6 +268,7 @@ public partial class MainWindow : Window
         CompactStatus.ToolTip = note is null ? null : note + Loc.T("\n点击展开查看");
         System.Windows.Automation.AutomationProperties.SetName(CompactStatus, note ?? Loc.T("采集正常"));
         RenderCompactRate(CompactClaudeRate,CompactClaudeRateValue,CompactClaudePoints,"Claude",view.Chart.Total,_model,now);
+        RenderCompactFable(view,now);
         RenderCompactRate(CompactCodexRate,CompactCodexRateValue,CompactCodexPoints,"Codex",codex.Chart.Total,_codex,now);
         if(CodexCompactSummary.Visibility==Visibility.Visible)
             RenderCompactRate(CodexInlineUsage,CodexInlineRateValue,CodexInlinePoints,"Codex",codex.Chart.Total,_codex,now);
@@ -284,6 +286,22 @@ public partial class MainWindow : Window
         host.ToolTip=Loc.F($"{platform} · 近 1h\n")+(rate.Rate is { } r?Loc.F($"{RatePresentation.Estimate(r)} 点/h · {rate.Points:0.##} 点 / {rate.CoverageMinutes:0}m"):Loc.T("等待约一小时的连续采样"))
             +(rate.LastObserved is { } at?Loc.F($"\n截至 {at.ToLocalTime():HH:mm}"):"")+(rate.Partial?Loc.T(" · 记录不全"):"");
         System.Windows.Automation.AutomationProperties.SetName(host,host.ToolTip.ToString());
+    }
+
+    void RenderCompactFable(WidgetView view,DateTimeOffset now)
+    {
+        var activity=_app.WorkTrendActivity(now);
+        var factor=QuotaUnits.FableToClaude(view.PlanLabel);
+        var source=factor is {} scale?QuotaUnits.Scale(view.Chart.Fable,scale):view.Chart.Fable;
+        var rate=RecentUsageRate.Build(source,now,_model.LastEnvelope?.EffectivePollIntervalSeconds??_model.Settings.PollIntervalSeconds);
+        var visible=_model.Settings.Listens(ChatPlatform.Claude)&&activity.ClaudeReady&&activity.FableRunning&&rate.Rate is >=.05&&!rate.Partial;
+        CompactFableRate.Visibility=visible?Visibility.Visible:Visibility.Collapsed;
+        CompactFableRateValue.Text=visible?RatePresentation.Estimate(rate.Rate!.Value):"";
+        var note=Loc.T("Fable · 近1h均速；确认工作结束后隐藏，历史消耗保留。")+"\n"+
+            (factor is not null?Loc.T("已折合 Claude 周额度点/h"):Loc.T("Fable 自身周额度点/h"));
+        CompactFableRate.ToolTip=note;
+        System.Windows.Automation.AutomationProperties.SetName(CompactFableRate,note);
+        CompactClaudeRateColumn.Width=new GridLength(_model.Settings.Monitors(ChatPlatform.Claude)?visible?2.1:1:0,GridUnitType.Star);
     }
 
     string? _compactChatSignature;
@@ -799,13 +817,6 @@ public partial class MainWindow : Window
     }
 
     // ---------- handlers ----------
-
-    void TitleBar_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
-    {
-        if (e.ButtonState != MouseButtonState.Pressed) return;
-        try { DragMove(); } catch (InvalidOperationException) { }
-        PersistPlacement();
-    }
 
     void PinButton_Click(object sender, RoutedEventArgs e) => SetTopmost(PinButton.IsChecked == true);
 

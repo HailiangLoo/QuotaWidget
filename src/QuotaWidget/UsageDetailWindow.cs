@@ -21,6 +21,7 @@ public sealed class UsageDetailWindow : Window
         _reload=reload;_clock=clock??(()=>DateTimeOffset.Now);Title=platform+Loc.T(" 用量 · 已固定");WindowStyle=WindowStyle.None;AllowsTransparency=true;Background=Brushes.Transparent;
         ResizeMode=ResizeMode.NoResize;SizeToContent=SizeToContent.WidthAndHeight;ShowInTaskbar=false;WindowStartupLocation=WindowStartupLocation.Manual;
         ReplaceCard(card);
+        WindowDrag.Attach(this,this,dragging=>_dragging=dragging,()=>_lastInteraction=_clock());
         PreviewKeyDown+=(_,e)=>{if(e.Key==Key.Escape){Close();e.Handled=true;}};
         PreviewMouseWheel+=(_,_)=>_lastInteraction=_clock();
         PreviewMouseDown+=(_,_)=>_lastInteraction=_clock();
@@ -47,15 +48,8 @@ public sealed class UsageDetailWindow : Window
         if(_closed)return;
         var offset=Card is {} previous&&previous.Platform==card.Platform&&previous.Minutes==card.Minutes?previous.TableScroll.VerticalOffset:0;
         _lastRefresh=_clock();
-        Card=card;card.SetPinned(true);card.SetActions(()=>ReplaceCard(_reload(Card.Minutes)),Close);
+        Card=card;card.SetPinned(true);card.SetActions(()=>ReplaceCard(_reload(Card.Minutes)),Close,range=>ReplaceCard(_reload(range)));
         card.DragHandle.Cursor=Cursors.SizeAll;
-        card.DragHandle.MouseLeftButtonDown+=(_,e)=>
-        {
-            if(card.IsCommandHit(e.OriginalSource as DependencyObject)||e.ButtonState!=MouseButtonState.Pressed) return;
-            _dragging=true;
-            try {DragMove();} catch(InvalidOperationException) {}
-            finally{_dragging=false;_lastInteraction=_clock();} e.Handled=true;
-        };
         Content=card;
         if(offset>0)Dispatcher.BeginInvoke(DispatcherPriority.Loaded,()=>
         {

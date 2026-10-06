@@ -37,11 +37,11 @@ Each chart chooses Rate or Total independently. The numbers in its header remain
 
 ### Local usage details
 
-Hover a provider's token row or usage heading, then click the card to pin it. Each provider has its own movable window showing input, cached-input and output tokens, grouped by model and by chat/model. Confirmed subagent usage is grouped under its parent chat. Its range follows the entry point used to open it.
+Hover a provider's token row or usage heading, then click the card to pin it. Each provider has its own movable window showing input, cached-input and output tokens, grouped by model and by chat/model. Confirmed subagent usage is grouped under its parent chat. The initial range follows the full view, or starts at 1h in compact mode; each detail window then has independent **1h / 5h / 12h / 24h / 3d / all** buttons. Drag content to move either window; controls and scrolling retain their usual actions.
 
 Visible pinned windows automatically refresh at the configured polling interval (5 minutes by default), preserving their range and scroll position. This only reads existing local records; it does not trigger quota requests or model calls. Hidden or closed windows do not refresh, and dragging or recent interaction briefly defers an update. **Refresh** remains available for an immediate update.
 
-These are local records, not a bill or an estimate of each chat's weekly quota. All names, projects and numbers shown here are synthetic.
+The **Est. pts** column apportions observed weekly quota using locally calibrated model/input/cache/output weights. It appears only after held-out validation and allocation-stability checks; insufficient or conflicting data shows a dash. This assumes the quota consumption is represented in local logs. It is an estimate, not a provider bill. All names, projects and numbers shown here are synthetic.
 
 ### Settings
 

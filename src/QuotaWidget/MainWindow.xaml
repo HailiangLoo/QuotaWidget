@@ -18,8 +18,7 @@
             Typography.NumeralAlignment="Tabular">
       <StackPanel>
         <!-- Title: drag handle -->
-        <Border x:Name="TitleBar" Background="Transparent" BorderBrush="{DynamicResource Line}" BorderThickness="0,0,0,1" Padding="9,3"
-                MouseLeftButtonDown="TitleBar_MouseLeftButtonDown">
+        <Border x:Name="TitleBar" Background="Transparent" BorderBrush="{DynamicResource Line}" BorderThickness="0,0,0,1" Padding="9,3">
           <DockPanel LastChildFill="True">
             <StackPanel Orientation="Horizontal" DockPanel.Dock="Right" VerticalAlignment="Center">
               <TextBlock x:Name="TagText" FontSize="11" Foreground="{DynamicResource Muted}" VerticalAlignment="Center" Margin="0,0,8,0" Visibility="Collapsed" />
@@ -135,13 +134,18 @@
 
           <StackPanel x:Name="CompactDetails" Visibility="Collapsed" Margin="4,0,4,0">
             <Grid x:Name="CompactRates" Height="20" Background="Transparent">
-              <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition/></Grid.ColumnDefinitions>
+              <Grid.ColumnDefinitions><ColumnDefinition x:Name="CompactClaudeRateColumn"/><ColumnDefinition/></Grid.ColumnDefinitions>
               <StackPanel x:Name="CompactClaudeRate" Grid.Column="0" VerticalAlignment="Center" Background="Transparent" Margin="0,0,4,0">
                 <Viewbox Stretch="Uniform" StretchDirection="DownOnly" HorizontalAlignment="Left">
                   <StackPanel Orientation="Horizontal">
                     <TextBlock Text="Claude" Foreground="{DynamicResource Claude}" FontSize="10" Margin="0,0,3,0" VerticalAlignment="Center" />
                     <TextBlock x:Name="CompactClaudeRateValue" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource Claude}" VerticalAlignment="Center" />
                     <TextBlock Text="/h" FontSize="9" Foreground="{DynamicResource Claude}" VerticalAlignment="Center" />
+                    <StackPanel x:Name="CompactFableRate" Orientation="Horizontal" Visibility="Collapsed" Margin="6,0,0,0">
+                      <TextBlock Text="Fable" Foreground="{DynamicResource Fable}" FontSize="10" Margin="0,0,3,0" VerticalAlignment="Center" />
+                      <TextBlock x:Name="CompactFableRateValue" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource Fable}" VerticalAlignment="Center" />
+                      <TextBlock Text="/h" FontSize="9" Foreground="{DynamicResource Fable}" VerticalAlignment="Center" />
+                    </StackPanel>
                     <TextBlock x:Name="CompactClaudePoints" Visibility="Collapsed" FontSize="9" Foreground="{DynamicResource Muted}" Margin="5,0,0,0" VerticalAlignment="Center" />
                   </StackPanel>
                 </Viewbox>

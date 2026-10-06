@@ -68,7 +68,7 @@ public partial class MainWindow
         if(clickToPin)
         {
             host.Cursor=Cursors.Hand;host.Focusable=true;
-            host.PreviewMouseLeftButtonDown+=(_,e)=>{PinUsageFromHost(host,platform);e.Handled=true;};
+            host.PreviewMouseLeftButtonUp+=(_,e)=>{PinUsageFromHost(host,platform);e.Handled=true;};
             host.KeyDown+=(_,e)=>{if(e.Key is Key.Enter or Key.Space){PinUsageFromHost(host,platform);e.Handled=true;}};
         }
     }
@@ -92,6 +92,10 @@ public partial class MainWindow
     }
     void PinUsageFromHost(FrameworkElement host,ChatPlatform platform)
     {
+        if(_usageWindows.TryGetValue(platform,out var existing))
+        {
+            CloseUsage();if(IsVisible){existing.Show();existing.Activate();}return;
+        }
         var minutes=UsageMinutes();
         // Reuse an already visible snapshot; a quick click never needs to open the popup first.
         var card=_hoverCard is { } hover&&hover.Platform==platform&&hover.Minutes==minutes?hover:CreateUsageCard(platform,minutes);
@@ -120,11 +124,30 @@ public partial class MainWindow
         var now=DateTimeOffset.Now;var start=minutes==0?DateTimeOffset.UnixEpoch:now.AddMinutes(-minutes);
         var data=_app.TokenBreakdown(platform,start,now);
         var names=_app.TokenChatNames(platform,data.Start,data.End,data.Chats.Select(g=>g.Key).ToHashSet());
-        var rate=_model.Settings.CompactMode?
-            (platform==ChatPlatform.Claude?CompactClaudePoints:CompactCodexPoints).Text+Loc.T(" · 均速 ")+
-            (platform==ChatPlatform.Claude?CompactClaudeRateValue:CompactCodexRateValue).Text+Loc.T(" 点/h"):null;
-        if(rate?.Contains('*')==true)rate+=Loc.T(" · 记录不全");
-        return new(platform,data,names,minutes,ShowUsage,CloseUsage,
-            (_model.Settings.TokenTrackingEnabled?"":Loc.T("统计已暂停；仅展示已保存记录。\n"))+_app.TokenDetail,rate);
+        // Never copy the compact one-hour caption into a card showing another range.
+        string? rate=null;
+        if(minutes==RecentUsageRate.WindowMinutes)
+        {
+            var model=platform==ChatPlatform.Claude?_model:_codex;
+            var recent=RecentUsageRate.Build(model.BuildView(now,minutes).Chart.Total,now,
+                model.LastEnvelope?.EffectivePollIntervalSeconds??model.Settings.PollIntervalSeconds);
+            if(recent.Rate is {} value)rate=Loc.T("近1h · ")+recent.Points.ToString("0.#")+Loc.T("点")+
+                Loc.T(" · 均速 ")+RatePresentation.Estimate(value)+Loc.T(" 点/h")+
+                (recent.LastObserved is {} at?Loc.F($" · 截至 {at.ToLocalTime():HH:mm}"):"")+(recent.Partial?Loc.T(" · 记录不全"):"");
+        }
+        var card=new PlatformUsageCard(platform,data,names,minutes,ShowUsage,CloseUsage,
+            (_model.Settings.TokenTrackingEnabled?"":Loc.T("统计已暂停；仅展示已保存记录。\n"))+_app.TokenDetail,rate,
+            range=>{_usageMinutes=range;ShowUsage();});
+        _=FillQuotaEstimate(card,data.Start,now);
+        return card;
+    }
+    async System.Threading.Tasks.Task FillQuotaEstimate(PlatformUsageCard card,DateTimeOffset start,DateTimeOffset end)
+    {
+        var model=card.Platform==ChatPlatform.Claude?_model:_codex;
+        // Capture observations on the UI thread; local SQL and fitting run off-thread.
+        // Completion updates only this card, never a replacement range/window.
+        var source=model.BuildView(end,RecentUsageRate.WindowMinutes).Chart.Total;
+        var estimate=await _app.EstimateChatQuota(card.Platform,source,start,end);
+        card.ShowQuotaEstimate(estimate);
     }
 }

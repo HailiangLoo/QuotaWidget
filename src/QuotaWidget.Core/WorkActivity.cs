@@ -7,13 +7,18 @@ public sealed record WorkSpan(DateTimeOffset Start, DateTimeOffset End, bool Kno
 public sealed record TrendActivity(IReadOnlyList<WorkSpan> Claude, IReadOnlyList<WorkSpan> Fable, IReadOnlyList<WorkSpan> Codex,
     bool ClaudeReady=true,bool CodexReady=true)
 {
+    public bool FableRunning {get;init;}
     public static readonly TrendActivity Empty = new([], [], []);
-    public TrendActivity Episodes(DateTimeOffset asOf)=>new(WorkActivity.Episodes(Claude,asOf),WorkActivity.Episodes(Fable,asOf),WorkActivity.Episodes(Codex,asOf),ClaudeReady,CodexReady);
+    public TrendActivity Episodes(DateTimeOffset asOf)=>new(WorkActivity.Episodes(Claude,asOf),WorkActivity.Episodes(Fable,asOf),WorkActivity.Episodes(Codex,asOf),ClaudeReady,CodexReady){FableRunning=FableRunning};
 }
 
 /// <summary>Only explicit local work metadata, not token-count gaps or quota plateaus.</summary>
 public static class WorkActivity
 {
+    // Inspect raw model spans before provider union removes their identities.
+    // An unknown input or another model is not evidence of current Fable work.
+    public static bool FableRunning(IEnumerable<WorkSpan> spans,DateTimeOffset now)=>
+        spans.Any(s=>FableDisplay.IsFable(s.Model)&&s.Start<=now&&s.End>=now&&!s.KnownEnd);
     // A turn completion is not necessarily the end of a provider usage episode.
     // Keep this short handoff window fixed: it is unrelated to polling or viewport size.
     public static readonly TimeSpan HandoffWindow=TimeSpan.FromSeconds(10);
