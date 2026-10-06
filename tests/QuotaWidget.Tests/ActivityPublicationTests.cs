@@ -50,6 +50,49 @@ static class ActivityPublicationTests
             for(var i=0;i<30&&index.PendingFiles>0;i++)index.Poll(now);
             Check(index.WorkActivityReady("Codex")&&index.WorkActivitySpans(now,"Codex").Count==1,"initial publication lost activity");
         });
+        Test("long rows during tail growth cannot strand completion behind two stalled cursors",root=>
+        {
+            var logs=Path.Combine(root,"cx","sessions");Directory.CreateDirectory(logs);
+            var path=Path.Combine(logs,"rollout-aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee.jsonl");
+            var idx=Path.Combine(root,"idx");
+            string LongRow(int bytes)=>"{\"type\":\"response_item\",\"body\":\""+new string('x',bytes)+"\"}\n";
+            var completedAt=now.AddHours(-11);
+            File.WriteAllText(path,Event(now.AddHours(-12),"task_started"));
+            using(var index=new TokenIndex(idx,Path.Combine(root,"cx"),Path.Combine(root,"cl"),now))
+            {
+                index.Poll(now);
+                Check(!index.WorkActivitySpans(now,"Codex").Single().KnownEnd,"fixture needs a published active turn");
+                // The hot-tail scan uses its entire first budget while backfill reaches
+                // an oversized row. A subsequent append starts another oversized row
+                // exactly at the tail cursor: both used to reread 1 MiB forever.
+                File.AppendAllText(path,LongRow(1400000)+Padding());
+                index.Poll(now);
+                Check(index.PendingFiles>0,"fixture needs unfinished backfill");
+                File.AppendAllText(path,LongRow(1800000)+JsonSerializer.Serialize(new{timestamp=completedAt,
+                    type="token_usage_record",payload=new{response_id="last-response",thread_id="aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+                        turn_id="turn",usage=new{input_tokens=100,cached_input_tokens=80,output_tokens=12}}})+"\n"+Event(completedAt,"task_complete"));
+                for(var i=0;i<4;i++)index.Poll(now);
+            }
+            // Resume the same saved cursors, including a skip that can span batches.
+            using var resumed=new TokenIndex(idx,Path.Combine(root,"cx"),Path.Combine(root,"cl"),now);
+            for(var i=0;i<40;i++)
+            {
+                resumed.Poll(now);
+                Check(resumed.LastReadBytes<=8*1024*1024,"completion recovery exceeded the poll byte budget");
+                if(resumed.PendingFiles==0)break;
+            }
+            Check(resumed.PendingFiles==0,"oversized log rows left backfill permanently pending");
+            var completed=resumed.WorkActivitySpans(now,"Codex").Single();
+            Check(completed.KnownEnd&&completed.End==completedAt,"task_complete never reached the published lifecycle");
+            Check(resumed.Sum(now.AddDays(-1),now,"Codex").Requests==1,"hot-tail/backfill replay duplicated or lost usage");
+            var source=new SeriesData{Key=SeriesKey.Total,Segments=Enumerable.Range(0,144).Select(i=>new RateSegment
+                {Start=now.AddMinutes(-720+5*i),End=now.AddMinutes(-715+5*i),Delta=i==0?1:0}).ToList()};
+            var trend=ActiveRateEstimator.Build(source,now,[completed]);
+            Check(trend.ValueAt(completedAt.AddMinutes(1))==0&&!trend.Runs.Any(r=>r.Provisional),"completed task still has an estimated idle tail");
+            var paths=ChartPath.PositiveRuns(trend.Runs.Select(ChartPath.HardEdges));
+            Check(paths.Count>0&&paths.All(p=>p[^1].Time<=completedAt)&&
+                trend.Runs.Any(r=>r.HardEnd&&r.Points[^1].Time==completedAt),"chart continued beyond the real completion");
+        });
         Test("restart restores a completed generation and monitoring choices never erase it",root=>
         {
             var logs=Path.Combine(root,"cx","sessions");Directory.CreateDirectory(logs);

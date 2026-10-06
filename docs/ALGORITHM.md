@@ -29,6 +29,8 @@ A clean quota reset may share rate context across the boundary when local work i
 
 When local activity cannot explain an observed increment, the estimator falls back to observation intervals. It does not silently attribute other-device or web usage to an unrelated local chat.
 
+Task boundaries depend on the local log import: lifecycle events → complete published work history → activity intervals → rate estimate → chart. Import runs in bounded batches and skips oversized output rows without blocking later completion events. An unchanged quota counter alone is not a task completion; confirmed completion cuts the curve at its recorded timestamp.
+
 Implementation: [ActiveRateEstimator](../src/QuotaWidget.Core/ActiveRateEstimator.cs), [RateTrend](../src/QuotaWidget.Core/RateTrend.cs), [TrendContinuity](../src/QuotaWidget.Core/TrendContinuity.cs), and [RecentUsageRate](../src/QuotaWidget.Core/RecentUsageRate.cs).
 
 ## How far can it differ from the real rate?

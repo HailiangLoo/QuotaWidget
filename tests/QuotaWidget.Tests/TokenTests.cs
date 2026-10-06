@@ -131,6 +131,19 @@ static class TokenTests
             for(var i=0;i<3;i++) {index.Poll(now);Check(index.LastReadBytes<=8*1024*1024,"unbounded read");}
             Check(index.Skipped>0&&index.Sum(now.AddDays(-1),now).Requests==1,"oversize recovery failed");
         }));
+        Test("a valid row exactly at the line limit waits for newline and is not discarded",()=>Temp(root=>
+        {
+            var logs=Path.Combine(root,"cx","sessions");Directory.CreateDirectory(logs);
+            var path=Path.Combine(logs,"limit.jsonl");
+            var prefix=Native()[..^1]+",\"padding\":\"";var suffix="\"}";
+            File.WriteAllText(path,prefix+new string('x',1024*1024-Encoding.UTF8.GetByteCount(prefix+suffix))+suffix);
+            using var index=new TokenIndex(Path.Combine(root,"idx"),Path.Combine(root,"cx"),Path.Combine(root,"cl"),now);
+            index.Poll(now);
+            Check(index.Sum(now.AddDays(-1),now).Requests==0&&index.Skipped==0,"unfinished limit-sized row discarded or counted");
+            File.AppendAllText(path,"\n"+Native("r2")+"\n");
+            for(var i=0;i<6;i++)index.Poll(now);
+            Check(index.PendingFiles==0&&index.Skipped==0&&index.Sum(now.AddDays(-1),now).Requests==2,"size limit changed or last-byte recovery lost a valid row");
+        }));
         Test("time range and chat grouping exclude unrelated usage",()=>Temp(root=>
         {
             using var db=new TokenStore(Path.Combine(root,"t.db"));

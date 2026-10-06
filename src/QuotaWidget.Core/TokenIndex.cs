@@ -115,6 +115,7 @@ public static class TokenParser
 /// <summary>Bounded background import, resumable byte cursors, local logs only.</summary>
 public sealed class TokenIndex : IDisposable
 {
+    const int MaxLineBytes=1024*1024;
     readonly object _gate = new();
     readonly TokenStore _store;
     readonly string _codexHome, _claudeHome;
@@ -280,22 +281,27 @@ public sealed class TokenIndex : IDisposable
         {
             // Show current requests promptly even when a long log needs many bounded
             // backfill batches. Native IDs dedupe this tail against the full-file scan.
-            if(!c.TailSeeded && f.Length-c.Offset>1024*1024)
+            if(!c.TailSeeded && f.Length-c.Offset>MaxLineBytes)
             {
-                c.Recent=new() {Platform=c.Platform,Chat=c.Chat,Model=c.Model,ActivityStream=c.ActivityStream,ActivityVersion=1,Offset=f.Length-1024*1024,Skipping=true,NativeOnly=true};
+                c.Recent=new() {Platform=c.Platform,Chat=c.Chat,Model=c.Model,ActivityStream=c.ActivityStream,ActivityVersion=1,Offset=f.Length-MaxLineBytes,Skipping=true,NativeOnly=true};
                 c.TailSeeded=true;
             }
             if(c.Recent is { } tail)
             {
                 var before=LastReadBytes;
-                changed|=ReadBatch(path,now,Math.Min(budget,1024*1024),tail);
+                // An unfinished line is reread from its start next time; no message
+                // body is persisted. Give this cursor room for the size limit AND
+                // one more byte (newline or oversize evidence). A limit-sized budget
+                // can strand it forever on a longer row and consume half of every
+                // backfill batch, stranding the other cursor too. Keep the combined
+                // read inside the caller's budget, including this extra byte.
+                changed|=ReadBatch(path,now,Math.Min(budget,MaxLineBytes+1),tail);
                 budget-=(int)(LastReadBytes-before);
             }
         }
         using var stream=new FileStream(path,FileMode.Open,FileAccess.Read,FileShare.ReadWrite|FileShare.Delete);
         stream.Position=c.Offset;
         var buffer=new byte[256*1024]; using var line=new MemoryStream(); var read=0;
-        const int maxLine=1024*1024;
         while (read < budget && stream.Position < c.Length)
         {
             var n=stream.Read(buffer,0,(int)Math.Min(Math.Min(buffer.Length,budget-read),c.Length-stream.Position)); if(n==0) break;
@@ -306,7 +312,7 @@ public sealed class TokenIndex : IDisposable
                 var end=Array.IndexOf(buffer,(byte)10,start,n-start); var len=(end<0?n:end)-start;
                 if(!c.Skipping)
                 {
-                    if(line.Length+len>maxLine) { line.SetLength(0); c.Skipping=true; c.Skipped++; }
+                    if(line.Length+len>MaxLineBytes) { line.SetLength(0); c.Skipping=true; c.Skipped++; }
                     else line.Write(buffer,start,len);
                 }
                 if(end>=0)

@@ -29,6 +29,8 @@
 
 如果本机活动解释不了官方增量，会回退到观测区间估计，不把网页版或其他设备的用量硬算到某个本机 chat 上。
 
+任务边界的数据链路是：本机日志中的生命周期事件 → 完整发布的工作记录 → 活动区间 → 速率估算 → 图表。日志按固定预算分批读取，超长输出行会被跳过，不阻塞后面的结束事件。额度不变本身不代表任务结束；确认结束后，曲线在记录的结束时间截断。
+
 实现见 [ActiveRateEstimator](../src/QuotaWidget.Core/ActiveRateEstimator.cs)、[RateTrend](../src/QuotaWidget.Core/RateTrend.cs)、[TrendContinuity](../src/QuotaWidget.Core/TrendContinuity.cs) 和 [RecentUsageRate](../src/QuotaWidget.Core/RecentUsageRate.cs)。
 
 ## 跟真实速率差多少
