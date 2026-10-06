@@ -426,5 +426,7 @@
   "额度与本机用量暂不吻合": "Quota and local usage do not reconcile",
   "所选区间无法可靠分摊": "Allocation is unreliable for this range",
   "不同合理权重的分摊差异过大": "Allocation changes too much across plausible weights",
-  "演示数据不参与校准": "Demo data is not used for calibration"
+  "演示数据不参与校准": "Demo data is not used for calibration",
+  "额度分摊 · {0:0.0} 点 · 演示估算": "Quota allocation · {0:0.0} pts · demo estimate",
+  "合成演示数值，不参与实际额度校准。": "Synthetic illustration; not used to calibrate real quota."
 }

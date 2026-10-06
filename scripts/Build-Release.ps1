@@ -10,6 +10,24 @@ $stage = Join-Path $artifacts ('build-'+[Guid]::NewGuid().ToString('N').Substrin
 [IO.Directory]::CreateDirectory($artifacts) | Out-Null
 dotnet publish $project -c Release -r win-x64 --self-contained true -o $stage -p:ContinuousIntegrationBuild=true -p:DebugType=None -p:DebugSymbols=false
 if ($LASTEXITCODE -ne 0) { throw 'dotnet publish failed.' }
+foreach ($runtimeFile in @('hostfxr.dll','hostpolicy.dll','coreclr.dll','System.Private.CoreLib.dll')) {
+    if (!(Test-Path -LiteralPath (Join-Path $stage $runtimeFile))) { throw "Self-contained runtime missing: $runtimeFile" }
+}
+# Exercise the exact distributable apphost, not only the framework-dependent test build.
+# Demo snapshot mode is isolated from real accounts, settings and collectors.
+$smokePath = Join-Path $artifacts ($name+'-smoke-'+[Guid]::NewGuid().ToString('N')+'.png')
+$smokeStart = [Diagnostics.ProcessStartInfo]::new((Join-Path $stage 'QuotaWidget.exe'))
+$smokeStart.UseShellExecute = $false
+$smokeStart.CreateNoWindow = $true
+$smokeStart.WindowStyle = [Diagnostics.ProcessWindowStyle]::Hidden
+foreach ($argument in @('--demo','--scenario','showcase','--snapshot',$smokePath)) { $smokeStart.ArgumentList.Add($argument) }
+$smoke = [Diagnostics.Process]::Start($smokeStart)
+if (!$smoke.WaitForExit(30000)) { $smoke.Kill($true); throw 'Packaged app startup timed out.' }
+if ($smoke.ExitCode -ne 0 -or !(Test-Path -LiteralPath $smokePath) -or (Test-Path -LiteralPath ($smokePath+'.error.txt'))) {
+    throw 'Packaged app failed the isolated startup check.'
+}
+$smoke.Dispose()
+Remove-Item -LiteralPath $smokePath
 foreach ($file in @('README.md','README.zh-CN.md','CONTRIBUTING.md','CONTRIBUTING.zh-CN.md','Start Widget.cmd','Sign in to Claude.cmd','Demo.cmd','LICENSE','NOTICE.md','启动小挂件.cmd','登录Claude.cmd','演示模式.cmd')) {
     Copy-Item -LiteralPath (Join-Path $root $file) -Destination $stage
 }

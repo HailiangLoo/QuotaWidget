@@ -485,7 +485,15 @@ public partial class App : Application
     public string TokenDetail => (_tokenWarning is { } warning ? Loc.T(warning) : null) ?? _tokens?.Coverage ?? _snapshotTokens?.Meta(Loc.IsEnglish?"coverage.en":"coverage") ?? (_opts.Demo ? Loc.T("演示 token 数值") : Loc.T("本机已记录日志；非账号账单。IN 为未命中输入（含缓存写入），CACHE 为命中输入，OUT 已含推理输出。首次补读可能尚未完成。"));
     public Task<ChatQuotaEstimate> EstimateChatQuota(ChatPlatform platform,SeriesData quota,DateTimeOffset start,DateTimeOffset end)
     {
-        if(_opts.Demo)return Task.FromResult(ChatQuotaEstimate.Unknown("演示数据不参与校准"));
+        if(_opts.Demo)
+        {
+            // Gallery-only fixture, explicitly labelled. Never calibrate against or
+            // import demo usage, and never represent these as validated real weights.
+            var rows=DemoTokenRows(platform,end);var points=RateEngine.SumRange(quota,start,end).Delta;
+            var weight=rows.Sum(r=>(double)r.Usage.Input+r.Usage.Cached*.1+r.Usage.Output*5);
+            return Task.FromResult(new ChatQuotaEstimate(points,rows.Select(r=>new ChatQuotaShare(r.Chat,r.Model,
+                weight>0?points*(r.Usage.Input+r.Usage.Cached*.1+r.Usage.Output*5)/weight:0,0)).ToArray(),""){Synthetic=true});
+        }
         if(!_model.Settings.TokenTrackingEnabled)return Task.FromResult(ChatQuotaEstimate.Unknown("本机记录尚未完整"));
         return Task.Run(()=>
         {

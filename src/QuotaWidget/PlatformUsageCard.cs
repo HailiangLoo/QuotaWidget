@@ -54,8 +54,9 @@ public sealed class PlatformUsageCard : Border
     public void ShowQuotaEstimate(ChatQuotaEstimate estimate)
     {
         QuotaEstimate=estimate;
-        _quotaNote.Text=estimate.Available?Loc.F($"额度分摊 · {estimate.Observed:0.0} 点 · 估算"):Loc.T("额度分摊 · ")+Loc.T(estimate.Reason);
-        _quotaNote.ToolTip=Loc.T("仅分摊完整观测区间。本机以外的消耗无法识别；估算不是官方账单。")+
+        _quotaNote.Text=estimate.Synthetic?Loc.F($"额度分摊 · {estimate.Observed:0.0} 点 · 演示估算"):
+            estimate.Available?Loc.F($"额度分摊 · {estimate.Observed:0.0} 点 · 估算"):Loc.T("额度分摊 · ")+Loc.T(estimate.Reason);
+        _quotaNote.ToolTip=estimate.Synthetic?Loc.T("合成演示数值，不参与实际额度校准。"):Loc.T("仅分摊完整观测区间。本机以外的消耗无法识别；估算不是官方账单。")+
             (estimate.Available?Loc.F($"\n校准 {estimate.CalibrationHours} 个时段 · 验证平均误差 {estimate.ValidationError:0.0} 点/时段"):"");
         foreach(var (cell,chat,model) in _quotaCells)
         {

@@ -4,6 +4,7 @@ public sealed record QuotaToken(DateTimeOffset At,DateTimeOffset End,string Chat
 public sealed record ChatQuotaShare(string Chat,string Model,double Points,double Spread);
 public sealed record ChatQuotaEstimate(double Observed,IReadOnlyList<ChatQuotaShare> Shares,string Reason,int CalibrationHours=0,double ValidationError=0)
 {
+    public bool Synthetic {get;init;}
     public bool Available=>Reason.Length==0;
     public static ChatQuotaEstimate Unknown(string reason,double observed=0)=>new(observed,[],reason);
 }
