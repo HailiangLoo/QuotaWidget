@@ -117,6 +117,10 @@ public sealed class ChatCacheState(ChatPlatform platform, string id)
                 if (type == "compacted") { Compact(at, preservePending: true); return; }
                 if (type == "turn_context") { WorkingDirectory = S(p, "cwd") ?? WorkingDirectory; Model(S(p, "model"), at); return; }
                 var kind = S(p, "type");
+                // The compacted record embeds replacement history and can exceed both
+                // tail limits. The small completion event survives that skip/cold start.
+                if (type == "event_msg" && kind == "item_completed" && S(O(p, "item"), "type") == "ContextCompaction")
+                { CodexCompactCompleted(p, at); return; }
                 if (type == "event_msg" && kind is "task_started" or "task_complete" or "turn_aborted")
                 {
                     var turnId = S(p, "turn_id");
@@ -148,7 +152,13 @@ public sealed class ChatCacheState(ChatPlatform platform, string id)
                     var info = O(p, "info");
                     var total = N(O(info, "total_token_usage"), "input_tokens");
                     if (total > _fallbackTotal && total > 0)
-                    { _fallbackTotal = total; if (Observe(at, "fallback-" + total, O(info, "last_token_usage")) && _running) WorkActivity(at); }
+                    {
+                        _fallbackTotal = total;
+                        var usage = O(info, "last_token_usage");
+                        // Post-compaction/context summaries carry old cumulative totals
+                        // with zero request input. They establish a baseline, not a request.
+                        if (N(usage, "input_tokens") > 0 && Observe(at, "fallback-" + total, usage) && _running) WorkActivity(at);
+                    }
                 }
             }
             else
@@ -173,6 +183,24 @@ public sealed class ChatCacheState(ChatPlatform platform, string id)
             }
         }
         catch (Exception e) when (e is JsonException or InvalidOperationException or FormatException) { /* changed/malformed records are ignored */ }
+    }
+
+    void CodexCompactCompleted(JsonElement payload, DateTimeOffset at)
+    {
+        var turn = S(payload, "turn_id");
+        if (_running && turn is not null && _turnId is not null && turn != _turnId) return;
+        var completedMs = N(payload, "completed_at_ms");
+        var startedMs = N(payload, "started_at_ms");
+        // Use the event's original completion time on delayed/replayed notifications.
+        if (completedMs > 0)
+        {
+            if (completedMs > at.ToUnixTimeMilliseconds() || startedMs > completedMs) return;
+            at = DateTimeOffset.FromUnixTimeMilliseconds(completedMs);
+        }
+        // These two records describe one operation. Acknowledging the large record
+        // must not create another journal marker or clear input arriving after it.
+        if (startedMs > 0 && CompactedAt is { } prior && prior.ToUnixTimeMilliseconds() >= startedMs && prior <= at) return;
+        Compact(at, preservePending: true);
     }
 
     internal static bool TranscriptOnly(JsonElement root)
@@ -224,7 +252,13 @@ public sealed class ChatCacheState(ChatPlatform platform, string id)
         _activity = _workEndedAt = at;
         _running = false;
         _turnId = null;
-        // RequestAt is deliberately untouched: finishing work does not renew server cache.
+        // A compact-only turn can start without visible usage (e.g. outside the tail).
+        // Once that turn ends, its pre-compact pending input is not a resumed request.
+        // Usage or real input after the boundary still retains its own cache clock.
+        if (Platform == ChatPlatform.Codex && CompactedAt is { } compact && compact == ResetAt
+            && LastObserved <= compact && (RequestAt is null || RequestAt <= compact))
+        { RequestAt = _pendingAt = null; _awaitingUsage = false; }
+        // Otherwise RequestAt stays untouched: finishing work never renews server cache.
     }
 
     void Input(DateTimeOffset at)

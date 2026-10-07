@@ -18,6 +18,10 @@ The recent-hour rate ends at the latest reading, then picks a continuous earlier
 
 The cumulative stroke connects known sampling endpoints. It does not reveal the exact moment an increment occurred inside an interval.
 
+## Chat reminders and compaction
+
+Chat timers show time since a local model request, not confirmed server cache lifetime. Compaction ends the old reminder; a real continuation starts or preserves the new request's timer. Codex's compact record can contain several megabytes of replacement history, so the bounded log reader also recognizes its small `ContextCompaction` completion event. Duplicate completion records represent one boundary. A cumulative token summary with zero new input does not start a request. Missing log evidence remains unknown.
+
 ## How smoothing works
 
 1. Keep providers and quota windows separate. Preserve missing readings, real gaps, account changes, and resets in the accounting data.
