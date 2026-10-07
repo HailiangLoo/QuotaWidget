@@ -20,6 +20,8 @@ The cumulative stroke connects known sampling endpoints. It does not reveal the 
 
 ## Chat reminders and compaction
 
+The management list shows main chats, with explicitly identified subagents excluded from both current and collapsed rows. Codex's paginated/resumed rollouts are grouped by `session_meta.id` (or `session_id`), not the extra storage ID in the filename. A fork's history reference is not subagent ownership. These display decisions do not remove token records or change confirmed subagent usage attribution.
+
 Chat timers show time since a local model request, not confirmed server cache lifetime. Compaction ends the old reminder; a real continuation starts or preserves the new request's timer. Codex's compact record can contain several megabytes of replacement history, so the bounded log reader also recognizes its small `ContextCompaction` completion event. Duplicate completion records represent one boundary. A cumulative token summary with zero new input does not start a request. Missing log evidence remains unknown.
 
 ## How smoothing works

@@ -358,7 +358,7 @@ public partial class App : Application
         {
             var monitor = ChatCacheMonitor.Local(); var now = DateTimeOffset.Now;
             _cacheEntries = monitor.Poll(now,Monitors(ChatPlatform.Claude),Monitors(ChatPlatform.Codex));
-            _chatLifecycle = ChatLifecycleMonitor.Local().Poll(LifecycleCandidates(now), now);
+            _chatLifecycle = ChatLifecycleMonitor.Local().Poll(LifecycleCandidates(now), now, monitor.HiddenRows);
             _cacheWarning = monitor.Warning ?? _chatLifecycle.Warning;
         }
         _window.Left = -20000;
@@ -421,7 +421,7 @@ public partial class App : Application
                         }
                         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
                         { _cacheWarning = "使用记录保存失败 · 稍后自动重试"; }
-                        _chatLifecycle = lifecycle.Poll(LifecycleCandidates(now), now);
+                        _chatLifecycle = lifecycle.Poll(LifecycleCandidates(now), now, monitor.HiddenRows);
                         _cacheWarning ??= _chatLifecycle.Warning;
                     }
                     catch { _cacheWarning = "本地记录暂不可读"; }

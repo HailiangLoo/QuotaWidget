@@ -101,8 +101,7 @@ public sealed class ChatCacheState(ChatPlatform platform, string id)
             if (Platform == ChatPlatform.Codex && type == "session_meta")
             {
                 WorkingDirectory = S(p, "cwd") ?? WorkingDirectory;
-                var src = O(p, "source");
-                if (Has(src, "subagent") || S(p, "source") == "subagent") Excluded = true;
+                if (ChatOwnership.IsCodexSubagent(p)) Excluded = true;
                 return;
             }
             if (Platform == ChatPlatform.Claude)
@@ -322,6 +321,23 @@ public sealed class MetadataTail
     bool _initialized, _skip;
     readonly MemoryStream _partial = new();
 
+    // Identity must be read before grouping tails. A paginated rollout's filename
+    // suffix is a storage ID, while session_meta.id remains the user-facing chat.
+    public static (string? Text,long Bytes) FirstLine(string path)
+    {
+        using var fs=new FileStream(path,FileMode.Open,FileAccess.Read,FileShare.ReadWrite|FileShare.Delete);
+        using var line=new MemoryStream();var buffer=new byte[64*1024];long read=0;
+        while(line.Length<=MaxLine)
+        {
+            var n=fs.Read(buffer,0,(int)Math.Min(buffer.Length,MaxLine+1-line.Length));read+=n;
+            if(n==0)return(null,read); // An unfinished header can be retried at discovery.
+            var end=Array.IndexOf(buffer,(byte)10,0,n);
+            if(end>=0){line.Write(buffer,0,end);return(Encoding.UTF8.GetString(line.GetBuffer(),0,(int)line.Length),read);}
+            line.Write(buffer,0,n);
+        }
+        return(null,read);
+    }
+
     public long Read(string path, Action<string> line, Action gap)
     {
         var fi = new FileInfo(path);
@@ -369,7 +385,7 @@ public sealed class ChatCacheMonitor(string codexHome, string claudeHome)
 {
     (bool Claude,bool Codex)? _monitoring;
     const int MaxFiles = 96;
-    readonly Dictionary<string, (MetadataTail Tail, ChatCacheState State)> _files = new(StringComparer.OrdinalIgnoreCase);
+    readonly Dictionary<string, (MetadataTail Tail, ChatCacheState State, string FileId)> _files = new(StringComparer.OrdinalIgnoreCase);
     readonly Dictionary<string, ChatCacheState> _states = new(StringComparer.Ordinal);
     readonly Dictionary<string, string> _titles = new(StringComparer.Ordinal);
     readonly Dictionary<string, DateTimeOffset> _indexUpdates = new(StringComparer.Ordinal);
@@ -379,6 +395,11 @@ public sealed class ChatCacheMonitor(string codexHome, string claudeHome)
     public long LastReadBytes { get; private set; }
     public int TrackedFiles => _files.Count;
     public string? Warning { get; private set; }
+    // Hide obsolete filename identities and explicitly classified sidechains even
+    // if older app versions already retained their rows in the local journal.
+    public IReadOnlySet<string> HiddenRows => _files.Values.SelectMany(f=>f.State.Excluded
+        ? new[]{ChatLifecycleSnapshot.Key(f.State.Platform,f.FileId),ChatLifecycleSnapshot.Key(f.State.Platform,f.State.Id)}
+        : f.FileId!=f.State.Id ? new[]{ChatLifecycleSnapshot.Key(f.State.Platform,f.FileId)} : Array.Empty<string>()).ToHashSet(StringComparer.Ordinal);
     public static ChatCacheMonitor Local() => new(
         Environment.GetEnvironmentVariable("CODEX_HOME") ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".codex"),
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".claude"));
@@ -455,21 +476,25 @@ public sealed class ChatCacheMonitor(string codexHome, string claudeHome)
             if (_files.ContainsKey(c.Path)) continue;
             var match = Regex.Match(Path.GetFileNameWithoutExtension(c.Path), @"[a-fA-F0-9]{8}-(?:[a-fA-F0-9]{4}-){3}[a-fA-F0-9]{12}$");
             if (!match.Success) continue;
-            var key = c.Platform + ":" + match.Value;
-            if (!_states.TryGetValue(key, out var state)) _states[key] = state = new(c.Platform, match.Value);
-            // Codex metadata at the head identifies sidechains even when the tail starts much later.
+            var fileId=ChatOwnership.Id(match.Value)!;var chatId=fileId;string? head=null;
+            // Read authoritative identity and sidechain evidence before choosing a
+            // shared state. Never infer ownership from filename shape or history_base.
             if (c.Platform == ChatPlatform.Codex)
             {
                 try
                 {
-                    using var fs = new FileStream(c.Path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
-                    var head = new byte[64 * 1024]; var n = fs.Read(head); LastReadBytes += n;
-                    var end = Array.IndexOf(head, (byte)10, 0, n);
-                    if (end >= 0) state.Read(Encoding.UTF8.GetString(head, 0, end));
+                    var header=MetadataTail.FirstLine(c.Path);LastReadBytes+=header.Bytes;head=header.Text;
+                    if(head is null){Warning="部分本地记录暂不可读";continue;}
+                    using var doc=JsonDocument.Parse(head);var r=doc.RootElement;
+                    if(r.ValueKind==JsonValueKind.Object&&r.TryGetProperty("type",out var type)&&type.ValueKind==JsonValueKind.String&&type.GetString()=="session_meta"&&r.TryGetProperty("payload",out var metadata))
+                        chatId=ChatOwnership.CodexThreadId(metadata)??fileId;
                 }
-                catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
+                catch (Exception e) when (e is IOException or UnauthorizedAccessException or JsonException) {Warning="部分本地记录暂不可读";continue;}
             }
-            _files[c.Path] = (new MetadataTail(), state);
+            var key = c.Platform + ":" + chatId;
+            if (!_states.TryGetValue(key, out var state)) _states[key] = state = new(c.Platform, chatId);
+            if(head is not null)state.Read(head);
+            _files[c.Path] = (new MetadataTail(), state, fileId);
         }
         var active = _files.Values.Select(v => v.State).ToHashSet();
         foreach (var key in _states.Where(kv => !active.Contains(kv.Value)).Select(kv => kv.Key).ToArray()) _states.Remove(key);

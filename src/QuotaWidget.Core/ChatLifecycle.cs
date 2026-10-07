@@ -41,7 +41,7 @@ public sealed class ChatLifecycleMonitor(string codexHome, IEnumerable<string> c
     static EnumerationOptions TopOnly => new() { RecurseSubdirectories = false, IgnoreInaccessible = false,
         AttributesToSkip = FileAttributes.ReparsePoint };
 
-    public ChatLifecycleSnapshot Poll(IEnumerable<ChatCacheEntry> candidates, DateTimeOffset now)
+    public ChatLifecycleSnapshot Poll(IEnumerable<ChatCacheEntry> candidates, DateTimeOffset now, IReadOnlySet<string>? hiddenRows = null)
     {
         var entries = candidates.Where(c => Guid.TryParseExact(c.Id, "D", out _))
             .DistinctBy(c => ChatLifecycleSnapshot.Key(c.Platform, c.Id)).ToArray();
@@ -52,6 +52,7 @@ public sealed class ChatLifecycleMonitor(string codexHome, IEnumerable<string> c
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         { warnings.Add("Codex 归档状态暂不可读"); }
         ReadClaude(entries.Where(c => c.Platform == ChatPlatform.Claude).ToArray(), now, next, warnings);
+        if(hiddenRows is not null)next.UnionWith(hiddenRows.Where(keys.Contains));
         _hidden = next;
         return new(next.ToFrozenSet(StringComparer.Ordinal), warnings.Count == 0 ? null : string.Join(" · ", warnings.Distinct()));
     }

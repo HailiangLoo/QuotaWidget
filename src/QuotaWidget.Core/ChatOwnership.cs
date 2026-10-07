@@ -8,6 +8,20 @@ public sealed record ChatParent(string Child,string Parent);
 public static class ChatOwnership
 {
     public static string? Id(string? value)=>Guid.TryParseExact(value,"D",out var id)?id.ToString("D"):null;
+    public static string? CodexThreadId(JsonElement metadata)
+    {
+        if(metadata.ValueKind!=JsonValueKind.Object)return null;
+        foreach(var key in new[]{"id","session_id"})
+            if(metadata.TryGetProperty(key,out var value)&&value.ValueKind==JsonValueKind.String&&Id(value.GetString()) is {} id)return id;
+        return null;
+    }
+    public static bool IsCodexSubagent(JsonElement metadata)
+    {
+        if(metadata.ValueKind!=JsonValueKind.Object)return false;
+        if(metadata.TryGetProperty("thread_source",out var kind)&&kind.ValueKind==JsonValueKind.String&&kind.GetString()=="subagent")return true;
+        return metadata.TryGetProperty("source",out var source)&&
+            (source.ValueKind==JsonValueKind.Object&&source.TryGetProperty("subagent",out _)||source.ValueKind==JsonValueKind.String&&source.GetString()=="subagent");
+    }
     public static string? CodexParent(JsonElement source)
     {
         if(source.ValueKind!=JsonValueKind.Object || !source.TryGetProperty("subagent",out var agent) || agent.ValueKind!=JsonValueKind.Object ||

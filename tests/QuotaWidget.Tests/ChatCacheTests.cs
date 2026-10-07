@@ -73,6 +73,55 @@ static class ChatCacheTests
             e = e with { WindowMinutes = 60 }; Check(e.Urgency(T.AddMinutes(40)) == 2 && !e.Expired(T.AddMinutes(59)), "Claude colors");
             var s = new ChatCacheState(ChatPlatform.Codex, "a"); s.Read(Usage(0, "r")); Check(s.View(T.AddHours(7)) is null, "old retention");
         });
+        Test("cache: paginated rollouts keep one canonical main chat and hide obsolete rows", () =>
+        {
+            var root=Temp();var folder=Path.Combine(root,"sessions");Directory.CreateDirectory(folder);
+            const string chat="11111111-1111-1111-1111-111111111111",page="22222222-2222-2222-2222-222222222222",
+                page2="33333333-3333-3333-3333-333333333333",agent="44444444-4444-4444-4444-444444444444",fork="55555555-5555-5555-5555-555555555555";
+            try
+            {
+                string Header(string id,string kind="user")=>Line(0,"session_meta",new{id,source="vscode",thread_source=kind,history_base=new{thread_id=chat}});
+                var first=Path.Combine(folder,"rollout-"+chat+"_"+page+".jsonl");var second=Path.Combine(folder,"rollout-"+chat+"_"+page2+".jsonl");
+                File.WriteAllText(first,Header(chat)+"\n"+Line(0,"event_msg",new{type="task_started",turn_id="turn"})+"\n"+Usage(1,"r1")+"\n");
+                File.WriteAllText(second,Header(chat)+"\n"+Line(2,"event_msg",new{type="task_complete",turn_id="turn"})+"\n");
+                File.SetLastWriteTimeUtc(first,T.UtcDateTime);File.SetLastWriteTimeUtc(second,T.AddMinutes(2).UtcDateTime);
+                File.WriteAllText(Path.Combine(folder,"rollout-"+agent+".jsonl"),Header(agent,"subagent")+"\n"+Usage(1,"agent-request")+"\n");
+                File.WriteAllText(Path.Combine(folder,"rollout-"+fork+".jsonl"),Header(fork)+"\n"+Usage(1,"fork-request")+"\n");
+                File.WriteAllText(Path.Combine(root,"session_index.jsonl"),JsonSerializer.Serialize(new{id=chat,thread_name="Main chat"})+"\n");
+                var monitor=new ChatCacheMonitor(root,Path.Combine(root,"claude"));var now=T.AddMinutes(3);var live=monitor.Poll(now);
+                var main=live.Single(e=>e.Id==chat);
+                Check(live.Count==2&&main.Title=="Main chat"&&main.RequestAt==T&&!main.WorkPending,"resumed identity lost its title, original request or completion");
+                Check(live.Any(e=>e.Id==fork),"history_base was mistaken for subagent ownership");
+                var retained=new[]{page,page2,agent}.Select(id=>main with{Id=id,Running=true}).ToArray();
+                var history=new ChatSessionHistory(Path.Combine(root,"data"));history.Capture(retained,now);history.Flush(now);
+                var saved=Directory.GetFiles(Path.Combine(root,"data","chat-sessions")).ToDictionary(p=>p,File.ReadAllText);
+                var policy=new ChatLifecycleMonitor(root,[]).Poll(live.Concat(retained),now,monitor.HiddenRows);
+                Check(ChatListPolicy.Merge(live,retained,now,policy).Select(e=>e.Id).ToHashSet().SetEquals(new[]{chat,fork}),"archived aliases or subagents reappeared");
+                Check(saved.All(p=>File.ReadAllText(p.Key)==p.Value),"display policy rewrote history");
+                Check(new ChatCacheMonitor(root,Path.Combine(root,"claude")).Poll(now).Single(e=>e.Id==chat)==main,"cold restart changed canonical activity");
+                monitor.Poll(now.AddSeconds(5));Check(monitor.LastReadBytes==0,"unchanged headers reread on every poll");
+            }
+            finally { Directory.Delete(root,true); }
+        });
+        Test("cache: canonical metadata is bounded and incomplete headers are retried", () =>
+        {
+            var root=Temp();var folder=Path.Combine(root,"sessions");Directory.CreateDirectory(folder);
+            const string chat="11111111-1111-1111-1111-111111111111",page="22222222-2222-2222-2222-222222222222";
+            var path=Path.Combine(folder,"rollout-"+page+".jsonl");
+            try
+            {
+                File.WriteAllText(path,"{\"type\":\"session_meta\"");
+                var monitor=new ChatCacheMonitor(root,Path.Combine(root,"claude"));
+                Check(monitor.Poll(T.AddMinutes(2)).Count==0,"partial header invented a filename chat");
+                var header=Line(0,"session_meta",new{session_id=chat,source="vscode",thread_source="user",base_instructions=new string('x',80000)});
+                File.WriteAllText(path,header+"\n"+Usage(1,"r1")+"\n");
+                Check(monitor.Poll(T.AddMinutes(3)).Single().Id==chat,"large complete header or session_id fallback lost");
+                File.WriteAllText(path,new string('x',2*1024*1024));
+                var head=MetadataTail.FirstLine(path);
+                Check(head.Text is null&&head.Bytes<=1024*1024+1,"unbounded metadata read");
+            }
+            finally { Directory.Delete(root,true); }
+        });
         Test("cache: new input resets immediately on both platforms and survives restart replay", () =>
         {
             foreach (var platform in new[] { ChatPlatform.Codex, ChatPlatform.Claude })
