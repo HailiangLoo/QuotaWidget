@@ -14,13 +14,42 @@ static class GapRateTests
         WorkSpan[] Open(double end)=>[new(t.AddHours(-1),t.AddMinutes(end),true,false,null)];
         double Area(IEnumerable<TrendRun> runs)=>runs.Sum(r=>r.Points.Zip(r.Points.Skip(1),(a,b)=>(a.Rate+b.Rate)/2*(b.Time-a.Time).TotalHours).Sum());
 
-        Test("sparse restart averages all observed active time rather than first jump plus predicted tail",()=>
+        Test("later unchanged readings retain a taper instead of flattening the entire sparse context",()=>
+        {
+            var data=Data(Before().Concat([S(0,5,1),S(5,10,1),S(10,40,0)]));
+            var curve=ActiveRateEstimator.Build(data,t.AddMinutes(40),Open(40));
+            Check(curve.ValueAt(t.AddMinutes(3))>1.2*curve.ValueAt(t.AddMinutes(37)),"zero-observation tail was pooled into a constant rate");
+            Check(curve.ValueAt(t.AddMinutes(39))>0,"unchanged counter invented a work stop");
+            Near(4,curve.Delta);Near(4,Area(curve.Runs));
+            Check(!curve.IsProvisional(t.AddMinutes(30))&&!curve.CanLabelPeak(t.AddMinutes(3)),"sparse shape added quota or a peak label");
+        });
+        Test("sparse completed tasks retain changing intensity and exact cuts after later idle samples",()=>
+        {
+            var data=Data(Before().Concat(Enumerable.Range(0,12).Select(i=>S(i*5,(i+1)*5,i is 0 or 2?1:0))));
+            WorkSpan[] work=[new(t.AddHours(-1),t.AddMinutes(-15),true,true,null),new(t,t.AddMinutes(13),true,true,null),new(t.AddMinutes(15),t.AddMinutes(17),true,true,null),new(t.AddMinutes(25),t.AddMinutes(43),true,true,null),new(t.AddMinutes(52),t.AddMinutes(54),true,true,null)];
+            var curve=ActiveRateEstimator.Build(data,t.AddHours(1),work);
+            Check(curve.ValueAt(t.AddMinutes(3))>curve.ValueAt(t.AddMinutes(53)),"all completed tasks forced to the same rate");
+            foreach(var m in new[]{14d,20,47,56})Near(0,curve.ValueAt(t.AddMinutes(m)));
+            Near(4,curve.Delta);Near(2,Area(curve.Runs.Where(r=>r.Points[0].Time>=t)));
+            Check(curve.Runs.Where(r=>r.Points[0].Time>=t).All(r=>!r.Provisional),"settled work remained a prediction");
+        });
+        Test("one jump without later observations cannot invent within-task variation",()=>
+        {
+            var data=Data(Before().Concat([S(0,5,0),S(5,10,0),S(10,15,0),S(15,20,1)]));
+            WorkSpan[] work=[new(t.AddHours(-1),t.AddMinutes(-15),true,true,null),new(t,t.AddMinutes(10),true,true,null),new(t.AddMinutes(12),t.AddMinutes(13),true,true,null),new(t.AddMinutes(16),t.AddMinutes(20),true,false,null)];
+            var curve=ActiveRateEstimator.Build(data,t.AddMinutes(20),work);
+            foreach(var m in new[]{1d,9,12.5,18})Near(4,curve.ValueAt(t.AddMinutes(m)));
+            Near(0,curve.ValueAt(t.AddMinutes(11)));Near(3,curve.Delta);
+        });
+
+        Test("sparse restart redistributes observed quota through unchanged readings without adding a predicted tail",()=>
         {
             foreach(var quantum in new[]{.5,1d})
             {
                 var data=Data(Before().Concat([S(0,5,quantum),S(5,15,0),S(15,20,quantum),S(20,30,0)]));
                 var curve=ActiveRateEstimator.Build(data,t.AddMinutes(30),Open(30),quantum:quantum);
-                foreach(var minute in new[]{1d,8,18,29})Near(4*quantum,curve.ValueAt(t.AddMinutes(minute)));
+                Check(curve.ValueAt(t.AddMinutes(1))>curve.ValueAt(t.AddMinutes(29)),"unchanged tail lost its effect");
+                Check(curve.Runs.Where(r=>r.Points[0].Time>=t).SelectMany(r=>r.Points).All(p=>p.Rate>0&&p.Rate<12*quantum),"first-poll spike or invented stop");
                 Near(2+2*quantum,curve.Delta);Near(curve.Delta,Area(curve.Runs));
                 Check(curve.ValueAt(t.AddMinutes(-5)) is null,"gap was painted or its 99 points assigned");
                 Check(!curve.IsProvisional(t.AddMinutes(25)),"restart invented additional quota beyond observed total");
@@ -69,13 +98,14 @@ static class GapRateTests
                 var data=Data([S(-5,0,50,issue),S(0,5,1),S(5,15,0)]);
                 var curve=ActiveRateEstimator.Build(data,t.AddMinutes(15),work);
                 var later=ActiveRateEstimator.Build(data,t.AddHours(1),work);
-                Near(4,curve.ValueAt(t.AddMinutes(12)));Near(4,later.ValueAt(t.AddMinutes(12)));
+                var value=curve.ValueAt(t.AddMinutes(12));Check(value is >0 and <12,"sparse estimate became a spike or a stop");
+                Near(value!.Value,later.ValueAt(t.AddMinutes(12)));Near(1,Area(curve.Runs));
                 Check(later.ValueAt(t.AddMinutes(16)) is null,"advanced past last observation");
                 Check(!later.CanLabelPeak(t.AddMinutes(12)),"fallback or missing data bypassed sparse peak protection");
                 foreach(var lookback in new[]{10,60,1440})
                 {
                     var view=new ChartView{Start=t.AddMinutes(15-lookback),End=t.AddMinutes(15),Smooth=true,Total=data,Fable=data,Codex=data,Gaps=[],Activity=new(work,work,work)};
-                    Near(4,view.TotalAt(t.AddMinutes(12)));Near(4,view.CodexAt(t.AddMinutes(12)));
+                    Near(value.Value,view.TotalAt(t.AddMinutes(12)));Near(value.Value,view.CodexAt(t.AddMinutes(12)));
                 }
             }
         });
@@ -88,9 +118,22 @@ static class GapRateTests
                 var zero=S(5,15,0);zero.Group=after.Group;
                 var data=Data([before,after,zero]);
                 var curve=ActiveRateEstimator.Build(data,t.AddMinutes(15),Open(15));
-                Near(4,curve.ValueAt(t.AddMinutes(12)));Near(11,curve.Delta);
+                var independent=ActiveRateEstimator.Build(Data([S(-5,0,0,SegmentIssue.Gap),after,zero]),t.AddMinutes(15),Open(15));
+                Near(independent.ValueAt(t.AddMinutes(12))!.Value,curve.ValueAt(t.AddMinutes(12)));Near(11,curve.Delta);
                 Check(!curve.CanLabelPeak(t.AddMinutes(12)),"implicit break retained prior support");
                 if(gap>0)Check(curve.ValueAt(t.AddMinutes(-5)) is null,"implicit gap was connected");
+            }
+        });
+        Test("long sparse open tails stay positive and bounded while no new quota is added",()=>
+        {
+            foreach(var quantum in new[]{.5,1d})
+            {
+                var data=Data([S(-5,0,0,SegmentIssue.Gap),S(0,5,quantum),S(5,720,0)]);
+                var curve=ActiveRateEstimator.Build(data,t.AddMinutes(720),[new(t,t.AddMinutes(720),true,false,null)],quantum:quantum);
+                Near(quantum,curve.Delta);Near(quantum,Area(curve.Runs));
+                Check(curve.Runs.SelectMany(r=>r.Points).All(p=>p.Rate>0&&double.IsFinite(p.Rate)),"unchanged counter fabricated a stop");
+                Check(curve.ValueAt(t.AddMinutes(5))>curve.ValueAt(t.AddMinutes(700)),"long zero-observation tail still flat");
+                Check(curve.Runs.Sum(r=>r.Points.Count)<2100,"unbounded rendering geometry");
             }
         });
     }

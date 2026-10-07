@@ -104,8 +104,8 @@ public static class ActiveRateEstimator
             // freezing a live prediction next to a now-historical gap. This does not
             // settle a completed task whose reporting delay lacks an idle sample.
             // After any break, fewer than three quanta cannot identify a local peak.
-            // Include unchanged readings rather than scale the first jump's short
-            // interval up and then append a separate decaying prediction.
+            // Include unchanged readings, but do not pool them into the positive
+            // prefix: that would erase all shape until the third quantum arrived.
             var warmingUp=afterBreak&&jumps.Sum(j=>j.Delta)<3*Math.Max(.0001,quantum)-1e-8;
             var observedThrough=closedByReset||(closedByBreak&&!spans[^1].HardEnd)||warmingUp?activeMinutes:from;var idleSample=0;
             for(var i=0;i<spans.Count;i++)
@@ -120,6 +120,7 @@ public static class ActiveRateEstimator
             // its area is redistributed from the observed total, never added to it.
             if(observedThrough>from+1e-8)bins.Add(new(){Start=clock.AddMinutes(from),End=clock.AddMinutes(observedThrough),Delta=0});
             if(afterBreak)bins=PoolStart(bins,quantum);
+            if(warmingUp)bins=SettleSparseTail(bins,quantum);
             var confirmed=RateTrend.Build(new(){Key=source.Key,Segments=bins},clock,clock.AddMinutes(observedThrough),adaptive);
             var points=confirmed.Runs.Single().Points;
             Map(points,0,observedThrough,false,confirmed.Runs.Single().KernelMinutes);
@@ -145,18 +146,9 @@ public static class ActiveRateEstimator
                     var span=spans.FirstOrDefault(a=>a.Start<=reset.End&&a.End>=reset.End);
                     if(span is not null)pendingFrom=Math.Max(pendingFrom,span.U+(reset.End-span.Start).TotalMinutes);
                 }
-                var duration=activeMinutes-pendingFrom;
-                const double decay=.8,growth=1.1;
-                var step=rate>0?120*Math.Max(.0001,quantum)*(1-growth*decay)/(rate*(1+decay)):duration;
                 var pending=new List<TrendPoint>{new(clock.AddMinutes(observedThrough),rate)};
                 if(pendingFrom>observedThrough)pending.Add(new(clock.AddMinutes(pendingFrom),rate));
-                double elapsed=0;
-                while(elapsed<duration)
-                {
-                    var dt=Math.Min(step,duration-elapsed);
-                    rate*=1-(1-decay)*dt/step;elapsed+=dt;
-                    pending.Add(new(clock.AddMinutes(pendingFrom+elapsed),rate));step*=growth;
-                }
+                pending.AddRange(DecayTail(clock.AddMinutes(pendingFrom),clock.AddMinutes(activeMinutes),rate,quantum).Skip(1));
                 Map(pending,observedThrough,activeMinutes,true,0);
             }
             run.Clear();
@@ -182,8 +174,10 @@ public static class ActiveRateEstimator
                 var limits=new[]{origin}.Concat(inner).Append(end).ToArray();
                 var consumed=limits.Zip(limits.Skip(1),(a,b)=>run.Any(s=>s.Delta>0&&s.End>a&&s.Start<b)).ToArray();
                 var supported=cuts.Where(t=>t==origin||t==end||!consumed[Array.BinarySearch(inner,t)]||!consumed[Array.BinarySearch(inner,t)+1]).ToArray();
-                var estimate=RateTrend.Build(new(){Key=source.Key,Segments=afterBreak?PoolStart(run,quantum):run.ToList()},origin,end,maxWindowMinutes,supported);
                 var limited=afterBreak&&run.Sum(s=>s.Delta)<3*Math.Max(.0001,quantum)-1e-8;
+                var bins=afterBreak?PoolStart(run,quantum):run.ToList();
+                if(limited)bins=SettleSparseTail(bins,quantum);
+                var estimate=RateTrend.Build(new(){Key=source.Key,Segments=bins},origin,end,maxWindowMinutes,supported);
                 result.Runs.AddRange(estimate.Runs.Select(r=>r with{LimitedSupport=limited}));run.Clear();
             }
             void Zero(DateTimeOffset a,DateTimeOffset b)=>result.Runs.Add(new([new(a,0),new(b,0)],0,0));
@@ -191,17 +185,52 @@ public static class ActiveRateEstimator
     }
     // The first jump after a break has an unknown integer-counter phase. Pool it with
     // the next two quanta before estimating shape. If that much evidence has not
-    // arrived, use the whole observed prefix, including zero increments. This affects
+    // arrived, pool only through the latest positive increment. Later unchanged
+    // observations must retain their position as evidence of a slowing tail. This affects
     // only the new context; no rates or quota are borrowed across the missing interval.
     // Keep the prefix pooled after more readings arrive, so its initial short jump
     // cannot reappear as a historical peak.
     static List<RateSegment> PoolStart(IReadOnlyList<RateSegment> bins,double quantum)
     {
         var count=0;double delta=0;
-        while(count<bins.Count&&delta<3*Math.Max(.0001,quantum)-1e-8)delta+=bins[count++].Delta;
+        var lastPositive=bins.Count-1;
+        while(lastPositive>=0&&bins[lastPositive].Delta<=0)lastPositive--;
+        while(count<=lastPositive&&delta<3*Math.Max(.0001,quantum)-1e-8)delta+=bins[count++].Delta;
         if(count<2)return bins.ToList();
         var prefix=new RateSegment{Start=bins[0].Start,End=bins[count-1].End,Delta=delta,Group=bins[0].Group};
         return new[]{prefix}.Concat(bins.Skip(count)).ToList();
+    }
+    // A sparse context has no reliable instantaneous rate. Retain the information
+    // in later unchanged samples using the same bounded decay as a live tail, then
+    // redistribute (not add) quota over the whole observed active context. This is a
+    // display estimate: the ledger stays untouched. A lone jump with no subsequent
+    // samples remains flat; work edges never manufacture within-task variation.
+    static List<RateSegment> SettleSparseTail(List<RateSegment> bins,double quantum)
+    {
+        var last=bins.FindLastIndex(s=>s.Delta>0);
+        if(last<0||last==bins.Count-1)return bins;
+        var total=bins.Sum(s=>s.Delta);var head=bins[last];
+        var tail=DecayTail(head.End,bins[^1].End,head.Rate,quantum);
+        var factor=total/(total+Area(tail));
+        var result=bins.Take(last+1).Select(s=>new RateSegment{Start=s.Start,End=s.End,Delta=s.Delta*factor,Group=s.Group}).ToList();
+        result.AddRange(tail.Zip(tail.Skip(1),(a,b)=>new RateSegment{Start=a.Time,End=b.Time,
+            Delta=(a.Rate+b.Rate)/2*(b.Time-a.Time).TotalHours*factor,Group=head.Group}));
+        return result;
+    }
+    static List<TrendPoint> DecayTail(DateTimeOffset start,DateTimeOffset end,double rate,double quantum)
+    {
+        var duration=(end-start).TotalMinutes;
+        const double decay=.8,growth=1.1;
+        var step=rate>0?120*Math.Max(.0001,quantum)*(1-growth*decay)/(rate*(1+decay)):duration;
+        var points=new List<TrendPoint>{new(start,rate)};
+        double elapsed=0;
+        while(elapsed<duration)
+        {
+            var dt=Math.Min(step,duration-elapsed);
+            rate*=1-(1-decay)*dt/step;elapsed+=dt;
+            points.Add(new(elapsed==duration?end:start.AddMinutes(elapsed),rate));step*=growth;
+        }
+        return points;
     }
     static double Area(IReadOnlyList<TrendPoint> points)=>points.Zip(points.Skip(1),(a,b)=>(a.Rate+b.Rate)/2*(b.Time-a.Time).TotalHours).Sum();
 }

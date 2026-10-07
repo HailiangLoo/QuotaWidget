@@ -25,14 +25,15 @@ static class ResetRateTests
             var before=ActiveRateEstimator.Build(data,t.AddMinutes(-4),Work(30));
             Check(before.IsProvisional(t.AddMinutes(-10)),"future reset was used before its observation");
         });
-        Test("sparse new-period readings do not become a first-poll spike and decay",()=>
+        Test("sparse new-period readings conserve quota without first-poll spikes or forced flat tails",()=>
         {
             foreach(var quantum in new[]{.5,1d})
             {
                 var data=Data(Prefix().Concat(new[]{S(0,5,quantum),S(5,25,0),S(25,30,quantum),S(30,35,0)}).ToArray());
                 var curve=ActiveRateEstimator.Build(data,t.AddMinutes(35),Work(35),quantum:quantum);
-                var expected=2*quantum*60/35;
-                foreach(var minute in new[]{0d,4,15,30,35})Near(expected,curve.ValueAt(t.AddMinutes(minute))!.Value);
+                var points=curve.Runs.Where(r=>r.Points[0].Time>=t).SelectMany(r=>r.Points).ToArray();
+                Check(points.All(p=>p.Rate>0&&p.Rate<12*quantum),"first-poll spike or an invented work stop");
+                Check(curve.ValueAt(t.AddMinutes(4))>curve.ValueAt(t.AddMinutes(34)),"later unchanged readings forced a constant rate");
                 Near(2+2*quantum,curve.Delta);Near(2+2*quantum,Area(curve.Runs));
                 Check(curve.ValueAt(t.AddMinutes(-2)) is null,"reset was bridged");
             }
@@ -57,7 +58,7 @@ static class ResetRateTests
             {
                 var first=ActiveRateEstimator.Build(data,t.AddMinutes(30),activity);
                 var later=ActiveRateEstimator.Build(data,t.AddMinutes(100),activity);
-                Near(2,first.ValueAt(t.AddMinutes(15))!.Value);
+                Check(first.ValueAt(t.AddMinutes(15)) is >0 and <12,"sparse reset created a spike or stop");
                 Near(first.ValueAt(t.AddMinutes(15))!.Value,later.ValueAt(t.AddMinutes(15))!.Value);
                 Check(later.ValueAt(t.AddMinutes(31)) is null,"wall-clock passage added coverage");
                 Near(3,later.Delta);
@@ -79,9 +80,10 @@ static class ResetRateTests
             var data=Data(Prefix().Concat(new[]{S(0,5,1),S(5,25,0),S(25,30,1),S(30,35,0)}).ToArray());
             var activity=Work(35);
             ChartView View(int minutes)=>new(){Start=t.AddMinutes(35-minutes),End=t.AddMinutes(35),Smooth=true,Total=data,Fable=data,Codex=data,Gaps=[],Activity=new(activity,activity,activity)};
+            var expected=ActiveRateEstimator.Build(data,t.AddMinutes(35),activity).ValueAt(t.AddMinutes(20))!.Value;
             foreach(var minutes in new[]{30,60,1440,4320})
             {
-                var view=View(minutes);Near(24d/7,view.CodexAt(t.AddMinutes(20))!.Value);
+                var view=View(minutes);Near(expected,view.CodexAt(t.AddMinutes(20))!.Value);
                 Near(view.CodexAt(t.AddMinutes(20))!.Value,view.TotalAt(t.AddMinutes(20))!.Value);
                 Near(2,RateEngine.SumRange(data,t,t.AddMinutes(35)).Delta);
             }

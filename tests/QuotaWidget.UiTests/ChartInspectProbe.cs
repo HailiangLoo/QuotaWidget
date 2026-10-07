@@ -194,7 +194,8 @@ static class ChartInspectProbe
                 Check(drawing.Children.Count==0,"startup average painted as a peak annotation");
             }
             chart.PinInspect(now.AddMinutes(-2),true);Verify(true,["Codex"]);
-            Check(Field<IEnumerable>(Card()!,"Rows").Cast<object>().Single() is {} row&&Field<string>(row,"Value")=="4.0","startup hover lost its one-decimal observed average");
+            var expected=startup.CodexAt(now.AddMinutes(-2))!.Value.ToString("0.0",System.Globalization.CultureInfo.CurrentCulture);
+            Check(Field<IEnumerable>(Card()!,"Rows").Cast<object>().Single() is {} row&&Field<string>(row,"Value")==expected,"startup hover differs from the curve or lost its one-decimal precision");
         }
         Console.WriteLine("Gap recovery: sparse startup stays visible with one-decimal hover, without peak labels or peak axis ticks in both/single-provider layouts.");
         chart.View=null;Check(Card() is null,"release leaves overlay");
