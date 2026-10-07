@@ -357,7 +357,7 @@
                 </Expander>
                 <Expander local:Translate.Header="历史与提醒" Margin="0,3,0,0">
                   <StackPanel Margin="0,5,0,8">
-                    <TextBlock TextWrapping="Wrap" local:Translate.Text="使用段：连续 4h 无日志活动才另开一段；重启和跨日不拆分。恢复的记录可能不完整。&#10;日历：各平台分别统计周额度点；Claude 已包含 Fable。缺口不补零，跨午夜区间按时长分摊，≈ 表示估计。&#10;compact：列表保留 24h，之后仅在历史显示。提醒时间是最近请求的年龄，不是服务端缓存寿命。&#10;精简均速：以最新读数和约 1h 前的实测读数之差，除以实际间隔（45–75m）；* 表示覆盖不全或读数陈旧。" />
+                    <TextBlock TextWrapping="Wrap" local:Translate.Text="使用段：连续 4h 无日志活动才另开一段；重启和跨日不拆分。恢复的记录可能不完整。&#10;日历：各平台分别统计周额度点；Claude 已包含 Fable。缺口不补零，跨午夜区间按时长分摊，≈ 表示估计。&#10;列表：最后活动满 24h 后移出当前列表；compact 条目从压缩时间起保留 24h。历史记录保留。提醒时间是最近请求的年龄，不是服务端缓存寿命。&#10;精简均速：以最新读数和约 1h 前的实测读数之差，除以实际间隔（45–75m）；* 表示覆盖不全或读数陈旧。" />
                     <TextBlock x:Name="CacheDiagnosticsText" TextWrapping="Wrap" Margin="0,5,0,0" />
                   </StackPanel>
                 </Expander>

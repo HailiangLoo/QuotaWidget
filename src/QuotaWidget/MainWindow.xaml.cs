@@ -446,30 +446,29 @@ public partial class MainWindow : Window
         }
         Grid.SetColumn(names, 2); row.Children.Add(names);
         var minutes = new TextBlock { Foreground = color, VerticalAlignment = VerticalAlignment.Center };
+        void ShowAge(DateTimeOffset at,double size)
+        {
+            var elapsed=ChatListPolicy.ElapsedAge(at,now);
+            minutes.Inlines.Add(new Run(elapsed.Number) { FontSize=size,FontWeight=FontWeights.SemiBold });
+            minutes.Inlines.Add(new Run(elapsed.Unit) { FontSize=10 });
+            if(elapsed.Minutes is { } remainder)
+            {
+                minutes.Inlines.Add(new Run(remainder) { FontSize=size,FontWeight=FontWeights.SemiBold });
+                minutes.Inlines.Add(new Run("m") { FontSize=10 });
+            }
+        }
         if (e.Compacted)
         {
             if (historical) minutes.Inlines.Add(new Run(e.CompactedAt?.ToLocalTime().ToString("HH:mm") ?? "—") { FontSize = 12 });
             else if (e.CompactedAt is { } compact)
-            {
-                var elapsed = ChatListPolicy.CompactAge(compact, now);
-                minutes.Inlines.Add(new Run(elapsed.Number) { FontSize = 16, FontWeight = FontWeights.SemiBold });
-                minutes.Inlines.Add(new Run(elapsed.Unit) { FontSize = 10 });
-                if (elapsed.Minutes is { } remainder)
-                {
-                    minutes.Inlines.Add(new Run(remainder) { FontSize = 16, FontWeight = FontWeights.SemiBold });
-                    minutes.Inlines.Add(new Run("m") { FontSize = 10 });
-                }
-            }
+                ShowAge(compact,16);
         }
         else if (historical)
             minutes.Inlines.Add(new Run((e.ActivityAt ?? e.RequestAt).ToLocalTime().ToString("HH:mm")) { FontSize = 12 });
         else if (e.WorkPending)
             minutes.Inlines.Add(new Run(e.Running ? (dense?Loc.T("运行"):Loc.T("进行中")) : Loc.T("未确认")) { FontSize = 11, FontWeight = FontWeights.SemiBold });
         else
-        {
-            minutes.Inlines.Add(new Run($"{Math.Floor(age):0}") { FontSize = dense?14:20, FontWeight = FontWeights.SemiBold });
-            minutes.Inlines.Add(new Run("m") { FontSize = 10 });
-        }
+            ShowAge(e.RequestAt,dense?14:age>=60?16:20);
         if (e.Compacted)
         {
             var status = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center,
@@ -490,7 +489,12 @@ public partial class MainWindow : Window
         var status=entry.Compacted ? Loc.F($"已 compact · {entry.CompactedAt?.ToLocalTime():M/d HH:mm}")
             : entry.Running ? Loc.T("进行中") : entry.ActivityUncertain ? Loc.T("状态未确认") : Loc.T("本轮已结束");
         if(historical) status=Loc.T("末次状态 · ")+status;
-        else if(!entry.Compacted) status+=Loc.F($" · 最近请求 {Math.Floor(entry.AgeMinutes(now)):0}m 前");
+        else if(!entry.Compacted)
+        {
+            var elapsed=ChatListPolicy.ElapsedAge(entry.RequestAt,now);
+            var requestAge=elapsed.Number+elapsed.Unit+(elapsed.Minutes is { } m?m+"m":"");
+            status+=Loc.F($" · 最近请求 {requestAge} 前");
+        }
         var statusText=Text(status,10,"Muted"); statusText.Margin=new Thickness(0,5,0,7); panel.Children.Add(statusText);
         if (_model.Settings.TokenTrackingEnabled)
         {

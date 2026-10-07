@@ -26,11 +26,30 @@ static class ChatListTests
             merged = ChatListPolicy.Merge([old], [active], now).Single();
             Check(!merged.Compacted && !merged.Running && merged.ActivityUncertain, "stale live tail resurrected compact/work");
         });
+        Test("all stale chats leave a long-running session list at 24h without changing the journal", () =>
+        {
+            var recent=new ChatCacheEntry(ChatPlatform.Codex,"recent","recent",now.AddHours(-23.99),30,"local",false);
+            var old=recent with {Id="old",RequestAt=now.AddHours(-24)};
+            var stalePending=old with {Id="pending",RequestAt=now.AddHours(-48),Running=true};
+            var retained=new[]{recent,old,stalePending};
+            Check(ChatListPolicy.Merge(retained,retained,now).Single().Id=="recent","ordinary or pending stale row outlived 24h");
+            Check(retained.Length==3&&stalePending.Running,"display cleanup rewrote historical state");
+            Check(ChatListPolicy.Merge([],retained,now.AddMinutes(1)).Count==0,"unchanged retained rows did not age out");
+        });
+        Test("fresh activity and resumed chats survive an old request timestamp", () =>
+        {
+            var old=new ChatCacheEntry(ChatPlatform.Codex,"a","a",now.AddHours(-48),30,"local",false);
+            var active=old with {Running=true,ActivityAt=now.AddMinutes(-1)};
+            var shown=ChatListPolicy.Merge([active],[old],now).Single();
+            Check(shown.Running&&shown.RequestAt==old.RequestAt,"24h display cutoff interrupted ongoing work or renewed its cache clock");
+            var resumed=old with {RequestAt=now,ActivityAt=now,Running=true};
+            Check(ChatListPolicy.Merge([resumed],[old],now).Single().RequestAt==now,"new activity failed to restore a hidden chat");
+        });
         Test("elapsed labels are from compact time and retain minutes after one hour", () =>
         {
-            Check(ChatListPolicy.CompactAge(now.AddMinutes(-59.9), now) == ("59", "m", null), "minute rounding");
-            Check(ChatListPolicy.CompactAge(now.AddMinutes(-65), now) == ("1", "h", "05"), "hour/minute label");
-            Check(ChatListPolicy.CompactAge(now.AddHours(-23), now) == ("23", "h", null), "exact hour label");
+            Check(ChatListPolicy.ElapsedAge(now.AddMinutes(-59.9), now) == ("59", "m", null), "minute rounding");
+            Check(ChatListPolicy.ElapsedAge(now.AddMinutes(-65), now) == ("1", "h", "05"), "hour/minute label");
+            Check(ChatListPolicy.ElapsedAge(now.AddHours(-23), now) == ("23", "h", null), "exact hour label");
         });
     }
 }

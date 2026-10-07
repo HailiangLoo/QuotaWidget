@@ -3,6 +3,7 @@ using System.Reflection;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
+using System.Windows.Documents;
 using QuotaWidget.Core;
 using QuotaWidget.App;
 
@@ -86,6 +87,27 @@ static class Probe
             Set("_chatLifecycle",ChatLifecycleSnapshot.Empty);window.RenderCache();Check(Control<StackPanel>("CacheRows").Children.Count==21,"restoration not rendered");
             Set("_currentChatSession",null!);Click("CompactButton");Check(rows.Children.Count==20,"retention fixture leaked");
             Console.WriteLine("Lifecycle UI: both layouts hide live and retained rows; restoration refreshes; journal remains intact.");
+            var listNow=DateTimeOffset.Now;
+            var ordinary=new ChatCacheEntry(ChatPlatform.Codex,"elapsed","elapsed",listNow.AddMinutes(-935),30,"fixture",false);
+            var compacted=ordinary with{Id="compact-age",Compacted=true,CompactedAt=listNow.AddMinutes(-122),ActivityAt=listNow.AddMinutes(-122)};
+            var stale=ordinary with{Id="stale",RequestAt=listNow.AddHours(-24)};
+            var pending=stale with{Id="stale-pending",Running=true};
+            var savedSession=new ChatSession{Id="long-session",Start=listNow.AddDays(-2),End=listNow,Chats=[new SessionChat{Last=stale,FirstAt=stale.RequestAt}]};
+            Set("_currentChatSession",savedSession);Set("_cacheEntries",new[]{ordinary,compacted,stale,pending});
+            Click("CompactButton");window.RenderCache();
+            var archived=Control<StackPanel>("ExpiredRows");
+            Check(archived.Children.Count==2&&Control<StackPanel>("CacheRows").Children.Count==0,"24h stale live/retained/pending rows remain in full view");
+            string Age(Grid row)
+            {
+                var right=row.Children.Cast<UIElement>().Single(c=>Grid.GetColumn(c)==3);
+                var label=right is TextBlock text?text:((StackPanel)right).Children.OfType<TextBlock>().Single();
+                return new TextRange(label.ContentStart,label.ContentEnd).Text;
+            }
+            Check(archived.Children.Cast<Grid>().Select(Age).Order().SequenceEqual(new[]{"15h35m","2h02m"}),"ordinary and compact rows have different elapsed formats");
+            Check(savedSession.Chats.Count==1&&savedSession.Chats[0].Last==stale,"list cleanup changed the session journal");
+            Click("CompactButton");Check(rows.Children.Count==0,"compact retained a stale running flag");
+            Set("_currentChatSession",null!);Set("_cacheEntries",Enumerable.Range(0,20).Select(i=>Entry("working-"+i,80,running:true)).ToArray());window.RenderCache();
+            Console.WriteLine("Chat retention UI: ordinary/compacted rows use hours and minutes; all 24h-stale entries disappear in both layouts while session records remain intact.");
             var details=TokenBreakdown.Build(now.AddHours(-2),now,Enumerable.Range(0,80).Select(i=>new TokenSlice(i%2==0?"model-a":"model-b","chat-"+i,new TokenSummary(i+1,1000,7,0,1,0))).ToArray());
             var labels=new Dictionary<string,ChatCacheEntry>{{"chat-79",Entry("named chat",1) with{Title="可核对的标题",Project="项目"}}};
             var refreshed=0;var closed=0;
