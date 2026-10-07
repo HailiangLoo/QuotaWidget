@@ -135,8 +135,10 @@ public static class WorkActivity
         return result;
     }
 
-    /// <summary>Changes in the set of active models, retaining the previous set across
-    /// idle time. Empty or unknown evidence never establishes exclusive ownership.</summary>
+    /// <summary>Model handoffs that require independent total-quota estimation.
+    /// A concurrent helper does not restart the counter of work still running.
+    /// Retain that context until its models are replaced or a different model is
+    /// working alone. Keep it across idle without extending the actual work spans.</summary>
     public static IReadOnlyList<DateTimeOffset> ModelChanges(IReadOnlyList<WorkSpan> spans,DateTimeOffset start,DateTimeOffset end)
     {
         if(spans.Count==0)return [];
@@ -152,7 +154,7 @@ public static class WorkActivity
             if(b<=a||a>=end||b<=start)continue;
             events.Add((a,g.Key,1));events.Add((b,g.Key,-1));
         }
-        var active=new Dictionary<string,int>();HashSet<string>? previous=null;
+        var active=new Dictionary<string,int>();HashSet<string>? context=null;
         var output=new List<DateTimeOffset>();
         foreach(var e in events.GroupBy(e=>e.At).OrderBy(g=>g.Key))
         {
@@ -163,8 +165,17 @@ public static class WorkActivity
             }
             if(active.Count==0)continue;
             var current=active.Keys.ToHashSet();
-            if(previous is not null&&!previous.SetEquals(current)&&e.Key>start&&e.Key<end)output.Add(e.Key);
-            previous=current;
+            if(context is null){context=current;continue;}
+            // Comparing every adjacent active set fragments an ongoing task whenever
+            // a helper joins/leaves. It turns one integer jump in a five-minute sample
+            // into an isolated 12 pt/h plateau, discarding neighbouring zero readings.
+            // Keep the continuing context, but never carry a previous model's total
+            // into a different exclusive model (including after initially mixed work).
+            if(!context.Overlaps(current)||(current.Count==1&&!context.SetEquals(current)))
+            {
+                if(e.Key>start&&e.Key<end)output.Add(e.Key);
+                context=current;
+            }
         }
         return output;
     }

@@ -27,16 +27,41 @@ static class ModelContextTests
                 Check(a.Runs.Any(r=>r.HardEnd&&r.Points[^1].Time==t.AddMinutes(20)),"old task completion was erased");
             }
         });
-        Test("concurrent-model entry and exit each separate estimation while work stays continuous",()=>
+        Test("a continuing model tolerates concurrent entry but a new exclusive model starts independent estimation",()=>
         {
             WorkSpan[] work=[W(0,30,"opus"),W(20,60,"fable",false)];
             var edges=WorkActivity.ModelChanges(work,t,t.AddHours(1));
-            Check(edges.SequenceEqual(new[]{t.AddMinutes(20),t.AddMinutes(30)}),"concurrent model-set changes missing");
+            Check(edges.SequenceEqual(new[]{t.AddMinutes(30)}),"concurrent entry restarted ongoing work or exclusive handoff was missed");
             SeriesData Source(double old)=>Data(S(0,20,old),S(20,30,2),S(30,40,1),S(40,60,0));
             var a=Build(Source(1),work);var b=Build(Source(50),work);
             Near(a.ValueAt(t.AddMinutes(45))!.Value,b.ValueAt(t.AddMinutes(45)));
             Check(!a.Runs.Any(r=>r.HardEnd&&edges.Contains(r.Points[^1].Time)||r.HardStart&&edges.Contains(r.Points[0].Time)),"model composition created a fake work stop");
             Near(4,a.Delta);
+        });
+        Test("short concurrent helpers cannot turn a steady counter into polling-frequency spikes",()=>
+        {
+            var data=Data(Enumerable.Range(0,24).Select(i=>S(i*5,(i+1)*5,i%3==2?1:0)).ToArray());
+            WorkSpan[] primary=[W(0,120,"opus",false)];
+            var reference=Build(data,primary,120);
+            foreach(var shift in new[]{-.2,0,.2})
+            {
+                var helpers=Enumerable.Range(1,20).Select(i=>W(i*5+shift,i*5+.5+shift,i%2==0?"fable":"sonnet"));
+                var work=primary.Concat(helpers).ToArray();var curve=Build(data,work,120);
+                Check(WorkActivity.ModelChanges(work,t,t.AddMinutes(120)).Count==0,"helper lifetime became a total-quota observation boundary");
+                foreach(var minute in Enumerable.Range(1,119))Near(reference.ValueAt(t.AddMinutes(minute))!.Value,curve.ValueAt(t.AddMinutes(minute)));
+                Near(8,curve.Delta);Near(8,Area(curve));
+                Check(curve.Runs.SelectMany(r=>r.Points).Max(p=>p.Rate)<6,"steady 4 points/hour became a one-point/5-minute spike");
+            }
+        });
+        Test("an initially mixed model context separates before the remaining model works alone",()=>
+        {
+            WorkSpan[] work=[W(0,30,"opus"),W(0,60,"fable",false)];
+            var edges=WorkActivity.ModelChanges(work,t,t.AddHours(1));
+            Check(edges.SequenceEqual(new[]{t.AddMinutes(30)}),"initial mixed work leaked into the exclusive model");
+            SeriesData Source(double old)=>Data(S(0,20,old),S(20,30,0),S(30,40,1),S(40,60,0));
+            var a=Build(Source(1),work);var b=Build(Source(50),work);
+            Near(a.ValueAt(t.AddMinutes(45))!.Value,b.ValueAt(t.AddMinutes(45)));
+            Near(2,a.Delta);Near(2,Area(a));
         });
         Test("positive observations spanning two model phases stay whole and independent of neighbouring rates",()=>
         {
@@ -83,7 +108,7 @@ static class ModelContextTests
         {
             WorkSpan[] work=[W(0,20,"opus"),W(10,60,"fable",false)];
             var edges=WorkActivity.ModelChanges(work,t,t.AddMinutes(20.05));
-            Check(edges.SequenceEqual(new[]{t.AddMinutes(10),t.AddMinutes(20)}),"completed Opus remained in the active model set for the grace period");
+            Check(edges.SequenceEqual(new[]{t.AddMinutes(20)}),"completed Opus remained in the active model set for the grace period");
         });
         Test("a clean counter reset cannot carry an old model's rate into a new model",()=>
         {
