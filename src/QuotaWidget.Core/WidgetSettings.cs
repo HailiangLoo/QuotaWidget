@@ -22,8 +22,9 @@ public sealed class WidgetSettings
     public bool ClaudeConnected { get; set; } = true;
     public bool CodexConnected { get; set; } = true;
     public bool Connected(ChatPlatform platform) => platform == ChatPlatform.Claude ? ClaudeConnected : CodexConnected;
-    public bool Listens(ChatPlatform platform) => SetupCompleted && Connected(platform) && Monitors(platform);
+    public bool Listens(ChatPlatform platform) => SetupCompleted && Connected(platform);
     public bool Collects(ChatPlatform platform) => CollectorEnabled && Listens(platform);
+    // Legacy setting name: this is the visible platform selection, not connection intent.
     public bool Monitors(ChatPlatform platform) => Monitoring == "both" || Monitoring == (platform == ChatPlatform.Claude ? "claude" : "codex");
     public bool AutoLogoutOnExit { get; set; } = false;
     public bool CacheRemindersEnabled { get; set; } = true;
@@ -78,6 +79,14 @@ public sealed class WidgetSettings
         {
             var s = JsonSerializer.Deserialize<WidgetSettings>(text, Options) ?? new WidgetSettings();
             s.Normalize();
+            // Pre-connection settings used the selector to opt out of a provider.
+            // Preserve that choice once, while retaining every explicit modern flag.
+            using var json=JsonDocument.Parse(text,new(){AllowTrailingCommas=true,CommentHandling=JsonCommentHandling.Skip});
+            if(json.RootElement.ValueKind==JsonValueKind.Object)
+            {
+                if(!json.RootElement.TryGetProperty("claudeConnected",out _))s.ClaudeConnected=s.Monitors(ChatPlatform.Claude);
+                if(!json.RootElement.TryGetProperty("codexConnected",out _))s.CodexConnected=s.Monitors(ChatPlatform.Codex);
+            }
             return s;
         }
         catch (JsonException)

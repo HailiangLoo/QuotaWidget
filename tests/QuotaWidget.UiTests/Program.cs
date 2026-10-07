@@ -215,10 +215,11 @@ static class Probe
             Click("TokenScope");Check(Control<StackPanel>("SettingsPanel").Visibility==Visibility.Visible&&Control<Expander>("TokenDiagnostics").IsExpanded&&Control<Expander>("TokenCalculation").IsExpanded,"diagnostic entry no longer opens token details");
             Console.WriteLine("Concise UI: no blanket chart/legend tooltip; brief mode tip; calculation details opt-in; token diagnostic entry works.");
             if(model.Settings.CompactMode)Click("CompactButton");model.Settings.ClaudeChartCollapsed=model.Settings.CodexChartCollapsed=false;window.Render();
+            var displayEvents=model.EventList.Count+codex.EventList.Count;
             Control<ComboBox>("MonitoringCombo").SelectedIndex=1;
             Check(model.Settings.Monitoring=="claude"&&Control<QuotaRing>("CodexMeter").Visibility==Visibility.Collapsed&&Control<TextBlock>("CodexInput").Visibility==Visibility.Collapsed&&Control<RateChart>("Chart").HeaderTop(true) is null,"Claude-only retained Codex live UI");
             Check(Control<StackPanel>("CodexChartModes").Visibility==Visibility.Collapsed&&Control<StackPanel>("ClaudeChartModes").Visibility==Visibility.Visible,"Claude-only mode controls wrong");
-            Check(app.CacheEntries(now).All(e=>e.Platform==ChatPlatform.Claude)&&codex.EventList.Any(e=>e.Type==EventTypes.MonitorPause),"Claude-only retained Codex chats or lost pause boundary");
+            Check(app.CacheEntries(now).All(e=>e.Platform==ChatPlatform.Claude)&&model.EventList.Count+codex.EventList.Count==displayEvents&&model.Settings.Collects(ChatPlatform.Codex),"Claude-only leaked hidden chats, paused collection or manufactured a history gap");
             Control<ComboBox>("MonitoringCombo").SelectedIndex=2;
             Check(model.Settings.Monitoring=="codex"&&Control<QuotaRing>("FiveMeter").Visibility==Visibility.Collapsed&&Control<TextBlock>("ClaudeInput").Visibility==Visibility.Collapsed&&Control<RateChart>("Chart").HeaderTop(false) is null,"Codex-only retained Claude live UI");
             Check(Control<StackPanel>("ClaudeChartModes").Visibility==Visibility.Collapsed&&Control<StackPanel>("CodexChartModes").Visibility==Visibility.Visible,"Codex-only mode controls wrong");

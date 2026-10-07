@@ -86,7 +86,7 @@ public partial class MainWindow
         _model.Settings.Monitoring=selected;_model.Settings.Normalize();
         CloseUsage();
         foreach(var entry in _usageWindows.ToArray()) if(!_model.Settings.Monitors(entry.Key)) entry.Value.Close();
-        _app.MonitoringChanged(previous);
+        _app.DisplayModeChanged();
         ApplyPlatformLayout();Chart.ClearInspect();SaveAndRender();
     }
 }

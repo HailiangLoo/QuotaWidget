@@ -36,6 +36,33 @@ static class ConnectionProbe
             Check(!model.Settings.CodexConnected&&cards[1].State.Text=="已断开"&&codex.EventList.Count==count+1,"disconnect state or event wrong");
             cards[1].Toggle.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
             Check(model.Settings.CodexConnected&&codex.EventList.Count==count+2,"reconnect duplicated lifecycle events");
+            Check(cards.All(c=>c.Login.Content.ToString()=="登录"),"connection cards retain install/open actions");
+            var displayCount=model.EventList.Count+codex.EventList.Count;
+            C<ComboBox>("MonitoringCombo").SelectedIndex=1;
+            Check(model.Settings.CodexConnected&&model.Settings.Collects(ChatPlatform.Codex)&&cards[1].Toggle.Content.ToString()=="断开","hiding Codex changed its connection/toggle state");
+            cards[0].Toggle.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
+            Check(model.Settings.ClaudeConnected&&model.Settings.Monitoring=="claude","connecting changed the display selection");
+            displayCount++;
+            foreach(var choice in new[]{2,0,1,2})C<ComboBox>("MonitoringCombo").SelectedIndex=choice;
+            Check(model.Settings.ClaudeConnected&&model.Settings.CodexConnected&&model.EventList.Count+codex.EventList.Count==displayCount,"display switching disconnected accounts or wrote pause/resume events");
+            cards[0].Toggle.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
+            Check(!model.Settings.ClaudeConnected&&model.Settings.Monitoring=="codex"&&cards[0].State.Text=="已断开","hidden account disconnect changed display or affected another account");
+            cards[0].Toggle.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
+            Check(model.Settings.ClaudeConnected&&model.Settings.Monitoring=="codex","hidden account reconnect forced both mode");
+            var stamp=DateTimeOffset.Now;
+            foreach(var sourceModel in new[]{model,codex})
+                typeof(WidgetModel).GetProperty("LastEnvelope")!.SetValue(sourceModel,new LatestEnvelope(1,"fixture","fixture","test",stamp,Statuses.Partial,300,null,null,
+                    new("fixture",stamp,new(null,UsageParser.Limit(12,stamp.AddDays(7)),null))));
+            displayCount=model.EventList.Count+codex.EventList.Count;
+            foreach(var choice in new[]{1,2,0})
+            {
+                C<ComboBox>("MonitoringCombo").SelectedIndex=choice;
+                Check(cards.All(c=>c.State.Text=="已连接"&&c.Toggle.Content.ToString()=="断开"),"display selection masked a verified connection");
+            }
+            Check(model.EventList.Count+codex.EventList.Count==displayCount,"verified connections gained fake display-switch gaps");
+            C<ComboBox>("LanguageCombo").SelectedIndex=2;
+            Check(cards.All(c=>c.State.Text=="Connected"&&c.Login.Content.ToString()=="Sign in"),"English cards changed connection semantics or retained install labels");
+            C<ComboBox>("LanguageCombo").SelectedIndex=1;
             typeof(MainWindow).GetMethod("BackButton_Click",BindingFlags.Instance|BindingFlags.NonPublic)!.Invoke(window,[window,new RoutedEventArgs()]);
             Check(model.Settings.CompactMode&&window.Width==264&&C<StackPanel>("MainPanel").Visibility==Visibility.Visible,"return did not restore compact mode");
             window.Close();

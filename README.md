@@ -60,15 +60,15 @@ The gear is available in full and compact modes. Settings includes language, pro
 
 1. Download `QuotaWidget-v<version>-win-x64.exe` from [Releases](https://github.com/HailiangLoo/QuotaWidget/releases/latest) and keep it in a folder of your choice. Choose the app EXE, not GitHub's source-code archive. Older releases such as v0.13.9 use a ZIP: extract those once and open the EXE inside.
 2. Double-click the EXE. It contains the .NET runtime; no installer, extraction step, helper scripts, or separate runtime download is needed for the single-file release.
-3. On first launch, choose the providers to monitor and complete official sign-in, then select **Start monitoring**. No quota collection or chat-log reading begins before this step. The gear remains available in compact mode.
-4. Settings shows each provider’s connection status, sign-in/install instructions, a connection check, and a disconnect button. Disconnect stops widget monitoring; it does not sign out of the official app or delete history.
+3. On first launch, choose the providers to connect and complete official sign-in, then select **Start monitoring**. Only those providers are enabled, and no quota collection or chat-log reading begins before this step. The gear remains available in compact mode.
+4. **Show** selects Claude, Codex, or both for the visible widget. It does not change connections: connected providers keep collecting in the background. Each provider has separate **Sign in**, **Check**, and **Connect / Disconnect** controls. Disconnect stops that provider's quota and local-log monitoring; it does not sign out of the official app or delete history. Sign-in opens the existing official login/app; the widget has no app-install action.
 5. Choose a language in Settings. Language defaults to the Windows display language: Chinese on Chinese systems, English otherwise. You can choose **English** or **简体中文** explicitly.
 
 **Codex:** install and sign in to the official Codex Windows app first. The widget checks the signature of the bundled CLI, queries quota through it, and reuses the existing sign-in.
 
 Official installation and sign-in guides: [Codex / ChatGPT](https://learn.chatgpt.com/docs/app), [ChatGPT authentication](https://learn.chatgpt.com/docs/auth), and [Claude Code](https://code.claude.com/docs/en/setup).
 
-**Claude:** requires a supported official Claude Code CLI, or the CLI bundled with the Claude Windows app. Use **Settings > Claude Code > Sign in / Install** to complete the widget's separate sign-in. If no compatible CLI is found, update the official app or set `claudeExePath` in `settings.json`.
+**Claude:** requires a supported official Claude Code CLI, or the CLI bundled with the Claude Windows app. Use **Settings > Claude Code > Sign in** to complete the widget's separate sign-in. If no compatible CLI is found, update the official app or set `claudeExePath` in `settings.json`.
 
 To preview the widget without an account, choose **Preview demo** in Settings. Demo data is stored separately from real data. Licenses for the app and its bundled runtime are also available in Settings.
 

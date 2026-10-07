@@ -262,14 +262,14 @@ public partial class App : Application
             _tokenTask = Task.Run(WatchTokensAsync);
             // Show which CLI will be used (or why none) even before the first login.
             var configured = _model.Settings.ClaudeExePath;
-            if(Monitors(ChatPlatform.Claude)) Task.Run(() => ClaudeCli.Resolve(configured)).ContinueWith(t =>
+            if(Listens(ChatPlatform.Claude)) Task.Run(() => ClaudeCli.Resolve(configured)).ContinueWith(t =>
             {
                 if (t.IsCompletedSuccessfully) Dispatcher.BeginInvoke(() => { _startupChoice = t.Result; Render(); });
             });
         }
 
         _tray = new TrayIcon(this);
-        _fileTimer = new DispatcherTimer(TimeSpan.FromSeconds(2), DispatcherPriority.Background, (_, _) => { if ((Monitors(ChatPlatform.Claude)&&_model.PollLatest()) | (Monitors(ChatPlatform.Codex)&&_codex.PollLatest())) Render(); }, Dispatcher);
+        _fileTimer = new DispatcherTimer(TimeSpan.FromSeconds(2), DispatcherPriority.Background, (_, _) => { if ((Listens(ChatPlatform.Claude)&&_model.PollLatest()) | (Listens(ChatPlatform.Codex)&&_codex.PollLatest())) Render(); }, Dispatcher);
         // Cheap clock checks; visible detail windows reload local usage only when their cadence is due.
         // Curves stay cached until data changes. Hidden widget: update the tray less often.
         _clockTimer = new DispatcherTimer(TimeSpan.FromSeconds(15), DispatcherPriority.Background, (_, _) =>
@@ -412,7 +412,6 @@ public partial class App : Application
                     try
                     {
                         var now = DateTimeOffset.Now;
-                        var mode=_model.Settings.Monitoring;
                         _cacheEntries = monitor.Poll(now,Listens(ChatPlatform.Claude),Listens(ChatPlatform.Codex)); _cacheWarning = monitor.Warning;
                         try
                         {
@@ -583,7 +582,7 @@ public partial class App : Application
         (CurrentSession(now)?.Chats.Select(c => c.Last) ?? []).Concat(_recentCompacts);
     IEnumerable<ChatCacheEntry> LifecycleCandidates(DateTimeOffset now) => _cacheEntries.Concat(RetainedCacheEntries(now)).Where(e=>Listens(e.Platform));
     public IReadOnlyList<ChatCacheEntry> CacheEntries(DateTimeOffset now) => (_opts.Demo ? DemoCacheEntries(now)
-        : ChatListPolicy.Merge(_cacheEntries, RetainedCacheEntries(now), now, _chatLifecycle)).Where(e=>_opts.Demo?Monitors(e.Platform):Listens(e.Platform)).ToArray();
+        : ChatListPolicy.Merge(_cacheEntries, RetainedCacheEntries(now), now, _chatLifecycle)).Where(e=>Monitors(e.Platform)&&(_opts.Demo||Listens(e.Platform))).ToArray();
 
     IReadOnlyList<ChatCacheEntry> DemoCacheEntries(DateTimeOffset now)
     {
@@ -703,16 +702,10 @@ public partial class App : Application
 
     public void LaunchLogin() => RunAuth(_model.Settings, logout: false, confirm: false);
 
-    public void MonitoringChanged(string previous)
+    public void DisplayModeChanged()
     {
-        var s=_model.Settings;
-        var before=new WidgetSettings{Monitoring=previous,SetupCompleted=s.SetupCompleted,ClaudeConnected=s.ClaudeConnected,CodexConnected=s.CodexConnected};var now=DateTimeOffset.Now;
-        foreach(var (platform,model) in new[]{(ChatPlatform.Claude,_model),(ChatPlatform.Codex,_codex)})
-            if(before.Listens(platform)!=Listens(platform))
-            {
-                model.RecordEvent(new AppEvent(now,Listens(platform)?EventTypes.MonitorResume:EventTypes.MonitorPause));
-                model.ReleaseArchive();
-            }
+        _trendActivity=null;_modelActivity=null;
+        _model.ReleaseArchive();_codex.ReleaseArchive();
     }
 
     public void LaunchLogout() => RunAuth(_model.Settings, logout: true, confirm: true);

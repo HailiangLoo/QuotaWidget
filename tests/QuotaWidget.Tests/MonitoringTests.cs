@@ -32,26 +32,26 @@ static class MonitoringTests
         });
         Test("Claude disabled manual and timer paths make no attempts or files",async dir=>
         {
-            var paths=new DataPaths(dir);var settings=new WidgetSettings{Monitoring="codex"};var source=new ClaudeSource();
+            var paths=new DataPaths(dir);var settings=new WidgetSettings{Monitoring="codex",ClaudeConnected=false};var source=new ClaudeSource();
             using var collector=new ClaudeUsageCollector(paths,()=>settings,source,()=>now);
             Check(await collector.CollectOnceAsync(default) is null,"disabled manual call accepted");
             using(var cancel=new CancellationTokenSource(40))await collector.RunAsync(cancel.Token);
             Check(source.Calls==0&&!File.Exists(paths.Latest),"disabled collector read source or changed latest");
-            settings.Monitoring="both";
+            settings.ClaudeConnected=true;
             Check((await collector.CollectOnceAsync(default))?.Status==Statuses.AuthRequired,"reenable did not restore normal collection");
         });
         Test("Codex disabled stops requests; reenable retains server backoff",async dir=>
         {
-            var clock=now;var settings=new WidgetSettings{Monitoring="claude"};var source=new CodexSource(()=>CodexUsageSource.Failure(clock,"limited",Statuses.RateLimited) with{RetryAfterSeconds=900});var paths=new DataPaths(dir);
+            var clock=now;var settings=new WidgetSettings{Monitoring="claude",CodexConnected=false};var source=new CodexSource(()=>CodexUsageSource.Failure(clock,"limited",Statuses.RateLimited) with{RetryAfterSeconds=900});var paths=new DataPaths(dir);
             using var collector=new CodexUsageCollector(paths,()=>settings,source,()=>clock);
             Check(await collector.CollectOnceAsync(default) is null&&source.Calls==0&&!File.Exists(paths.Latest),"disabled source called");
-            settings.Monitoring="both";await collector.CollectOnceAsync(default);var deadline=collector.NotBefore;
-            settings.Monitoring="claude";clock=now.AddMinutes(1);await collector.CollectOnceAsync(default);
-            settings.Monitoring="codex";await collector.CollectOnceAsync(default);
+            settings.CodexConnected=true;await collector.CollectOnceAsync(default);var deadline=collector.NotBefore;
+            settings.CodexConnected=false;clock=now.AddMinutes(1);await collector.CollectOnceAsync(default);
+            settings.CodexConnected=true;settings.Monitoring="codex";await collector.CollectOnceAsync(default);
             Check(source.Calls==1&&collector.NotBefore==deadline,"toggle bypassed backoff");
             clock=now.AddMinutes(16);await collector.CollectOnceAsync(default);Check(source.Calls==2,"reenable never resumed");
         });
-        Test("token and chat readers switch immediately without reading excluded logs or losing totals",dir=>
+        Test("token and chat connection opt-outs apply without reading excluded logs or losing totals",dir=>
         {
             const string cxId="11111111-1111-1111-1111-111111111111",clId="22222222-2222-2222-2222-222222222222";
             var cx=Path.Combine(dir,"codex");var cl=Path.Combine(dir,"claude");Directory.CreateDirectory(Path.Combine(cx,"sessions"));Directory.CreateDirectory(Path.Combine(cl,"projects"));

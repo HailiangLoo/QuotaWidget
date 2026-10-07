@@ -294,7 +294,7 @@
           </ScrollViewer.Resources>
           <StackPanel Margin="14">
           <TextBlock x:Name="SettingsTitle" local:Translate.Text="显示设置" FontSize="14" FontWeight="Medium" Margin="0,0,0,2" />
-          <TextBlock x:Name="SetupIntro" local:Translate.Text="欢迎使用。先选择监听平台，再完成官方登录。开始前不会采集额度或读取 chat 日志。" FontSize="11" TextWrapping="Wrap" Foreground="{DynamicResource Muted}" Margin="0,6,0,0" Visibility="Collapsed" />
+          <TextBlock x:Name="SetupIntro" local:Translate.Text="先选择要连接的平台并登录，再开始监听。开始前不会采集额度或读取 chat 日志；之后切换显示不会断开连接。" FontSize="11" TextWrapping="Wrap" Foreground="{DynamicResource Muted}" Margin="0,6,0,0" Visibility="Collapsed" />
           <DockPanel Margin="0,12,0,0">
             <ComboBox x:Name="LanguageCombo" DockPanel.Dock="Right" Style="{StaticResource FlatCombo}" SelectionChanged="LanguageCombo_SelectionChanged">
               <ComboBoxItem Tag="auto" local:Translate.Content="跟随系统" />
@@ -307,9 +307,10 @@
             <ComboBox x:Name="MonitoringCombo" DockPanel.Dock="Right" Style="{StaticResource FlatCombo}" SelectionChanged="MonitoringCombo_SelectionChanged" PreviewMouseWheel="MonitoringCombo_PreviewMouseWheel">
               <ComboBoxItem Tag="both" local:Translate.Content="两者"/><ComboBoxItem Tag="claude" local:Translate.Content="仅 Claude"/><ComboBoxItem Tag="codex" local:Translate.Content="仅 Codex"/>
             </ComboBox>
-            <TextBlock local:Translate.Text="监听平台" VerticalAlignment="Center" />
+            <TextBlock local:Translate.Text="显示平台" VerticalAlignment="Center" />
           </DockPanel>
           <StackPanel x:Name="ConnectionRows" Margin="0,7,0,0" />
+          <TextBlock local:Translate.Text="切换显示不影响连接；已连接的平台继续在后台采集。" FontSize="10" Foreground="{DynamicResource Muted}" TextWrapping="Wrap" Margin="0,5,0,0" />
           <TextBlock local:Translate.Text="断开仅停止挂件监听，不退出官方账号或删除历史。" FontSize="10" Foreground="{DynamicResource Muted}" TextWrapping="Wrap" Margin="0,5,0,0" />
           <Button x:Name="SetupStart" Style="{StaticResource FlatButton}" Background="{DynamicResource Raised}" Padding="7" Margin="0,9,0,0" local:Translate.Content="开始监听" Click="SetupStart_Click" Visibility="Collapsed" />
           <StackPanel x:Name="AppearanceSettings">

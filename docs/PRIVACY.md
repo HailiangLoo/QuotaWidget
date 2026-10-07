@@ -16,10 +16,10 @@ The widget reads local log files to extract metadata. Those source files may con
 
 The default directory is `%USERPROFILE%\.quotawidget\data`. Its `claude-auth` directory holds the official CLI's separate sign-in configuration. Other directories store history, events, and token indexes. **Do not commit, share, or package the entire data directory.** `.gitignore` is a guard against accidental commits, not a substitute for reviewing files.
 
-Settings can disable provider monitoring, token tracking, and chat reminders separately. Disabling tracking does not delete saved data. Exit the widget and back up anything you want to keep before deleting history.
+Settings can disconnect each provider or disable token tracking and chat reminders separately. The **Show** selector only changes the visible widget; connected providers continue quota collection and enabled local-log reading in the background. Disabling tracking does not delete saved data. Exit the widget and back up anything you want to keep before deleting history.
 
 Quitting does not sign out of Claude by default. If sign out on exit is enabled, the official CLI performs the sign-out. This project does not claim that removing local credentials also revokes the token on the server.
 
 `--demo` uses synthetic data only. Documentation screenshots are generated from demo mode. The repository does not include the developer's account configuration, real history, session databases, or sign-in state.
 
-First-use setup must be completed before quota collection or chat-log reading begins. Disconnecting a provider stops widget monitoring and retains sign-in and history; Claude sign-out is a separate action. Provider marks in the tray also come from locally installed apps, without downloading or redistributing those assets.
+First-use setup enables only the chosen providers and must be completed before quota collection or chat-log reading begins. Later display changes do not connect another provider or disconnect an existing one. Disconnecting a provider stops widget monitoring and retains sign-in and history; Claude sign-out is a separate action. Provider marks in the tray also come from locally installed apps, without downloading or redistributing those assets.

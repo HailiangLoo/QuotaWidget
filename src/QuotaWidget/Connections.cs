@@ -32,6 +32,11 @@ public partial class App
     }
     public void CompleteSetup()
     {
+        if(!_model.Settings.SetupCompleted)
+        {
+            _model.Settings.ClaudeConnected=_model.Settings.Monitors(ChatPlatform.Claude);
+            _model.Settings.CodexConnected=_model.Settings.Monitors(ChatPlatform.Codex);
+        }
         _model.Settings.SetupCompleted=true;_model.Settings.CollectorEnabled=true;
         _model.SaveSettings();
         foreach(var platform in new[]{ChatPlatform.Claude,ChatPlatform.Codex})
@@ -39,12 +44,11 @@ public partial class App
     }
     public void ToggleConnection(ChatPlatform platform)
     {
-        var s=_model.Settings;var was=s.Listens(platform)&&s.CollectorEnabled;
+        var s=_model.Settings;var was=s.Connected(platform);
         if(platform==ChatPlatform.Claude)s.ClaudeConnected=!was;else s.CodexConnected=!was;
         if(!was)
         {
             s.CollectorEnabled=true;
-            if(!s.Monitors(platform))s.Monitoring="both";
             _verifyAfter[platform]=DateTimeOffset.Now;
         }
         var model=platform==ChatPlatform.Claude?_model:_codex;
@@ -80,24 +84,24 @@ public partial class App
     public void OpenProviderLogin(ChatPlatform platform)
     {
         if(_opts.Demo||_opts.Snapshot is not null)return;
-        _verifyAfter[platform]=DateTimeOffset.Now;
         try
         {
             if(platform==ChatPlatform.Claude)
             {
                 var choice=ClaudeCli.Resolve(_model.Settings.ClaudeExePath);
-                if(choice.Usable)LaunchLogin();else OpenUrl("https://code.claude.com/docs/en/setup");
+                if(choice.Usable){_verifyAfter[platform]=DateTimeOffset.Now;LaunchLogin();}
+                else _window.Flash(Loc.T("未找到兼容的官方程序，暂时无法登录。"));
             }
             else if(OfficialAppLaunch.CodexTarget() is { } target)
             {
                 var start=new ProcessStartInfo(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows),"explorer.exe")){UseShellExecute=true};
                 start.ArgumentList.Add("shell:AppsFolder\\"+target);Process.Start(start);
+                _verifyAfter[platform]=DateTimeOffset.Now;
             }
-            else OpenUrl("https://learn.chatgpt.com/docs/app");
+            else _window.Flash(Loc.T("未找到可打开的 Codex / ChatGPT 应用，请手动打开官方程序登录。"));
         }
-        catch { _window.Flash(Loc.T("未能打开官方程序，请按安装说明手动打开。")); }
+        catch { _window.Flash(Loc.T("未能打开官方程序，请手动打开并登录。")); }
     }
-    static void OpenUrl(string url)=>Process.Start(new ProcessStartInfo(url){UseShellExecute=true});
 }
 
 public static class OfficialAppLaunch
@@ -154,9 +158,9 @@ public sealed class ConnectionCard : Border
     public void Render(ConnectionStatus status,WidgetSettings settings)
     {
         State.Text=status.Text;State.SetResourceReference(TextBlock.ForegroundProperty,status.Color);Detail.Text=status.Detail;
-        Login.Content=Loc.T(_platform==ChatPlatform.Claude?"登录 / 安装":"打开 / 安装");
-        Login.ToolTip=Loc.T(_platform==ChatPlatform.Claude?"使用官方 Claude 登录；未安装时打开安装说明。":"在官方 Codex / ChatGPT 应用中登录 ChatGPT 账号。");
-        Check.Content=Loc.T("检查连接");Toggle.Content=Loc.T(settings.Listens(_platform)&&settings.CollectorEnabled?"断开":"连接");
+        Login.Content=Loc.T("登录");
+        Login.ToolTip=Loc.T(_platform==ChatPlatform.Claude?"使用挂件专用的 Claude 登录。":"在官方 Codex / ChatGPT 应用中登录 ChatGPT 账号。");
+        Check.Content=Loc.T("检查连接");Toggle.Content=Loc.T(settings.Connected(_platform)?"断开":"连接");
         Toggle.ToolTip=Loc.T("断开仅停止挂件监听，不退出官方账号或删除历史。");
         Toggle.Visibility=settings.SetupCompleted?Visibility.Visible:Visibility.Collapsed;
     }

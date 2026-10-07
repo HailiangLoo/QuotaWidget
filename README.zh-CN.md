@@ -10,7 +10,7 @@ A small Windows desktop widget for Claude and Codex quota, usage trends, and loc
 
 ## 界面
 
-截图全部使用合成演示数据。支持深浅主题、完整/精简模式，以及仅 Claude、仅 Codex 或同时监听。**点击任意图片可查看原图。**
+截图全部使用合成演示数据。支持深浅主题、完整/精简模式，以及显示 Claude、Codex 或两者。**点击任意图片可查看原图。**
 
 <table>
   <tr>
@@ -63,15 +63,15 @@ token 列保留本机原始统计，估算列不改写原始记录。上图的�
 
 1. 在 [Releases](https://github.com/HailiangLoo/QuotaWidget/releases/latest) 下载 `QuotaWidget-v<版本>-win-x64.exe`，放到自己喜欢的文件夹。选择应用 EXE，不用下载 GitHub 自动生成的源码压缩包。v0.13.9 等旧版仍是 ZIP，需要解压后打开里面的 EXE。
 2. 双击 EXE 即可。单文件版已经包含 .NET 运行时，无需安装、手动解压、辅助脚本或额外下载运行库。
-3. 首次启动先选择监听平台、完成官方登录，再点“开始监听”。开始前不采集额度或读取 chat 日志。精简模式也保留齿轮设置入口。
-4. 设置显示各平台的当前状态，并提供登录/安装、检查连接和断开按钮。断开只停止挂件监听，不退出官方应用的账号，也不删除历史。
+3. 首次启动先选择要连接的平台、完成官方登录，再点“开始监听”，只启用这些平台。开始前不采集额度或读取 chat 日志。精简模式也保留齿轮设置入口。
+4. “显示平台”只选择界面展示 Claude、Codex 或两者，不改变连接；已连接的平台继续在后台采集。各平台分别提供“登录”“检查连接”和“连接／断开”。断开会停止该平台额度及本机日志监听，不退出官方账号或删除历史。登录只打开现有官方登录流程或应用，挂件不提供安装主应用的操作。
 5. 设置中选择语言。语言默认跟随系统，也可选择简体中文或 English；切换立即生效。
 
 **Codex**：先安装并登录官方 Codex Windows 应用。挂件通过应用附带、经签名校验的 CLI 查询额度，使用现有登录状态。
 
 官方安装与登录说明：[Codex / ChatGPT](https://learn.chatgpt.com/docs/app)、[ChatGPT 登录](https://learn.chatgpt.com/docs/auth)、[Claude Code](https://code.claude.com/docs/en/setup)。
 
-**Claude**：需要受支持的官方 Claude Code CLI，或 Claude Windows 应用附带的 CLI。在“设置 → Claude Code → 登录 / 安装”完成挂件专用登录；它使用独立配置目录。找不到兼容 CLI 时，在 settings.json 中指定 claudeExePath 或更新官方应用。
+**Claude**：需要受支持的官方 Claude Code CLI，或 Claude Windows 应用附带的 CLI。在“设置 → Claude Code → 登录”完成挂件专用登录；它使用独立配置目录。找不到兼容 CLI 时，在 settings.json 中指定 claudeExePath 或更新官方应用。
 
 只想先看效果，在设置中点击“预览演示”。演示数据与真实数据分开存放。应用及内置运行库的开源许可也可以在设置中查看。
 

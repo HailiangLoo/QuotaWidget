@@ -34,6 +34,23 @@ static class ConnectionTests
             Check(await pending is null&&!File.Exists(paths.Latest),"disconnected result entered latest/history");
             Check(await collector.CollectOnceAsync(default) is null&&source.Calls==1,"disconnected account queried again");
         });
+        Test("display changes preserve explicit connections, live results and independent opt-outs",async dir=>
+        {
+            var settings=new WidgetSettings();var file=Path.Combine(dir,"settings.json");
+            foreach(var mode in new[]{"claude","codex","both"})
+            {
+                settings.Monitoring=mode;settings.Save(file);settings=WidgetSettings.Load(file,out _);
+                Check(settings.Collects(ChatPlatform.Claude)&&settings.Collects(ChatPlatform.Codex),"display change paused or lost a connection after restart");
+            }
+            settings.Monitoring="codex";settings.ClaudeConnected=false;settings.Save(file);settings=WidgetSettings.Load(file,out _);
+            settings.Monitoring="both";
+            Check(!settings.Listens(ChatPlatform.Claude)&&settings.Listens(ChatPlatform.Codex),"showing both reconnected an explicitly disconnected account");
+            var result=new TaskCompletionSource<LatestEnvelope>();var source=new Source(()=>result.Task);var paths=new DataPaths(Path.Combine(dir,"pending"));
+            using var collector=new CodexUsageCollector(paths,()=>settings,source,()=>now);
+            var pending=collector.CollectOnceAsync(default);settings.Monitoring="claude";
+            result.SetResult(CodexUsageSource.Failure(now,"not_logged_in",Statuses.AuthRequired));
+            Check(await pending is not null&&source.Calls==1&&File.Exists(paths.Latest),"hiding a connected provider discarded its pending reading");
+        });
         Test("connection check can recover sign-in but preserves network and server retry floors",async dir=>
         {
             foreach(var code in new[]{"not_logged_in","cli_missing_or_untrusted","network","limited"})
@@ -54,6 +71,8 @@ static class ConnectionTests
             var env=new LatestEnvelope(1,CodexUsageSource.SourceId,"fixture","Codex Plus",now,Statuses.Partial,300,null,null,
                 new("fixture",now,new(null,UsageParser.Limit(12,now.AddDays(7)),null)));
             Check(Connections.Describe(platform,s,env,true,now).Text==Loc.T("已连接"),"valid reading not connected");
+            s.Monitoring="claude";
+            Check(Connections.Describe(platform,s,env,true,now).Text==Loc.T("已连接"),"hiding Codex replaced its real connection status");
             Check(Connections.Describe(platform,s,env,true,now.AddHours(2)).Text==Loc.T("数据陈旧"),"old data claimed connected");
             s.CodexConnected=false;Check(Connections.Describe(platform,s,env,true,now).Text==Loc.T("已断开"),"old success overrode disconnect");return Task.CompletedTask;
         });
