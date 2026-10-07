@@ -53,6 +53,29 @@ static class FableDisplayTests
             var conflict=FableDisplay.Build(Series(),Series(),[Use(32,"fable"),Use(45,null)],t,t.AddMinutes(100),120,work:[fable]);
             Check(!Contains(conflict,45)&&!Contains(conflict,47),"conflicted request model overridden by lifecycle name or reduced to a one-tick veto");
         });
+        Test("request coverage needs a single containing turn, handles nesting and ignores input order",()=>
+        {
+            WorkSpan fable=new(t,t.AddMinutes(60),true,true,"fable");
+            ModelActivity request=new(t.AddMinutes(20),t.AddMinutes(30),"OPUS");
+            WorkSpan whole=new(t.AddMinutes(20),t.AddMinutes(30),true,true,"opus");
+            var covered=FableDisplay.Build(Series(),Series(),[request,Use(5,"fable")],t,t.AddMinutes(60),120,work:[whole,fable]);
+            Check(Contains(covered,32),"case-insensitive containing turn was missed");
+            var split=FableDisplay.Build(Series(),Series(),[request,Use(5,"fable")],t,t.AddMinutes(60),120,
+                work:[whole with{Start=t.AddMinutes(25)},fable,whole with{End=t.AddMinutes(25)}]);
+            Check(!Contains(split,32)&&Contains(split,37),"two different turns falsely covered a request or extended its veto");
+            var nested=FableDisplay.Build(Series(),Series(),[request with{Start=t.AddMinutes(23),End=t.AddMinutes(28)},Use(5,"fable")],t,t.AddMinutes(60),120,
+                work:[new(t.AddMinutes(21),t.AddMinutes(22),true,true,"opus"),fable,whole with{End=t.AddMinutes(28)}]);
+            Check(Contains(nested,29),"short nested turn hid an earlier containing turn");
+        });
+        Test("instantaneous unknown requests veto only their original quota interval",()=>
+        {
+            foreach(var model in new string?[]{null,""," ","unmatched"})
+            {
+                var spans=FableDisplay.Build(Series(),Series(),[Use(30,model),Use(5,"fable")],t,t.AddMinutes(60),120,
+                    work:[new(t,t.AddMinutes(60),true,true,"fable")]);
+                Check(Contains(spans,29)&&!Contains(spans,32)&&Contains(spans,37),"point request dropped or endpoint comparison changed");
+            }
+        });
         Test("lifecycle classification preserves quota mismatch guards and mixed cumulative history",()=>
         {
             WorkSpan[] work=[new(t,t.AddMinutes(25),true,true,"opus"),new(t.AddMinutes(30),t.AddMinutes(300),true,true,"fable")];

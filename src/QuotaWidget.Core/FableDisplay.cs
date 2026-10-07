@@ -87,13 +87,42 @@ public static class FableDisplay
             var candidates=Merge(known.Concat(quiet));
             known=candidates.Where(s=>known.Any(k=>k.Start<s.End&&k.End>s.Start)).ToList();
         }
+        // Resolve request/work containment once, not once per quota segment. A prefix
+        // maximum still requires ONE work span to contain the entire request; merging
+        // adjacent turns here would incorrectly turn incomplete evidence into coverage.
+        var uncovered=new List<ModelActivity>();
+        if(!cumulative&&work is {Count:>0})
+        {
+            var byModel=work.ToLookup(w=>w.Model,StringComparer.OrdinalIgnoreCase);
+            foreach(var group in activity.Where(a=>!IsFable(a.Model)).GroupBy(a=>a.Model,StringComparer.OrdinalIgnoreCase))
+            {
+                if(string.IsNullOrWhiteSpace(group.Key)){uncovered.AddRange(group);continue;}
+                var spans=byModel[group.Key].OrderBy(w=>w.Start).ToArray();
+                var cursor=0;var through=DateTimeOffset.MinValue;
+                foreach(var a in group.OrderBy(a=>a.Start))
+                {
+                    while(cursor<spans.Length&&spans[cursor].Start<=a.Start)
+                    {if(spans[cursor].End>through)through=spans[cursor].End;cursor++;}
+                    if(cursor==0||through<a.End)uncovered.Add(a);
+                }
+            }
+        }
+        // Keep instantaneous requests and the original inclusive end boundary.
+        var vetoes=uncovered.OrderBy(a=>a.Start).ToArray();
+        var vetoEnds=new DateTimeOffset[vetoes.Length];
+        for(var i=0;i<vetoes.Length;i++)vetoEnds[i]=i>0&&vetoEnds[i-1]>vetoes[i].End?vetoEnds[i-1]:vetoes[i].End;
+        bool Vetoes(RateSegment s)
+        {
+            var lo=0;var hi=vetoes.Length;
+            while(lo<hi){var mid=lo+(hi-lo)/2;if(vetoes[mid].Start<s.End)lo=mid+1;else hi=mid;}
+            return lo>0&&vetoEnds[lo-1]>=s.Start;
+        }
         var output=new List<ChartSpan>();
         foreach(var s in fable.Segments)
         {
             if(!s.Valid||s.Start<start||s.End>end||!valid.TryGetValue((s.Start,s.End),out var t)||
                 Math.Abs(t.Delta-s.Delta)>1.5)continue; // mismatched coverage or unexplained large quota change
-            if(!cumulative&&work is {Count:>0}&&activity.Any(a=>!IsFable(a.Model)&&a.End>=s.Start&&a.Start<s.End&&
-                (string.IsNullOrWhiteSpace(a.Model)||!work.Any(w=>string.Equals(w.Model,a.Model,StringComparison.OrdinalIgnoreCase)&&w.Start<=a.Start&&w.End>=a.End))))
+            if(Vetoes(s))
                 continue; // Contrary/unknown request evidence cannot be reduced to an invisible one-tick veto.
             foreach(var k in known.Where(k=>k.End>s.Start&&k.Start<s.End))
             {
