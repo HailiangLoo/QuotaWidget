@@ -136,5 +136,20 @@ static class GapRateTests
                 Check(curve.Runs.Sum(r=>r.Points.Count)<2100,"unbounded rendering geometry");
             }
         });
+        Test("three differently spaced jumps retain their rate changes instead of becoming a rectangle",()=>
+        {
+            var data=Data([S(-5,0,0,SegmentIssue.Gap),S(0,20,1),S(20,30,1),S(30,45,1)]);
+            var curve=ActiveRateEstimator.Build(data,t.AddMinutes(45),[new(t,t.AddMinutes(45),true,false,null)]);
+            Check(curve.ValueAt(t.AddMinutes(5))<curve.ValueAt(t.AddMinutes(30))-.5,"three observed jump intervals were flattened");
+            Near(3,curve.Delta);Near(3,Area(curve.Runs));
+        });
+        Test("first-phase protection keeps later acceleration and deceleration within the initial prefix",()=>
+        {
+            var data=Data([S(-5,0,0,SegmentIssue.Gap),S(0,2,1),S(2,32,1),S(32,42,1)]);
+            var curve=ActiveRateEstimator.Build(data,t.AddMinutes(42),[new(t,t.AddMinutes(42),true,false,null)],30);
+            Check(curve.ValueAt(t.AddMinutes(37))>curve.ValueAt(t.AddMinutes(20))+.5,"protecting the first jump erased subsequent changes");
+            Check(curve.ValueAt(t.AddMinutes(1))<10,"first two-minute jump became a 30/h spike");
+            Near(3,curve.Delta);Near(3,Area(curve.Runs));
+        });
     }
 }

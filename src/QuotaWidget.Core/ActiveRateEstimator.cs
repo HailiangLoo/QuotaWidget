@@ -10,13 +10,15 @@ public static class ActiveRateEstimator
     {public double Minutes=>(End-Start).TotalMinutes;public double V=>U+Minutes;}
 
     public static RateTrend Build(SeriesData source,DateTimeOffset asOf,IReadOnlyList<WorkSpan>? activity=null,
-        double maxWindowMinutes=120,double quantum=1,IReadOnlyList<DateTimeOffset>? fallbackEdges=null)
+        double maxWindowMinutes=120,double quantum=1,IReadOnlyList<DateTimeOffset>? fallbackEdges=null,IReadOnlyList<DateTimeOffset>? contextEdges=null)
     {
-        activity=WorkActivity.Episodes(activity??[],asOf);
+        var contexts=(contextEdges??[]).Where(t=>t<asOf).Distinct().Order().ToArray();
+        activity=WorkActivity.Episodes(activity??[],asOf,contexts);
         // Only the estimation copy may span a counter reset. The caller's original
         // source still owns cumulative points, coverage, reset labels and recent-hour facts.
         var continuity=TrendContinuity.Prepare(source,asOf,activity);
-        source=continuity.Source;
+        var separated=RateContexts.Separate(continuity.Source,contexts,activity);
+        source=separated.Source;
         var result=new RateTrend();var run=new List<RateSegment>();var afterBreak=false;
         foreach(var s in source.Segments)
         {
@@ -29,7 +31,11 @@ public static class ActiveRateEstimator
             if(run.Count>0&&(run[^1].End!=s.Start||run[^1].Group!=s.Group)){Flush(closedByBreak:true);afterBreak=true;}
             run.Add(s);
         }
-        Flush();result.Runs.Sort((a,b)=>a.Points[0].Time.CompareTo(b.Points[0].Time));return result;
+        Flush();
+        for(var i=0;i<result.Runs.Count;i++)
+            if(separated.Ambiguous.Any(s=>s.Start<result.Runs[i].Points[^1].Time&&s.End>result.Runs[i].Points[0].Time))
+                result.Runs[i]=result.Runs[i] with{LimitedSupport=true};
+        result.Runs.Sort((a,b)=>a.Points[0].Time.CompareTo(b.Points[0].Time));return result;
 
         void Flush(bool closedByReset=false,bool closedByBreak=false)
         {
@@ -119,7 +125,7 @@ public static class ActiveRateEstimator
             // minute cost nothing. Smooth this final interval with the preceding bins;
             // its area is redistributed from the observed total, never added to it.
             if(observedThrough>from+1e-8)bins.Add(new(){Start=clock.AddMinutes(from),End=clock.AddMinutes(observedThrough),Delta=0});
-            if(afterBreak)bins=PoolStart(bins,quantum);
+            if(afterBreak)bins=RegularizeStart(bins,quantum);
             if(warmingUp)bins=SettleSparseTail(bins,quantum);
             var confirmed=RateTrend.Build(new(){Key=source.Key,Segments=bins},clock,clock.AddMinutes(observedThrough),adaptive);
             var points=confirmed.Runs.Single().Points;
@@ -175,7 +181,7 @@ public static class ActiveRateEstimator
                 var consumed=limits.Zip(limits.Skip(1),(a,b)=>run.Any(s=>s.Delta>0&&s.End>a&&s.Start<b)).ToArray();
                 var supported=cuts.Where(t=>t==origin||t==end||!consumed[Array.BinarySearch(inner,t)]||!consumed[Array.BinarySearch(inner,t)+1]).ToArray();
                 var limited=afterBreak&&run.Sum(s=>s.Delta)<3*Math.Max(.0001,quantum)-1e-8;
-                var bins=afterBreak?PoolStart(run,quantum):run.ToList();
+                var bins=afterBreak?RegularizeStart(run,quantum):run.ToList();
                 if(limited)bins=SettleSparseTail(bins,quantum);
                 var estimate=RateTrend.Build(new(){Key=source.Key,Segments=bins},origin,end,maxWindowMinutes,supported);
                 result.Runs.AddRange(estimate.Runs.Select(r=>r with{LimitedSupport=limited}));run.Clear();
@@ -183,22 +189,35 @@ public static class ActiveRateEstimator
             void Zero(DateTimeOffset a,DateTimeOffset b)=>result.Runs.Add(new([new(a,0),new(b,0)],0,0));
         }
     }
-    // The first jump after a break has an unknown integer-counter phase. Pool it with
-    // the next two quanta before estimating shape. If that much evidence has not
-    // arrived, pool only through the latest positive increment. Later unchanged
-    // observations must retain their position as evidence of a slowing tail. This affects
-    // only the new context; no rates or quota are borrowed across the missing interval.
-    // Keep the prefix pooled after more readings arrive, so its initial short jump
-    // cannot reappear as a historical peak.
-    static List<RateSegment> PoolStart(IReadOnlyList<RateSegment> bins,double quantum)
+    // The first counter jump may start part-way through one quantum. Use up to the
+    // following two quanta to reduce only an unusually fast first interval, by at
+    // most one quantum. Keep every later inter-jump duration/rate contrast instead
+    // of collapsing three observations to a rectangular average. Renormalizing the
+    // prefix conserves its observed amount; no rate is borrowed across a break.
+    static List<RateSegment> RegularizeStart(IReadOnlyList<RateSegment> bins,double quantum)
     {
+        quantum=Math.Max(.0001,quantum);
         var count=0;double delta=0;
         var lastPositive=bins.Count-1;
         while(lastPositive>=0&&bins[lastPositive].Delta<=0)lastPositive--;
-        while(count<=lastPositive&&delta<3*Math.Max(.0001,quantum)-1e-8)delta+=bins[count++].Delta;
-        if(count<2)return bins.ToList();
-        var prefix=new RateSegment{Start=bins[0].Start,End=bins[count-1].End,Delta=delta,Group=bins[0].Group};
-        return new[]{prefix}.Concat(bins.Skip(count)).ToList();
+        while(count<=lastPositive&&delta<3*quantum-1e-8)delta+=bins[count++].Delta;
+        if(count==0)return bins.ToList();
+        var prefix=new List<RateSegment>();var from=bins[0].Start;
+        foreach(var bin in bins.Take(count))
+        {
+            if(bin.Delta<=0)continue;
+            prefix.Add(new(){Start=from,End=bin.End,Delta=bin.Delta,Group=bin.Group});from=bin.End;
+        }
+        if(prefix.Count>1)
+        {
+            var first=prefix[0];var remaining=(prefix[^1].End-first.End).TotalMinutes;
+            var expected=(delta-first.Delta)/remaining*first.Minutes;
+            var correction=Math.Min(quantum,Math.Max(0,first.Delta-expected));
+            if(correction>=delta)correction=0; // sub-ULP input must not produce an infinite scale
+            var factor=delta/(delta-correction);
+            prefix=prefix.Select((s,i)=>new RateSegment{Start=s.Start,End=s.End,Delta=(s.Delta-(i==0?correction:0))*factor,Group=s.Group}).ToList();
+        }
+        return prefix.Concat(bins.Skip(count)).ToList();
     }
     // A sparse context has no reliable instantaneous rate. Retain the information
     // in later unchanged samples using the same bounded decay as a live tail, then

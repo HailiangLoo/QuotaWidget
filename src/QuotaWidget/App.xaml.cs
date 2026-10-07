@@ -449,7 +449,7 @@ public partial class App : Application
             var value=new TrendActivity(WorkActivity.Merge(claude,cadence),
                 WorkActivity.Merge(claude.Where(s=>s.Model is null||FableDisplay.IsFable(s.Model)),cadence),WorkActivity.Merge(codex,cadence),
                 !Monitors(ChatPlatform.Claude)||Ready("Claude"),!Monitors(ChatPlatform.Codex)||Ready("Codex"))
-                {FableRunning=WorkActivity.FableRunning(claude,now)};
+                {FableRunning=WorkActivity.FableRunning(claude,now),ClaudeModels=claude};
             _trendActivity=(version,mode,now,value);return value;
         }
         catch{return _trendActivity is {} last?last.Value with{FableRunning=false}:new TrendActivity([],[],[],false,false);}

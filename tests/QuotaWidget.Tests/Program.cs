@@ -1117,6 +1117,7 @@ LocalizationTests.Register(tests);
 ConnectionTests.Register(tests);
 ChatQuotaTests.Register(tests);
 GapRateTests.Register(tests);
+ModelContextTests.Register(tests);
 var failed = 0; var skipped = 0;
 foreach (var (name, body) in tests)
 {

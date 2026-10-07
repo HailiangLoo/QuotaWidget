@@ -179,7 +179,7 @@ public partial class MainWindow : Window
             var chart=dashboard.Chart;
             var window=s.Smoothing?s.TrendMinutes:10;
             chart.FableOnlySpans=FableDisplay.Build(chart.Total,chart.Fable,
-                _app.ClaudeModelActivity(chart.EstimationStart.AddMinutes(-window/2d),now),chart.EstimationStart,chart.End,window,chart.ClaudeCumulativeMode);
+                _app.ClaudeModelActivity(chart.EstimationStart.AddMinutes(-window/2d),now),chart.EstimationStart,chart.End,window,chart.ClaudeCumulativeMode,chart.Activity.ClaudeModels);
         }
         _suppress = true;
         TagText.Text = v.Tag ?? "";

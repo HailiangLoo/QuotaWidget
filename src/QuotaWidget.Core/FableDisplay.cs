@@ -10,7 +10,7 @@ public static class FableDisplay
         (model.Equals("fable",StringComparison.OrdinalIgnoreCase)||model.StartsWith("claude-fable-",StringComparison.OrdinalIgnoreCase));
 
     public static IReadOnlyList<ChartSpan> Build(SeriesData total,SeriesData fable,IReadOnlyList<ModelActivity> activity,
-        DateTimeOffset start,DateTimeOffset end,double smoothingMinutes,bool cumulative=false)
+        DateTimeOffset start,DateTimeOffset end,double smoothingMinutes,bool cumulative=false,IReadOnlyList<WorkSpan>? work=null)
     {
         if(activity.Count==0)return [];
         // A mixed-model smoothing neighbourhood must keep both curves. Isolated known Fable
@@ -18,6 +18,20 @@ public static class FableDisplay
         var radius=TimeSpan.FromMinutes(Math.Clamp(smoothingMinutes,0,180)/2);
         var known=Merge(activity.Where(a=>IsFable(a.Model)).Select(a=>new ChartSpan(a.Start-radius,a.End+radius)));
         var blocked=Merge(activity.Where(a=>!IsFable(a.Model)).Select(a=>new ChartSpan(a.Start-radius,a.End+radius)));
+        if(!cumulative&&work is {Count:>0})
+        {
+            // Explicit lifecycle evidence outranks a request's smoothing neighbourhood.
+            // A completed Opus turn cannot veto a later Fable-only turn for another hour.
+            // Preserve all raw model spans: provider union may have retained just one
+            // model name from concurrent work. Unknown starts/ends stay conservative.
+            known=Merge(work.Where(s=>IsFable(s.Model)&&s.KnownStart&&s.Start<end)
+                .Select(s=>new ChartSpan(s.Start,s.KnownEnd&&s.End<end?s.End:end)));
+            blocked=Merge(work.Where(s=>!IsFable(s.Model)&&s.Start<end)
+                .Select(s=>new ChartSpan(s.KnownStart?s.Start:start,s.KnownEnd&&s.End<end?s.End:end))
+                // Conflicted or contrary request metadata remains a veto even when
+                // lifecycle model labels appear complete. Do not extend its time range.
+                .Concat(activity.Where(s=>!IsFable(s.Model)).Select(s=>new ChartSpan(s.Start,s.End>s.Start?s.End:s.Start.AddTicks(1)))));
+        }
         var valid=total.Segments.Where(s=>s.Valid).ToDictionary(s=>(s.Start,s.End));
         if(cumulative)
         {
@@ -34,6 +48,9 @@ public static class FableDisplay
         {
             if(!s.Valid||s.Start<start||s.End>end||!valid.TryGetValue((s.Start,s.End),out var t)||
                 Math.Abs(t.Delta-s.Delta)>1.5)continue; // mismatched coverage or unexplained large quota change
+            if(!cumulative&&work is {Count:>0}&&activity.Any(a=>!IsFable(a.Model)&&a.End>=s.Start&&a.Start<s.End&&
+                (string.IsNullOrWhiteSpace(a.Model)||!work.Any(w=>string.Equals(w.Model,a.Model,StringComparison.OrdinalIgnoreCase)&&w.Start<=a.Start&&w.End>=a.End))))
+                continue; // Contrary/unknown request evidence cannot be reduced to an invisible one-tick veto.
             foreach(var k in known.Where(k=>k.End>s.Start&&k.Start<s.End))
             {
                 var a=k.Start>s.Start?k.Start:s.Start;var b=k.End<s.End?k.End:s.End;
@@ -91,7 +108,10 @@ public static class FableDisplay
                 var a=run[i-1];var b=run[i];if(b.Time<a.Time){Flush();continue;}
                 if(b.Time==a.Time)
                 {
-                    if(spans.Any(s=>a.Time>=s.Start&&a.Time<s.End))Flush();
+                    // A closing vertical belongs to the interval on its left; an
+                    // opening vertical belongs to the right. Avoid a ghost total
+                    // stroke at a shared Fable completion without erasing the next start.
+                    if(spans.Any(s=>a.Rate>b.Rate?a.Time>s.Start&&a.Time<=s.End:a.Time>=s.Start&&a.Time<s.End))Flush();
                     else {current??=[a];current.Add(b);}
                     continue;
                 }

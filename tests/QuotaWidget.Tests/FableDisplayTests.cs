@@ -13,6 +13,49 @@ static class FableDisplayTests
         bool Contains(IReadOnlyList<ChartSpan> spans,int minute)=>spans.Any(s=>s.Start<=t.AddMinutes(minute)&&s.End>t.AddMinutes(minute));
         double Area(RateTrend trend)=>trend.Runs.Sum(r=>r.Points.Zip(r.Points.Skip(1),(a,b)=>(a.Rate+b.Rate)/2*(b.Time-a.Time).TotalHours).Sum());
 
+        Test("confirmed Opus completion permits the next Fable turn without a smoothing-window delay",()=>
+        {
+            ModelActivity[] requests=[Use(24,"claude-opus-5-5"),Use(32,"claude-fable-5-1")];
+            WorkSpan[] work=[new(t,t.AddMinutes(25),true,true,"claude-opus-5-5"),new(t.AddMinutes(30),t.AddMinutes(60),true,true,"claude-fable-5-1")];
+            Check(!Contains(FableDisplay.Build(Series(),Series(),requests,t,t.AddMinutes(300),120),35),"fixture does not reproduce the old smoothing veto");
+            foreach(var smoothing in new[]{30,60,120,150})
+            {
+                var spans=FableDisplay.Build(Series(),Series(),requests,t,t.AddMinutes(300),smoothing,work:work);
+                Check(Contains(spans,30)&&Contains(spans,35)&&Contains(spans,59),"completed Opus still vetoes later Fable");
+                Check(!Contains(spans,24)&&!Contains(spans,29)&&!Contains(spans,60),"Fable classification escaped actual work boundaries");
+            }
+        });
+        Test("concurrent and unknown work remains a veto without carrying completed work into the future",()=>
+        {
+            var requests=new[]{Use(32,"fable"),Use(35,"opus")};
+            WorkSpan fable=new(t.AddMinutes(30),t.AddMinutes(60),true,true,"fable");
+            WorkSpan other=new(t,t.AddMinutes(40),true,true,"opus");
+            var overlap=FableDisplay.Build(Series(),Series(),requests,t,t.AddMinutes(100),120,work:[other,fable]);
+            Check(!Contains(overlap,35)&&Contains(overlap,45),"concurrent Opus hidden or its completed tail extended");
+            foreach(var pending in new[]{other with{KnownEnd=false},other with{Model=null,KnownEnd=false}})
+                Check(FableDisplay.Build(Series(),Series(),requests,t,t.AddMinutes(100),120,work:[pending,fable]).Count==0,"unconfirmed end treated as completed");
+            Check(FableDisplay.Build(Series(),Series(),requests,t,t.AddMinutes(100),120,work:[fable with{KnownStart=false}]).Count==0,"unknown Fable start promoted to exact ownership");
+            var conflict=FableDisplay.Build(Series(),Series(),[Use(32,"fable"),Use(45,null)],t,t.AddMinutes(100),120,work:[fable]);
+            Check(!Contains(conflict,45)&&!Contains(conflict,47),"conflicted request model overridden by lifecycle name or reduced to a one-tick veto");
+        });
+        Test("lifecycle classification preserves quota mismatch guards and mixed cumulative history",()=>
+        {
+            WorkSpan[] work=[new(t,t.AddMinutes(25),true,true,"opus"),new(t.AddMinutes(30),t.AddMinutes(300),true,true,"fable")];
+            ModelActivity[] requests=[Use(24,"opus"),Use(32,"fable")];
+            Check(FableDisplay.Build(Series(5),Series(.5),requests,t,t.AddMinutes(300),120,work:work).Count==0,"large unexplained account usage hidden");
+            var total=Series(.1);total.Segments[0]=new(){Start=t,End=t.AddMinutes(5),Delta=8};
+            var fable=Series(.1);
+            var spans=FableDisplay.Build(total,fable,requests,t,t.AddMinutes(300),120,cumulative:true,work:work);
+            Check(!FableDisplay.CoversCumulativeRange(total,fable,spans,t,t.AddMinutes(300)),"mixed cumulative baseline was erased");
+        });
+        Test("shared hard ends omit the closing total stroke but preserve the next model's start",()=>
+        {
+            TrendPoint[] ending=[new(t,0),new(t,2),new(t.AddMinutes(10),2),new(t.AddMinutes(10),0)];
+            TrendPoint[] starting=[new(t.AddMinutes(10),0),new(t.AddMinutes(10),4),new(t.AddMinutes(20),4)];
+            var paths=FableDisplay.Omit([ending,starting],[new(t,t.AddMinutes(10))]);
+            Check(paths.Count==1&&paths[0][0].Rate==0&&paths[0][1].Rate==4,"shared Fable completion left a phantom total-rate vertical line or erased the following start");
+        });
+
         Test("classifies fragments inside the same session and keeps mixed smoothing shoulders",()=>
         {
             var spans=FableDisplay.Build(Series(),Series(),[Use(30,"claude-fable-5-1"),Use(90,"claude-opus-5-5"),Use(150,"claude-fable-5-1")],t,t.AddMinutes(300),60);

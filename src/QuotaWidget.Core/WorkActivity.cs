@@ -8,8 +8,10 @@ public sealed record TrendActivity(IReadOnlyList<WorkSpan> Claude, IReadOnlyList
     bool ClaudeReady=true,bool CodexReady=true)
 {
     public bool FableRunning {get;init;}
+    // Keep model ownership before provider union discards concurrent model identities.
+    public IReadOnlyList<WorkSpan> ClaudeModels {get;init;}=[];
     public static readonly TrendActivity Empty = new([], [], []);
-    public TrendActivity Episodes(DateTimeOffset asOf)=>new(WorkActivity.Episodes(Claude,asOf),WorkActivity.Episodes(Fable,asOf),WorkActivity.Episodes(Codex,asOf),ClaudeReady,CodexReady){FableRunning=FableRunning};
+    public TrendActivity Episodes(DateTimeOffset asOf,IReadOnlyList<DateTimeOffset>? modelChanges=null)=>new(WorkActivity.Episodes(Claude,asOf,modelChanges),WorkActivity.Episodes(Fable,asOf),WorkActivity.Episodes(Codex,asOf),ClaudeReady,CodexReady){FableRunning=FableRunning,ClaudeModels=ClaudeModels};
 }
 
 /// <summary>Only explicit local work metadata, not token-count gaps or quota plateaus.</summary>
@@ -110,6 +112,62 @@ public static class WorkActivity
     public static IReadOnlyList<WorkSpan> Episodes(IEnumerable<WorkSpan> spans,DateTimeOffset asOf) =>
         Merge(spans.Where(s=>s.Start<asOf).Select(s=>s.End>asOf?s with{End=asOf,KnownEnd=false}:s),HandoffWindow)
             .Select(s=>s.KnownEnd&&asOf-s.End<HandoffWindow?s with{KnownEnd=false}:s).ToArray();
+
+    // Brief handoffs can join the same model's turns, never a known model change.
+    // Artificial context edges divide smoothing, not actual work: preserve outer
+    // lifecycle flags and do not manufacture a zero-rate edge in concurrent work.
+    public static IReadOnlyList<WorkSpan> Episodes(IEnumerable<WorkSpan> spans,DateTimeOffset asOf,IReadOnlyList<DateTimeOffset>? changes)
+    {
+        if(changes is not {Count:>0})return Episodes(spans,asOf);
+        var raw=spans.Where(s=>s.Start<asOf).ToArray();
+        if(raw.Length==0)return [];
+        var start=raw.Min(s=>s.Start);
+        var limits=new[]{start}.Concat(changes.Where(t=>t>start&&t<asOf)).Append(asOf).Distinct().Order().ToArray();
+        var result=new List<WorkSpan>();
+        for(var i=1;i<limits.Length;i++)
+        {
+            var a=limits[i-1];var b=limits[i];
+            var part=raw.Where(s=>s.End>a&&s.Start<b).Select(s=>s with{
+                Start=s.Start>a?s.Start:a,End=s.End<b?s.End:b,
+                KnownStart=s.KnownStart&&s.Start>=a,KnownEnd=s.KnownEnd&&s.End<=b}).ToArray();
+            result.AddRange(i<limits.Length-1?Merge(part,HandoffWindow):Episodes(part,asOf));
+        }
+        return result;
+    }
+
+    /// <summary>Changes in the set of active models, retaining the previous set across
+    /// idle time. Empty or unknown evidence never establishes exclusive ownership.</summary>
+    public static IReadOnlyList<DateTimeOffset> ModelChanges(IReadOnlyList<WorkSpan> spans,DateTimeOffset start,DateTimeOffset end)
+    {
+        if(spans.Count==0)return [];
+        string Key(WorkSpan s)=>FableDisplay.IsFable(s.Model)?"fable":s.Model?.Trim().ToLowerInvariant()??"?";
+        var events=new List<(DateTimeOffset At,string Model,int Delta)>();
+        foreach(var g in spans.GroupBy(Key))
+        // A known model completion is immediately authoritative. The ordinary
+        // provider handoff grace must not keep an ended model in a concurrent set.
+        foreach(var s in Merge(g.Where(s=>s.Start<end).Select(s=>s.End>end?s with{End=end,KnownEnd=false}:s),HandoffWindow))
+        {
+            var a=s.KnownStart&&s.Start>start?s.Start:start;
+            var b=s.KnownEnd&&s.End<end?s.End:end;
+            if(b<=a||a>=end||b<=start)continue;
+            events.Add((a,g.Key,1));events.Add((b,g.Key,-1));
+        }
+        var active=new Dictionary<string,int>();HashSet<string>? previous=null;
+        var output=new List<DateTimeOffset>();
+        foreach(var e in events.GroupBy(e=>e.At).OrderBy(g=>g.Key))
+        {
+            foreach(var item in e)
+            {
+                active.TryGetValue(item.Model,out var n);n+=item.Delta;
+                if(n>0)active[item.Model]=n;else active.Remove(item.Model);
+            }
+            if(active.Count==0)continue;
+            var current=active.Keys.ToHashSet();
+            if(previous is not null&&!previous.SetEquals(current)&&e.Key>start&&e.Key<end)output.Add(e.Key);
+            previous=current;
+        }
+        return output;
+    }
 
     // Union of concurrent chats/agents. Raw provider aggregation passes zero; only
     // Episodes applies the fixed handoff rule, never a polling/backoff interval.

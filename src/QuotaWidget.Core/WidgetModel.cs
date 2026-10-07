@@ -27,7 +27,9 @@ public sealed class ChartView
     public IReadOnlyList<DateTimeOffset> TrendBoundaries { get; init; } = [];
     public TrendActivity Activity { get; init; } = TrendActivity.Empty;
     TrendActivity? _episodes;
-    public TrendActivity Episodes => _episodes ??= Activity.Episodes(End);
+    IReadOnlyList<DateTimeOffset>? _claudeModelChanges;
+    public IReadOnlyList<DateTimeOffset> ClaudeModelChanges => _claudeModelChanges??=WorkActivity.ModelChanges(Activity.ClaudeModels,Total.Segments.Select(s=>s.Start).DefaultIfEmpty(End).Min(),End);
+    public TrendActivity Episodes => _episodes ??= Activity.Episodes(End,ClaudeModelChanges);
     public IReadOnlyList<DateTimeOffset> VisibleTrendEdges =>
         (TotalVisible?WorkActivity.Edges(Episodes.Claude):[]).Concat(FableDrawable?WorkActivity.Edges(Episodes.Fable):[])
             .Concat(CodexVisible?WorkActivity.Edges(Episodes.Codex):[]).Concat(TrendBoundaries).Distinct().Order().ToArray();
@@ -69,7 +71,7 @@ public sealed class ChartView
     public DateTimeOffset EstimationStart => Total.Segments.Concat(Fable.Segments).Concat(Codex?.Segments??[]).Select(s=>s.Start).DefaultIfEmpty(Start).Min();
     // No viewport-local counter pairing or work-segment renormalization in the rate path.
     public QuotaAlignment Alignment => new(Total,Fable,0,0);
-    public RateTrend TotalTrend => _totalTrend ??= Activity.ClaudeReady?ActiveRateEstimator.Build(Total,End,Activity.Claude,TrendMinutes,1,TrendBoundaries):new();
+    public RateTrend TotalTrend => _totalTrend ??= Activity.ClaudeReady?ActiveRateEstimator.Build(Total,End,Activity.Claude,TrendMinutes,1,TrendBoundaries,ClaudeModelChanges):new();
     public RateTrend FableTrend => _fableTrend ??= Activity.ClaudeReady?ActiveRateEstimator.Build(Fable,End,Activity.Fable,TrendMinutes,FableToClaudeFactor??1,TrendBoundaries):new();
     public RateTrend DisplayFableTrend => FableTrend;
     public RateTrend? CodexTrend => Codex is null ? null : _codexTrend ??= Activity.CodexReady?ActiveRateEstimator.Build(Codex,End,Activity.Codex,TrendMinutes,1,TrendBoundaries):new();

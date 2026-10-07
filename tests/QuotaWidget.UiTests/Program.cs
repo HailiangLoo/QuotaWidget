@@ -232,6 +232,7 @@ static class Probe
             Console.WriteLine("Chart axes: each expanded provider has its own axis; collapsed providers reserve no axis space; headers never overlap either axis.");
             ChartInspectProbe.Run();
             MonitoringRefreshProbe.Run(app);
+            FableTransitionProbe.Run(app);
             LocalizationProbe.Run(app);
             ConnectionProbe.Run(app);
             UsageRefreshProbe.Run();
