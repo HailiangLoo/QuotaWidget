@@ -130,13 +130,21 @@ public sealed class PlatformUsageCard : Border
                 var name=new DockPanel{Margin=new Thickness(0,5,9,5),HorizontalAlignment=HorizontalAlignment.Left,VerticalAlignment=VerticalAlignment.Center};
                 var label=Text(title,14);label.ToolTip=title+(project is {Length:>0}?"\n"+project:"");
                 var metadata=Loc.F($"{entry.Usage.Requests:N0} 请求")+(byChat?(entry.Subagents>0?$" · {entry.Subagents} subagent":""):$" · {group.Members} chats");
-                var detail=Text(" · "+metadata,13,"Muted");detail.MaxWidth=190;detail.ToolTip=metadata;
+                var hasProject=byChat&&!string.IsNullOrWhiteSpace(project);
+                var detail=Text(" · "+metadata,13,"Muted");detail.MaxWidth=hasProject?125:190;detail.ToolTip=metadata;
                 DockPanel.SetDock(detail,Dock.Right);name.Children.Add(detail);
                 if(byChat)
                 {
-                    // Reserve model and metadata widths; only the remaining title space can shrink.
-                    var model=Text(" · "+Loc.T(entry.Model),14,_accent);model.MaxWidth=145;model.ToolTip=entry.Model;
+                    // Dock from right to left: title, project, model, request metadata.
+                    // Bound supporting labels so long project names cannot take the entire row.
+                    var model=Text(" · "+Loc.T(entry.Model),14,_accent);model.MaxWidth=hasProject?120:145;model.ToolTip=entry.Model;
                     DockPanel.SetDock(model,Dock.Right);name.Children.Add(model);
+                    if(hasProject)
+                    {
+                        var projectLabel=Text(project!.Trim(),11,"Muted");projectLabel.MaxWidth=80;
+                        projectLabel.Margin=new Thickness(6,0,0,0);projectLabel.ToolTip=project.Trim();
+                        DockPanel.SetDock(projectLabel,Dock.Right);name.Children.Add(projectLabel);
+                    }
                 }
                 name.Children.Add(label);row.Children.Add(name);
                 var values=new[]{entry.Usage.Input,entry.Usage.Cached,entry.Usage.Output};
