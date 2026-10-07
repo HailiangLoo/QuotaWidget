@@ -54,7 +54,7 @@ The gear is available in full and compact modes. Settings includes language, pro
 - Claude: five-hour, total weekly, and Fable weekly quota.
 - Codex: weekly quota, plus a five-hour gauge when the account's interface provides it.
 - Independent rate or cumulative views for each provider, with 1h, 5h, 12h, 24h, 3d, and all-history ranges.
-- Local chat activity, cache reminders, token summaries, and confirmed subagent grouping.
+- Main-chat activity and cache reminders; identified subagents stay out of the management list, while their usage remains in statistics and is grouped under a parent when confirmed.
 - Always on top, system tray, compact mode, and layouts that adapt to narrow windows.
 - English and Simplified Chinese, with an instant language switch in Settings.
 
