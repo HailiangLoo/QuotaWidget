@@ -2,6 +2,7 @@
 param([switch]$AllowPrerelease)
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
+& (Join-Path $PSScriptRoot 'Update-Icons.ps1') -Check
 $project = Join-Path $root 'src\QuotaWidget\QuotaWidget.csproj'
 $xml = [xml](Get-Content -LiteralPath $project -Raw)
 $version = [string]$xml.Project.PropertyGroup.Version

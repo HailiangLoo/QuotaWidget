@@ -10,7 +10,7 @@ using Microsoft.Win32;
 
 namespace QuotaWidget.App;
 
-/// <summary>Use an installed provider's identification asset locally; never redistribute it.</summary>
+/// <summary>Local provider labels with a fallback; bundled badges for a consistent app/tray identity.</summary>
 public static class ProviderIcon
 {
     static readonly Dictionary<string,ImageSource> Cache=new();
@@ -41,10 +41,9 @@ public static class ProviderIcon
 
     public static System.Drawing.Bitmap TrayBitmap(string platform)
     {
-        var visual=new DrawingVisual();using(var dc=visual.RenderOpen())dc.DrawImage(Get(platform,true),new Rect(0,0,64,64));
-        var target=new RenderTargetBitmap(64,64,96,96,PixelFormats.Pbgra32);target.Render(visual);
-        var encoder=new PngBitmapEncoder();encoder.Frames.Add(BitmapFrame.Create(target));
-        using var stream=new MemoryStream();encoder.Save(stream);stream.Position=0;
+        // Match the packaged icon on every PC, regardless of installed apps or their versions.
+        var name=platform=="Claude"?"claude":"codex";
+        using var stream=Application.GetResourceStream(new Uri($"/QuotaWidget;component/Assets/{name}-badge.png",UriKind.Relative)).Stream;
         using var bitmap=new System.Drawing.Bitmap(stream);
         return new System.Drawing.Bitmap(bitmap);
     }

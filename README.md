@@ -109,4 +109,4 @@ For an English demo, run `QuotaWidget.exe --demo --language en`. Use `--language
 
 ## License
 
-Source code and original artwork are licensed under [MIT](LICENSE). This is an independent project, not an official Anthropic or OpenAI product, and is not endorsed by either company. Their names and trademarks belong to their respective owners. Provider icons are read from the user's local app installation and are not redistributed in source or release packages. See [NOTICE](NOTICE.md) for runtime and trademark details.
+Source code and original artwork are licensed under [MIT](LICENSE). This is an independent project, not an official Anthropic or OpenAI product, and is not endorsed by either company. The app icon includes provider identification marks; those names and logos belong to their respective owners and are not covered by MIT. See [NOTICE](NOTICE.md) for runtime and trademark details.

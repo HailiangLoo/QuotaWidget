@@ -110,4 +110,4 @@ pwsh -File scripts/Build-Release.ps1
 
 ## 许可
 
-项目源码及原创图标采用 [MIT](LICENSE)。本项目独立维护，非 Anthropic 或 OpenAI 官方产品，也未获得其背书。相关名称和商标归各自所有者所有；平台图标从用户本机安装中读取，不随源码或发布包分发。运行时及商标说明见 [NOTICE](NOTICE.md)。
+项目源码及原创绘图采用 [MIT](LICENSE)。本项目独立维护，非 Anthropic 或 OpenAI 官方产品，也未获得其背书。应用图标包含用于识别平台的标志；相关名称和标志归各自所有者所有，不适用本项目的 MIT 许可。运行时及商标说明见 [NOTICE](NOTICE.md)。

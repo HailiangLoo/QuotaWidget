@@ -1,14 +1,14 @@
 # Notices
 
-QuotaWidget source code and original quota-companion artwork are licensed under MIT.
+QuotaWidget source code and original face drawing are licensed under MIT.
 
 Anthropic, Claude, OpenAI, ChatGPT, Codex and related names/logos are the property of
 their respective owners. This is an independent utility, not an official product
-or an endorsement. Provider logo files are not included in this repository or its
-release packages. If installed locally, official application icons may be loaded
-at runtime solely to identify the relevant provider; otherwise original generic
-badges are rendered. Brand marks visible in documentation screenshots are not
-relicensed under the project's MIT license.
+or an endorsement. The application icon includes Claude and Codex identification
+marks sourced from their official Windows application icons. In-widget labels may
+also load icons from local installations, with original generic badges as a fallback.
+These marks, including those in screenshots, remain the property of their respective
+owners and are not relicensed under the project's MIT license.
 
 Self-contained Windows builds include Microsoft's .NET runtime. The single EXE
 embeds the corresponding runtime licenses and third-party notices, accessible
