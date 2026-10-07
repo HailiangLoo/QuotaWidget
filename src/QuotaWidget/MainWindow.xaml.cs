@@ -402,8 +402,8 @@ public partial class MainWindow : Window
         foreach (var entry in active) CacheRows.Children.Add(CacheRow(entry, now));
         foreach (var entry in expired) ExpiredRows.Children.Add(CacheRow(entry, now));
         ExpiredChats.Visibility = expired.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
-        ExpiredChats.Header = Loc.F($"已收起 · {expired.Count}");
-        ExpiredChats.ToolTip = Loc.T("compact / 超时 / 状态未确认");
+        ExpiredChats.Header = Loc.F($"已收起 · {expired.Count}（保留24h）");
+        ExpiredChats.ToolTip = Loc.T("compact / 超时 / 状态未确认\n最后活动满 24 小时后移出当前列表；历史保留。");
     }
 
     FrameworkElement CacheRow(ChatCacheEntry e, DateTimeOffset now, bool historical = false,bool dense=false)

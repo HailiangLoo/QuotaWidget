@@ -117,6 +117,7 @@
                 <StackPanel Orientation="Horizontal">
                   <TextBlock x:Name="CodexInlineRateValue" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource Violet}" VerticalAlignment="Center" />
                   <TextBlock Text="/h" FontSize="9" Foreground="{DynamicResource Violet}" VerticalAlignment="Center" />
+                  <TextBlock Text="↗" FontSize="9" Foreground="{DynamicResource Muted}" Margin="3,0,0,0" VerticalAlignment="Center" />
                   <TextBlock x:Name="CodexInlinePoints" Visibility="Collapsed" FontSize="9" Foreground="{DynamicResource Muted}" Margin="6,0,0,0" VerticalAlignment="Center" />
                 </StackPanel>
               </Viewbox>
@@ -142,6 +143,7 @@
                     <TextBlock Text="Claude" Foreground="{DynamicResource Claude}" FontSize="10" Margin="0,0,3,0" VerticalAlignment="Center" />
                     <TextBlock x:Name="CompactClaudeRateValue" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource Claude}" VerticalAlignment="Center" />
                     <TextBlock Text="/h" FontSize="9" Foreground="{DynamicResource Claude}" VerticalAlignment="Center" />
+                    <TextBlock Text="↗" FontSize="9" Foreground="{DynamicResource Muted}" Margin="3,0,0,0" VerticalAlignment="Center" />
                     </StackPanel>
                     <StackPanel x:Name="CompactFableRate" Orientation="Horizontal" Visibility="Collapsed" Margin="6,0,0,0">
                       <TextBlock Text="Fable" Foreground="{DynamicResource Fable}" FontSize="10" Margin="0,0,3,0" VerticalAlignment="Center" />
@@ -158,6 +160,7 @@
                     <TextBlock Text="Codex" Foreground="{DynamicResource Violet}" FontSize="10" Margin="0,0,3,0" VerticalAlignment="Center" />
                     <TextBlock x:Name="CompactCodexRateValue" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource Violet}" VerticalAlignment="Center" />
                     <TextBlock Text="/h" FontSize="9" Foreground="{DynamicResource Violet}" VerticalAlignment="Center" />
+                    <TextBlock Text="↗" FontSize="9" Foreground="{DynamicResource Muted}" Margin="3,0,0,0" VerticalAlignment="Center" />
                     <TextBlock x:Name="CompactCodexPoints" Visibility="Collapsed" FontSize="9" Foreground="{DynamicResource Muted}" Margin="5,0,0,0" VerticalAlignment="Center" />
                   </StackPanel>
                 </Viewbox>
@@ -219,17 +222,17 @@
                   </ToggleButton>
               </StackPanel>
               <Grid x:Name="TokenPanel" Margin="0,7,0,2">
-                <Grid.ColumnDefinitions><ColumnDefinition Width="44"/><ColumnDefinition/><ColumnDefinition/><ColumnDefinition/></Grid.ColumnDefinitions>
+                <Grid.ColumnDefinitions><ColumnDefinition Width="84"/><ColumnDefinition/><ColumnDefinition/><ColumnDefinition/></Grid.ColumnDefinitions>
                 <Grid.RowDefinitions><RowDefinition Height="15"/><RowDefinition Height="22"/><RowDefinition Height="22"/></Grid.RowDefinitions>
                 <Button x:Name="TokenScope" Grid.Column="0" Content="TOKEN" FontSize="9" Padding="0" HorizontalAlignment="Left" Style="{StaticResource FlatButton}" Foreground="{DynamicResource Muted}" Click="TokenDiagnostics_Click" local:Translate.ToolTip="数据诊断" />
                 <TextBlock Grid.Column="1" Text="IN" FontSize="9" Foreground="{DynamicResource Muted}" HorizontalAlignment="Right" local:Translate.ToolTip="未缓存输入" />
                 <TextBlock Grid.Column="2" Text="CACHE" FontSize="9" Foreground="{DynamicResource Muted}" HorizontalAlignment="Right" local:Translate.ToolTip="缓存命中的输入" />
                 <TextBlock Grid.Column="3" Text="OUT" FontSize="9" Foreground="{DynamicResource Muted}" HorizontalAlignment="Right" local:Translate.ToolTip="输出（含推理）" />
-                <TextBlock x:Name="ClaudeTokenLabel" Grid.Row="1" Text="Claude" FontSize="10" Foreground="{DynamicResource Claude}" VerticalAlignment="Center" />
+                <TextBlock x:Name="ClaudeTokenLabel" Grid.Row="1" local:Translate.Text="Claude 用量 ↗" FontSize="10" Foreground="{DynamicResource Claude}" VerticalAlignment="Center" />
                 <TextBlock x:Name="ClaudeInput" Grid.Row="1" Grid.Column="1" FontSize="12" FontWeight="SemiBold" HorizontalAlignment="Right" VerticalAlignment="Center" />
                 <TextBlock x:Name="ClaudeCached" Grid.Row="1" Grid.Column="2" FontSize="12" FontWeight="SemiBold" HorizontalAlignment="Right" VerticalAlignment="Center" />
                 <TextBlock x:Name="ClaudeOutput" Grid.Row="1" Grid.Column="3" FontSize="12" FontWeight="SemiBold" HorizontalAlignment="Right" VerticalAlignment="Center" />
-                <TextBlock x:Name="CodexTokenLabel" Grid.Row="2" Text="Codex" FontSize="10" Foreground="{DynamicResource Violet}" VerticalAlignment="Center" />
+                <TextBlock x:Name="CodexTokenLabel" Grid.Row="2" local:Translate.Text="Codex 用量 ↗" FontSize="10" Foreground="{DynamicResource Violet}" VerticalAlignment="Center" />
                 <TextBlock x:Name="CodexInput" Grid.Row="2" Grid.Column="1" FontSize="12" FontWeight="SemiBold" HorizontalAlignment="Right" VerticalAlignment="Center" />
                 <TextBlock x:Name="CodexCached" Grid.Row="2" Grid.Column="2" FontSize="12" FontWeight="SemiBold" HorizontalAlignment="Right" VerticalAlignment="Center" />
                 <TextBlock x:Name="CodexOutput" Grid.Row="2" Grid.Column="3" FontSize="12" FontWeight="SemiBold" HorizontalAlignment="Right" VerticalAlignment="Center" />

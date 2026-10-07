@@ -37,7 +37,9 @@ Each chart chooses Rate or Total independently. The numbers in its header remain
 
 ### Local usage details
 
-Hover a provider's token row or usage heading, then click the card to pin it. Each provider has its own movable window showing input, cached-input and output tokens, grouped by model and by chat/model. Chat rows show their project in smaller, muted text when available. Confirmed subagent usage is grouped under its parent chat. The initial range follows the full view, or starts at 1h in compact mode; each detail window then has independent **1h / 5h / 12h / 24h / 3d / all** buttons. Drag content to move either window; controls and scrolling retain their usual actions.
+**To see which tasks account for your usage, click “Claude usage ↗ / Codex usage ↗” in the TOKEN section, or the provider's hourly rate ↗ in compact mode.** Hover to preview; click the card to pin it.
+
+Each provider has its own movable detail window. Choose **1h / 5h / 12h / 24h / 3d / all**, then compare model totals and individual chat/model rows: input, cached-input and output tokens, plus validated quota estimates. Different models used within one chat get separate rows. Project names appear in smaller, muted text; confirmed subagent usage is grouped under its parent chat. The initial range follows the full view, or starts at 1h in compact mode; each window then selects its range independently. Drag content to move either window; controls and scrolling retain their usual actions.
 
 Visible pinned windows automatically refresh at the configured polling interval (5 minutes by default), preserving their range and scroll position. This only reads existing local records; it does not trigger quota requests or model calls. Hidden or closed windows do not refresh, and dragging or recent interaction briefly defers an update. **Refresh** remains available for an immediate update.
 
