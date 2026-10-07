@@ -61,8 +61,8 @@ token 列保留本机原始统计，估算列不改写原始记录。上图的�
 
 ## 开始使用
 
-1. 在 [Releases](https://github.com/HailiangLoo/QuotaWidget/releases/latest) 下载 `QuotaWidget-v0.13.9-win-x64.zip`，解压到自己的文件夹。
-2. 双击 `QuotaWidget.exe`，或者 `启动小挂件.cmd`。发布包包含 .NET 运行时，无需另外安装。
+1. 在 [Releases](https://github.com/HailiangLoo/QuotaWidget/releases/latest) 下载 `QuotaWidget-v<版本>-win-x64.exe`，放到自己喜欢的文件夹。选择应用 EXE，不用下载 GitHub 自动生成的源码压缩包。v0.13.9 等旧版仍是 ZIP，需要解压后打开里面的 EXE。
+2. 双击 EXE 即可。单文件版已经包含 .NET 运行时，无需安装、手动解压、辅助脚本或额外下载运行库。
 3. 首次启动先选择监听平台、完成官方登录，再点“开始监听”。开始前不采集额度或读取 chat 日志。精简模式也保留齿轮设置入口。
 4. 设置显示各平台的当前状态，并提供登录/安装、检查连接和断开按钮。断开只停止挂件监听，不退出官方应用的账号，也不删除历史。
 5. 设置中选择语言。语言默认跟随系统，也可选择简体中文或 English；切换立即生效。
@@ -71,11 +71,15 @@ token 列保留本机原始统计，估算列不改写原始记录。上图的�
 
 官方安装与登录说明：[Codex / ChatGPT](https://learn.chatgpt.com/docs/app)、[ChatGPT 登录](https://learn.chatgpt.com/docs/auth)、[Claude Code](https://code.claude.com/docs/en/setup)。
 
-**Claude**：需要受支持的官方 Claude Code CLI，或 Claude Windows 应用附带的 CLI。双击 `登录Claude.cmd` 完成挂件专用登录；它使用独立配置目录。找不到兼容 CLI 时，在 settings.json 中指定 claudeExePath 或更新官方应用。
+**Claude**：需要受支持的官方 Claude Code CLI，或 Claude Windows 应用附带的 CLI。在“设置 → Claude Code → 登录 / 安装”完成挂件专用登录；它使用独立配置目录。找不到兼容 CLI 时，在 settings.json 中指定 claudeExePath 或更新官方应用。
 
-只想先看效果，双击 `演示模式.cmd`。演示数据与真实数据分开存放。
+只想先看效果，在设置中点击“预览演示”。演示数据与真实数据分开存放。应用及内置运行库的开源许可也可以在设置中查看。
 
 系统要求：Windows 10/11，x64。界面支持中文和英文。初版二进制尚未签名。
+
+### 更新
+
+暂不提供自动更新。需要新版时，下载新 EXE，从托盘退出挂件，替换旧 EXE 后重新打开即可；使用快捷方式时保留原文件名。设置和历史保存在用户数据目录里，替换程序不会清掉它们。从旧 ZIP 版升级时，可以把新 EXE 放进新文件夹，确认正常后再移除旧版解压目录；不要删除数据目录。
 
 ## 数据与精度
 
@@ -96,10 +100,10 @@ Windows 上安装 .NET 10 SDK，然后运行：
 ```powershell
 dotnet run --project tests/QuotaWidget.Tests -c Release
 dotnet run --project tests/QuotaWidget.UiTests -c Release
-powershell -File scripts/Build-Release.ps1
+pwsh -File scripts/Build-Release.ps1
 ```
 
-发布文件位于 `artifacts/`。测试默认不需要登录账号；依赖已安装官方 CLI 的检查须显式开启，见 [CONTRIBUTING.zh-CN.md](CONTRIBUTING.zh-CN.md)。
+构建脚本需要 PowerShell 7，会在 `artifacts/` 生成一个 EXE 和可选的 SHA-256 校验文件。版本号以 `-local` 结尾时，加上 `-AllowPrerelease`。测试默认不需要登录账号；依赖已安装官方 CLI 的检查须显式开启，见 [CONTRIBUTING.zh-CN.md](CONTRIBUTING.zh-CN.md)。
 
 ## 许可
 

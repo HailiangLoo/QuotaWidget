@@ -58,8 +58,8 @@ The gear is available in full and compact modes. Settings includes language, pro
 
 ## Getting started
 
-1. Download `QuotaWidget-v0.13.9-win-x64.zip` from [Releases](https://github.com/HailiangLoo/QuotaWidget/releases/latest) and extract it into a folder of your choice.
-2. Open `QuotaWidget.exe` or `Start Widget.cmd`. The download includes the .NET runtime; no separate runtime installation is needed.
+1. Download `QuotaWidget-v<version>-win-x64.exe` from [Releases](https://github.com/HailiangLoo/QuotaWidget/releases/latest) and keep it in a folder of your choice. Choose the app EXE, not GitHub's source-code archive. Older releases such as v0.13.9 use a ZIP: extract those once and open the EXE inside.
+2. Double-click the EXE. It contains the .NET runtime; no installer, extraction step, helper scripts, or separate runtime download is needed for the single-file release.
 3. On first launch, choose the providers to monitor and complete official sign-in, then select **Start monitoring**. No quota collection or chat-log reading begins before this step. The gear remains available in compact mode.
 4. Settings shows each provider’s connection status, sign-in/install instructions, a connection check, and a disconnect button. Disconnect stops widget monitoring; it does not sign out of the official app or delete history.
 5. Choose a language in Settings. Language defaults to the Windows display language: Chinese on Chinese systems, English otherwise. You can choose **English** or **简体中文** explicitly.
@@ -68,11 +68,15 @@ The gear is available in full and compact modes. Settings includes language, pro
 
 Official installation and sign-in guides: [Codex / ChatGPT](https://learn.chatgpt.com/docs/app), [ChatGPT authentication](https://learn.chatgpt.com/docs/auth), and [Claude Code](https://code.claude.com/docs/en/setup).
 
-**Claude:** requires a supported official Claude Code CLI, or the CLI bundled with the Claude Windows app. Open `Sign in to Claude.cmd` to complete the widget's separate sign-in. If no compatible CLI is found, update the official app or set `claudeExePath` in `settings.json`.
+**Claude:** requires a supported official Claude Code CLI, or the CLI bundled with the Claude Windows app. Use **Settings > Claude Code > Sign in / Install** to complete the widget's separate sign-in. If no compatible CLI is found, update the official app or set `claudeExePath` in `settings.json`.
 
-To preview the widget without an account, open `Demo.cmd`. Demo data is stored separately from real data.
+To preview the widget without an account, choose **Preview demo** in Settings. Demo data is stored separately from real data. Licenses for the app and its bundled runtime are also available in Settings.
 
 Requires Windows 10/11, x64. Release binaries are currently unsigned.
+
+### Updating
+
+There is no automatic updater. When you want a newer version, download its EXE, quit the widget from the tray, replace your old EXE, and reopen it. Keep the same filename if you use a shortcut. Settings and history stay in your user data directory and survive replacement. When moving from an older ZIP release, you can keep the new EXE in a new folder and retire the old extracted folder after verifying it works; do not delete the data directory.
 
 ## Data and accuracy
 
@@ -93,10 +97,10 @@ Install the .NET 10 SDK on Windows, then run:
 ```powershell
 dotnet run --project tests/QuotaWidget.Tests -c Release
 dotnet run --project tests/QuotaWidget.UiTests -c Release
-powershell -File scripts/Build-Release.ps1
+pwsh -File scripts/Build-Release.ps1
 ```
 
-Release files are written to `artifacts/`. Tests do not require a signed-in account by default. Checks that use installed official CLIs are opt-in; see [CONTRIBUTING.md](CONTRIBUTING.md).
+The build script requires PowerShell 7 and writes one EXE plus an optional SHA-256 checksum to `artifacts/`. For a version ending in `-local`, add `-AllowPrerelease`. Tests do not require a signed-in account by default. Checks that use installed official CLIs are opt-in; see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 For an English demo, run `QuotaWidget.exe --demo --language en`. Use `--language zh-CN` for Chinese or `--language auto` to follow Windows.
 

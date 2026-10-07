@@ -33,10 +33,14 @@ Check both `--language en` and `--language zh-CN`, all monitoring modes, and com
 ## Releases
 
 ```powershell
-powershell -File scripts/Build-Release.ps1
+pwsh -File scripts/Build-Release.ps1
 powershell -File scripts/Test-PublicTree.ps1
 ```
 
-Build fresh binaries from source with debug symbols removed and compiler paths mapped. Do not copy a private installation directory. Publish only the newly generated zip and checksum from `artifacts/`. Review `git diff --cached` before pushing; automated scans cannot identify every kind of private information.
+Use PowerShell 7. For a local prerelease version, pass `-AllowPrerelease`; normal release builds reject prerelease versions. The script resolves the exact .NET and Windows Desktop runtime packs, embeds their licenses and third-party notices, then uses the `Portable` publish profile to produce a compressed, self-contained single EXE. Native libraries extract automatically into the .NET temporary cache at startup; the user does not need to manage a runtime folder. WPF is not trimmed. See Microsoft's [single-file deployment documentation](https://learn.microsoft.com/en-us/dotnet/core/deploying/single-file/overview).
+
+The script checks that the publish folder contains only the EXE, copies it to an empty Unicode/space path under a different filename, and tests embedded-license export and full, compact, setup and usage-detail snapshots with a fresh extraction cache. Snapshots use synthetic data and do not collect real quota or read private logs.
+
+Build fresh binaries from source with debug symbols removed and compiler paths mapped. Do not copy a private installation directory. Publish only the newly generated EXE and checksum from `artifacts/`, not the intermediate build directories. Review `git diff --cached` before pushing; automated scans cannot identify every kind of private information. Updating is manual: exit the widget and replace the EXE; settings and history remain in the separate user data directory.
 
 Add meaningful regression coverage for functional changes. Chart changes must preserve recorded totals, real work boundaries, and provider isolation. Switching view ranges or monitoring modes must not change the estimation basis at the same timestamp.

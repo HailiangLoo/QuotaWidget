@@ -10,9 +10,11 @@ at runtime solely to identify the relevant provider; otherwise original generic
 badges are rendered. Brand marks visible in documentation screenshots are not
 relicensed under the project's MIT license.
 
-Self-contained Windows builds include Microsoft's .NET runtime. The release
-package includes the corresponding runtime license and third-party notices under
-`licenses/`; those files govern the bundled runtime components.
+Self-contained Windows builds include Microsoft's .NET runtime. The single EXE
+embeds the corresponding runtime licenses and third-party notices, accessible
+through Settings > Open-source licenses or `--export-licenses notices.txt`.
+Those notices govern the bundled runtime components. Older ZIP releases carry
+them in the `licenses/` directory instead.
 
 Windows APIs, SQLite and system fonts are provided by the operating system and
 are not distributed as separate assets by this project.

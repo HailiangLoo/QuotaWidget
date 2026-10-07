@@ -27,10 +27,14 @@ Remove-Item Env:QUOTAWIDGET_LIVE_TESTS
 ## 发布
 
 ```powershell
-powershell -File scripts/Build-Release.ps1
+pwsh -File scripts/Build-Release.ps1
 powershell -File scripts/Test-PublicTree.ps1
 ```
 
-构建从源码重新生成二进制，移除调试符号并映射编译路径；不要复制私人安装目录。仅发布 `artifacts/` 下新生成的 zip 与校验文件。推送前人工检查 `git diff --cached`，自动扫描并不保证能识别所有私人信息。
+使用 PowerShell 7。本地预发布版本加 `-AllowPrerelease`；普通发布构建会拒绝预发布版本。脚本先确定实际使用的 .NET 与 Windows Desktop 运行库版本，将对应许可与第三方声明嵌入程序，再通过 `Portable` 发布配置生成压缩的独立 EXE。原生运行库在启动时自动释放到 .NET 临时缓存，用户无需整理运行库目录；不对 WPF 做裁剪。技术细节见微软的[单文件部署文档](https://learn.microsoft.com/en-us/dotnet/core/deploying/single-file/overview)。
+
+脚本检查输出仅有一个 EXE，再将其改名复制到含中文和空格的空目录，使用全新运行库缓存验证许可导出、完整/精简模式、初始化与用量明细截图。截图采用合成数据，不采集真实额度或读取私人日志。
+
+构建从源码重新生成二进制，移除调试符号并映射编译路径；不要复制私人安装目录。仅发布 `artifacts/` 下新生成的 EXE 与校验文件，不发布中间构建目录。推送前人工检查 `git diff --cached`，自动扫描并不保证能识别所有私人信息。更新采用手动退出并替换 EXE；设置和历史仍保存在独立的用户数据目录。
 
 功能修改请补充有意义的回归测试。曲线修改应保留原始记账总量、真实工作边界和提供方隔离，并验证切换视图/监听模式不会改变同一时刻的估算依据。

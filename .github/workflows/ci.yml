@@ -26,4 +26,4 @@ jobs:
         run: dotnet run --project tests/QuotaWidget.UiTests -c Release
       - name: Build distributable
         shell: pwsh
-        run: ./scripts/Build-Release.ps1
+        run: ./scripts/Build-Release.ps1 -AllowPrerelease

@@ -382,6 +382,10 @@
           <Button Style="{StaticResource FlatButton}" Background="{DynamicResource Raised}" Padding="8" Margin="0,12,0,0" HorizontalContentAlignment="Center"
                   local:Translate.Content="返回小窗" Click="BackButton_Click" />
           </StackPanel>
+          <UniformGrid Columns="2" Margin="0,10,0,0">
+            <Button x:Name="DemoButton" Style="{StaticResource FlatButton}" local:Translate.Content="预览演示" Click="DemoButton_Click" />
+            <Button x:Name="LicensesButton" Style="{StaticResource FlatButton}" local:Translate.Content="开源许可" Click="LicensesButton_Click" />
+          </UniformGrid>
           </StackPanel>
           </ScrollViewer>
         </StackPanel>

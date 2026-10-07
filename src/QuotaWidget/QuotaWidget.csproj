@@ -11,7 +11,7 @@
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <AssemblyName>QuotaWidget</AssemblyName>
     <RootNamespace>QuotaWidget.App</RootNamespace>
-    <Version>0.13.11-local</Version>
+    <Version>0.13.12-local</Version>
     <ApplicationIcon>Assets\quota-companion.ico</ApplicationIcon>
     <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
     <NoWarn>$(NoWarn);WFO0003</NoWarn>
@@ -19,7 +19,14 @@
 
   <ItemGroup>
     <Resource Include="Assets\*.png" />
+    <EmbeddedResource Include="..\..\LICENSE" LogicalName="QuotaWidget.LICENSE" />
+    <EmbeddedResource Include="..\..\NOTICE.md" LogicalName="QuotaWidget.NOTICE" />
+    <EmbeddedResource Include="$(BundledRuntimeNotices)" LogicalName="QuotaWidget.RuntimeNotices" Condition="'$(BundledRuntimeNotices)' != ''" />
     <ProjectReference Include="..\QuotaWidget.Core\QuotaWidget.Core.csproj" />
   </ItemGroup>
+
+  <Target Name="RequireBundledNotices" BeforeTargets="PrepareForBuild" Condition="'$(PublishSingleFile)' == 'true'">
+    <Error Condition="'$(BundledRuntimeNotices)' == '' Or !Exists('$(BundledRuntimeNotices)')" Text="Single-file builds require runtime notices. Use scripts/Build-Release.ps1." />
+  </Target>
 
 </Project>

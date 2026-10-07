@@ -1,4 +1,6 @@
 {
+  "开源许可": "Open-source licenses",
+  "预览演示": "Preview demo",
   "\n5h 剩余 {0} · Fable 剩余 {1}": "\n5h left {0} · Fable left {1}",
   "\nCodex 5h 剩余 {0}": "\nCodex 5h left {0}",
   "\ncompact {0} 次 · 最近 {1:M/d HH:mm}": "\nCompacted {0} times · latest {1:M/d HH:mm}",

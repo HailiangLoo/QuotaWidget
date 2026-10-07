@@ -49,6 +49,7 @@ public sealed class AppOptions
     public bool Exit { get; private set; }
     public bool QaWindow { get; private set; }
     public bool UsageDiagnostics { get; private set; }
+    public string? ExportLicenses { get; private set; }
     /// <summary>"login" or "logout": run the shared auth path and exit (used by 登录Claude.cmd).</summary>
     public string? Auth { get; private set; }
 
@@ -93,6 +94,7 @@ public sealed class AppOptions
                 case "--exit": o.Exit = true; break;
                 case "--qa-window": o.QaWindow = true; break;
                 case "--diagnose-usage": o.UsageDiagnostics = true; break;
+                case "--export-licenses": o.ExportLicenses = Next(); break;
                 case "--login": o.Auth = "login"; break;
                 case "--logout": o.Auth = "logout"; break;
             }
@@ -151,6 +153,11 @@ public partial class App : Application
         base.OnStartup(e);
         _opts = AppOptions.Parse(e.Args);
         Loc.Configure(_opts.Language);
+        if (_opts.ExportLicenses is { } licensePath)
+        {
+            File.WriteAllText(licensePath, LicenseWindow.Notices);
+            Shutdown(); return;
+        }
         var snapshot = _opts.Snapshot is not null;
         // A demo snapshot renders from a throwaway copy, so it never disturbs a running demo.
         var root = _opts.DataDir ?? (_opts.Demo

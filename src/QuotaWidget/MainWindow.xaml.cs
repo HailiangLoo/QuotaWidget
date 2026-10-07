@@ -828,6 +828,21 @@ public partial class MainWindow : Window
 
     void BackButton_Click(object sender, RoutedEventArgs e) => ShowSettings(false);
 
+    void LicensesButton_Click(object sender, RoutedEventArgs e) => new LicenseWindow { Owner = this }.ShowDialog();
+
+    void DemoButton_Click(object sender, RoutedEventArgs e)
+    {
+        // Works even when the downloaded single EXE is renamed or moved.
+        if (_opts.Demo || _opts.Snapshot is not null) return;
+        try
+        {
+            var start = new System.Diagnostics.ProcessStartInfo(Environment.ProcessPath!) { UseShellExecute = false };
+            foreach (var arg in new[] { "--demo", "--scenario", "showcase", "--language", _model.Settings.Language }) start.ArgumentList.Add(arg);
+            System.Diagnostics.Process.Start(start)?.Dispose();
+        }
+        catch (Exception ex) { MessageBox.Show(this, ex.Message, "QuotaWidget", MessageBoxButton.OK, MessageBoxImage.Error); }
+    }
+
     void HideButton_Click(object sender, RoutedEventArgs e) => Hide();
 
     void NoteBar_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
