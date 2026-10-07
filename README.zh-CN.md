@@ -29,7 +29,7 @@ A small Windows desktop widget for Claude and Codex quota, usage trends, and loc
     <th>设置</th>
   </tr>
   <tr>
-    <td align="center" valign="top"><strong>Claude + Codex</strong><br /><a href="docs/images/both-compact.png"><img src="docs/images/both-compact.png" width="220" alt="Claude 与 Codex 精简模式" /></a><br /><strong>Codex</strong><br /><a href="docs/images/codex-compact.png"><img src="docs/images/codex-compact.png" width="220" alt="仅 Codex 精简模式" /></a></td>
+    <td align="center" valign="top"><strong>Claude + Codex</strong><br /><a href="docs/images/both-compact.png"><img src="docs/images/both-compact.png" width="220" alt="Claude 与 Codex 精简模式" /></a><br /><strong>Codex</strong><br /><a href="docs/images/codex-compact.png"><img src="docs/images/codex-compact.png" width="220" alt="仅 Codex 精简模式" /></a><br /><strong>Claude</strong><br /><a href="docs/images/claude-compact.png"><img src="docs/images/claude-compact.png" width="220" alt="仅 Claude 精简模式" /></a></td>
     <td align="center" valign="top"><strong>Claude</strong><br /><a href="docs/images/claude-usage.png"><img src="docs/images/claude-usage.png" width="220" alt="Claude 用量：按模型和 chat 分组" /></a><br /><strong>Codex</strong><br /><a href="docs/images/codex-usage.png"><img src="docs/images/codex-usage.png" width="220" alt="Codex 用量：按模型和 chat 分组" /></a></td>
     <td align="center" valign="top"><a href="docs/images/settings.png"><img src="docs/images/settings.png" width="220" alt="平台连接、采样与平滑设置" /></a></td>
   </tr>
@@ -39,7 +39,7 @@ A small Windows desktop widget for Claude and Codex quota, usage trends, and loc
 
 ### 本机用量明细
 
-**想知道额度花在哪些任务上：完整模式点击 TOKEN 区域的「Claude 用量 ↗ / Codex 用量 ↗」，精简模式点击对应平台的每小时速率 ↗。**悬停也能预览，点击卡片即可固定。
+**想知道额度花在哪些任务上：完整模式点击 TOKEN 区域的「Claude 用量 ↗ / Codex 用量 ↗」；精简单平台模式点击「近1h」下的数值，双平台模式点击对应平台的速率 ↗。**悬停也能预览，点击卡片即可固定。「近1h」显示最近约一小时的均速，单位为点/h。
 
 Claude 和 Codex 各有一个可拖动的明细窗口。选定 **1h / 5h / 12h / 24h / 3d / all** 后，可按模型汇总、按 chat / 模型查看 IN 未缓存输入、CACHE 缓存命中、OUT 输出及通过校准的估算点数；同一 chat 用过的不同模型分行显示，方便对比任务消耗。有项目信息时，chat 名称后显示较小、较淡的项目名。确认归属的 subagent 用量计入父 chat。初始范围沿用完整视图，精简模式默认 1h，之后各明细窗口独立选时间。主窗口和固定明细都可拖动内容区域，按钮和滚动保留原操作。
 

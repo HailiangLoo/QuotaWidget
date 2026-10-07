@@ -184,6 +184,7 @@
   "compact / 超时 / 状态未确认\n最后活动满 24 小时后移出当前列表；历史保留。": "Compacted / expired / unconfirmed\nLeaves this list 24 hours after the last activity; history is retained.",
   "Claude 用量 ↗": "Claude usage ↗",
   "Codex 用量 ↗": "Codex usage ↗",
+  "近1h": "Last 1h",
   "已暂停": "Paused",
   "已用 %": "Used %",
   "已用 {0}%": "{0}% used",

@@ -27,7 +27,7 @@ All screenshots use synthetic demo data. Supports light and dark themes, full an
     <th>Settings</th>
   </tr>
   <tr>
-    <td align="center" valign="top"><strong>Claude + Codex</strong><br /><a href="docs/images/both-compact-en.png"><img src="docs/images/both-compact-en.png" width="220" alt="Compact mode with Claude and Codex" /></a><br /><strong>Codex</strong><br /><a href="docs/images/codex-compact-en.png"><img src="docs/images/codex-compact-en.png" width="220" alt="Compact mode with Codex only" /></a></td>
+    <td align="center" valign="top"><strong>Claude + Codex</strong><br /><a href="docs/images/both-compact-en.png"><img src="docs/images/both-compact-en.png" width="220" alt="Compact mode with Claude and Codex" /></a><br /><strong>Codex</strong><br /><a href="docs/images/codex-compact-en.png"><img src="docs/images/codex-compact-en.png" width="220" alt="Compact mode with Codex only" /></a><br /><strong>Claude</strong><br /><a href="docs/images/claude-compact-en.png"><img src="docs/images/claude-compact-en.png" width="220" alt="Compact mode with Claude only" /></a></td>
     <td align="center" valign="top"><strong>Claude</strong><br /><a href="docs/images/claude-usage-en.png"><img src="docs/images/claude-usage-en.png" width="220" alt="Claude usage grouped by model and chat" /></a><br /><strong>Codex</strong><br /><a href="docs/images/codex-usage-en.png"><img src="docs/images/codex-usage-en.png" width="220" alt="Codex usage grouped by model and chat" /></a></td>
     <td align="center" valign="top"><a href="docs/images/settings-en.png"><img src="docs/images/settings-en.png" width="220" alt="Provider connections, sampling and smoothing settings" /></a></td>
   </tr>
@@ -37,7 +37,7 @@ Each chart chooses Rate or Total independently. The numbers in its header remain
 
 ### Local usage details
 
-**To see which tasks account for your usage, click “Claude usage ↗ / Codex usage ↗” in the TOKEN section, or the provider's hourly rate ↗ in compact mode.** Hover to preview; click the card to pin it.
+**To see which tasks account for your usage, click “Claude usage ↗ / Codex usage ↗” in the TOKEN section. In compact mode, click the value below “Last 1h” for a single provider, or the provider's rate ↗ when showing both.** Hover to preview; click the card to pin it. “Last 1h” shows the observed recent-hour average in points/hour.
 
 Each provider has its own movable detail window. Choose **1h / 5h / 12h / 24h / 3d / all**, then compare model totals and individual chat/model rows: input, cached-input and output tokens, plus validated quota estimates. Different models used within one chat get separate rows. Project names appear in smaller, muted text; confirmed subagent usage is grouped under its parent chat. The initial range follows the full view, or starts at 1h in compact mode; each window then selects its range independently. Drag content to move either window; controls and scrolling retain their usual actions.
 

@@ -113,11 +113,10 @@
             <Grid.ColumnDefinitions><ColumnDefinition Width="112"/><ColumnDefinition/></Grid.ColumnDefinitions>
             <local:QuotaRing x:Name="CodexInlineMeter" Label="week" Accent="Violet" Platform="Codex" Compact="True" SingleProvider="True" />
             <StackPanel x:Name="CodexInlineUsage" Grid.Column="1" Background="Transparent" VerticalAlignment="Center">
-              <Viewbox Stretch="Uniform" StretchDirection="DownOnly" HorizontalAlignment="Right">
-                <StackPanel Orientation="Horizontal">
-                  <TextBlock x:Name="CodexInlineRateValue" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource Violet}" VerticalAlignment="Center" />
-                  <TextBlock Text="/h" FontSize="9" Foreground="{DynamicResource Violet}" VerticalAlignment="Center" />
-                  <TextBlock Text="↗" FontSize="9" Foreground="{DynamicResource Muted}" Margin="3,0,0,0" VerticalAlignment="Center" />
+              <Viewbox Stretch="Uniform" StretchDirection="DownOnly" HorizontalAlignment="Center">
+                <StackPanel Orientation="Vertical">
+                  <TextBlock local:Translate.Text="近1h" FontSize="9" Foreground="{DynamicResource Muted}" HorizontalAlignment="Center" />
+                  <TextBlock x:Name="CodexInlineRateValue" FontSize="16" FontWeight="SemiBold" Foreground="{DynamicResource Violet}" HorizontalAlignment="Center" />
                   <TextBlock x:Name="CodexInlinePoints" Visibility="Collapsed" FontSize="9" Foreground="{DynamicResource Muted}" Margin="6,0,0,0" VerticalAlignment="Center" />
                 </StackPanel>
               </Viewbox>
@@ -139,11 +138,11 @@
               <StackPanel x:Name="CompactClaudeRate" Grid.Column="0" VerticalAlignment="Center" Background="Transparent" Margin="0,0,4,0">
                 <Viewbox x:Name="CompactClaudeRateBox" Stretch="Uniform" StretchDirection="DownOnly" HorizontalAlignment="Left">
                   <StackPanel x:Name="CompactClaudeRateContent" Orientation="Horizontal">
-                    <StackPanel Orientation="Horizontal">
-                    <TextBlock Text="Claude" Foreground="{DynamicResource Claude}" FontSize="10" Margin="0,0,3,0" VerticalAlignment="Center" />
+                    <StackPanel x:Name="CompactClaudePrimaryRate" Orientation="Horizontal">
+                    <TextBlock x:Name="CompactClaudeRateHeading" Text="Claude" Foreground="{DynamicResource Claude}" FontSize="10" Margin="0,0,3,0" VerticalAlignment="Center" />
                     <TextBlock x:Name="CompactClaudeRateValue" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource Claude}" VerticalAlignment="Center" />
-                    <TextBlock Text="/h" FontSize="9" Foreground="{DynamicResource Claude}" VerticalAlignment="Center" />
-                    <TextBlock Text="↗" FontSize="9" Foreground="{DynamicResource Muted}" Margin="3,0,0,0" VerticalAlignment="Center" />
+                    <TextBlock x:Name="CompactClaudeRateUnit" Text="/h" FontSize="9" Foreground="{DynamicResource Claude}" VerticalAlignment="Center" />
+                    <TextBlock x:Name="CompactClaudeRateArrow" Text="↗" FontSize="9" Foreground="{DynamicResource Muted}" Margin="3,0,0,0" VerticalAlignment="Center" />
                     </StackPanel>
                     <StackPanel x:Name="CompactFableRate" Orientation="Horizontal" Visibility="Collapsed" Margin="6,0,0,0">
                       <TextBlock Text="Fable" Foreground="{DynamicResource Fable}" FontSize="10" Margin="0,0,3,0" VerticalAlignment="Center" />
@@ -155,12 +154,12 @@
                 </Viewbox>
               </StackPanel>
               <StackPanel x:Name="CompactCodexRate" Grid.Column="1" VerticalAlignment="Center" Background="Transparent" Margin="4,0,0,0">
-                <Viewbox Stretch="Uniform" StretchDirection="DownOnly" HorizontalAlignment="Right">
-                  <StackPanel Orientation="Horizontal">
-                    <TextBlock Text="Codex" Foreground="{DynamicResource Violet}" FontSize="10" Margin="0,0,3,0" VerticalAlignment="Center" />
+                <Viewbox x:Name="CompactCodexRateBox" Stretch="Uniform" StretchDirection="DownOnly" HorizontalAlignment="Right">
+                  <StackPanel x:Name="CompactCodexPrimaryRate" Orientation="Horizontal">
+                    <TextBlock x:Name="CompactCodexRateHeading" Text="Codex" Foreground="{DynamicResource Violet}" FontSize="10" Margin="0,0,3,0" VerticalAlignment="Center" />
                     <TextBlock x:Name="CompactCodexRateValue" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource Violet}" VerticalAlignment="Center" />
-                    <TextBlock Text="/h" FontSize="9" Foreground="{DynamicResource Violet}" VerticalAlignment="Center" />
-                    <TextBlock Text="↗" FontSize="9" Foreground="{DynamicResource Muted}" Margin="3,0,0,0" VerticalAlignment="Center" />
+                    <TextBlock x:Name="CompactCodexRateUnit" Text="/h" FontSize="9" Foreground="{DynamicResource Violet}" VerticalAlignment="Center" />
+                    <TextBlock x:Name="CompactCodexRateArrow" Text="↗" FontSize="9" Foreground="{DynamicResource Muted}" Margin="3,0,0,0" VerticalAlignment="Center" />
                     <TextBlock x:Name="CompactCodexPoints" Visibility="Collapsed" FontSize="9" Foreground="{DynamicResource Muted}" Margin="5,0,0,0" VerticalAlignment="Center" />
                   </StackPanel>
                 </Viewbox>

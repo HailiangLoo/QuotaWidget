@@ -11,6 +11,7 @@ $views = @(
     @{ Name='both-cumulative'; Monitor='both'; Layout='expanded'; Mode='cumulative'; Width=324 },
     @{ Name='both-compact'; Monitor='both'; Layout='compact'; Mode='rate'; Width=264 },
     @{ Name='codex-compact'; Monitor='codex'; Layout='compact'; Mode='rate'; Width=264 },
+    @{ Name='claude-compact'; Monitor='claude'; Layout='compact'; Mode='rate'; Width=264 },
     @{ Name='claude-usage'; Monitor='both'; Layout='expanded'; Mode='rate'; Width=324; Extra=@('--usage-card','claude','--usage-pinned','--usage-range','0') },
     @{ Name='codex-usage'; Monitor='both'; Layout='expanded'; Mode='rate'; Width=324; Extra=@('--usage-card','codex','--usage-pinned','--usage-range','0') },
     @{ Name='settings'; Monitor='both'; Layout='expanded'; Mode='rate'; Width=324; Extra=@('--settings') }
@@ -36,4 +37,4 @@ foreach ($language in @('zh-CN','en')) {
         $process.Dispose()
     }
 }
-Write-Output 'Updated sixteen synthetic gallery screenshots, including usage details and settings.'
+Write-Output 'Updated eighteen synthetic gallery screenshots, including both single-provider compact views, usage details and settings.'
