@@ -42,6 +42,7 @@ public partial class MainWindow : Window
         Loc.Configure(opts.Language ?? model.Settings.Language);
         Translate.RefreshResources();
         InitializeComponent();
+        InitializeScaling();
         WindowDrag.Attach(this,Frame,moved:PersistPlacement);
         InitializeConnections();
         Chart.AttachInspectOverlay(ChartInspection);
@@ -49,7 +50,6 @@ public partial class MainWindow : Window
         if (opts.QaWindow) ShowInTaskbar = true; // permits native UI inspection of this otherwise tool-only window
         var s = model.Settings;
 
-        Width = s.Width + 2 * ShadowMargin;
         Topmost = s.Topmost;
         PinButton.IsChecked = s.Topmost;
         if (opts.HistoryOpen) s.CompactMode = false;
@@ -151,6 +151,7 @@ public partial class MainWindow : Window
 
     public WidgetView Render()
     {
+        ApplyWidgetScale();
         RenderConnections();
         var now = DateTimeOffset.Now;
         var s = _model.Settings;
@@ -326,12 +327,12 @@ public partial class MainWindow : Window
     void ApplyCompactLayout()
     {
         var compact = _model.Settings.CompactMode;
-        Width = (compact && SettingsPanel.Visibility!=Visibility.Visible ? 240 : _model.Settings.Width) + 2 * ShadowMargin;
+        ApplyWidgetScale();
         CompactButton.IsChecked = compact;
         CompactButton.ToolTip = compact ? Loc.T("展开") : Loc.T("精简模式");
         System.Windows.Automation.AutomationProperties.SetName(CompactButton, compact ? Loc.T("展开完整模式") : Loc.T("切换精简模式"));
         CompactGlyph.Data = Geometry.Parse(compact ? "M4,4 H20 V20 H4 Z M4,10 H20 M9,17 L12,14 L15,17" : "M4,4 H20 V20 H4 Z M4,10 H20 M9,14 L12,17 L15,14");
-        HistoryButton.Visibility = WidthGrip.Visibility = compact ? Visibility.Collapsed : Visibility.Visible;
+        HistoryButton.Visibility = compact ? Visibility.Collapsed : Visibility.Visible;
         SettingsButton.Visibility=Visibility.Visible;
         SessionStartText.Visibility = Visibility.Visible;
         ChartPanel.Visibility = CachePanel.Visibility = compact ? Visibility.Collapsed : Visibility.Visible;
@@ -913,16 +914,6 @@ public partial class MainWindow : Window
         _model.Settings.AutoLogoutOnExit = AutoLogoutCheck.IsChecked == true;
         SaveAndRender();
     }
-
-    void WidthGrip_DragDelta(object sender, DragDeltaEventArgs e)
-    {
-        if (_model.Settings.CompactMode) return;
-        var s = _model.Settings;
-        s.Width = Math.Clamp(Math.Round(s.Width + e.HorizontalChange), 240, 340);
-        Width = s.Width + 2 * ShadowMargin;
-    }
-
-    void WidthGrip_DragCompleted(object sender, DragCompletedEventArgs e) => SaveAndRender();
 
     protected override void OnClosing(CancelEventArgs e)
     {

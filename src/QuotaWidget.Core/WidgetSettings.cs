@@ -49,6 +49,8 @@ public sealed class WidgetSettings
     public bool CodexChartCollapsed { get; set; }
 
     public double Width { get; set; } = 300;
+    public const double MinUiScale = .8, MaxUiScale = 2;
+    public double UiScale { get; set; } = 1;
     public bool Topmost { get; set; } = true;
     /// <summary>Window top-left in physical pixels (monitors may differ in scaling, so DIPs are ambiguous).</summary>
     public int? WindowX { get; set; }
@@ -108,6 +110,7 @@ public sealed class WidgetSettings
         if (CodexChartMode is not ("rate" or "cumulative")) CodexChartMode = ChartMode;
         if (TrendMinutes is not (60 or 90 or 120 or 150)) TrendMinutes = 120;
         if (!double.IsFinite(Width) || Width < 240 || Width > 340) Width = 300;
+        UiScale = double.IsFinite(UiScale) ? Math.Clamp(UiScale, MinUiScale, MaxUiScale) : 1;
         if (string.IsNullOrWhiteSpace(FableModelName)) FableModelName = "Fable";
     }
 

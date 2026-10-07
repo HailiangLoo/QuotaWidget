@@ -7,7 +7,9 @@
         Width="324" UseLayoutRounding="True"
         FontFamily="{StaticResource UiFont}" FontSize="13" Foreground="{DynamicResource Ink}"
         TextOptions.TextFormattingMode="Ideal">
-  <Grid x:Name="Outer" Margin="12">
+  <Grid x:Name="WindowSurface" Margin="12">
+  <Grid x:Name="Outer" Width="300" HorizontalAlignment="Left" VerticalAlignment="Top">
+    <Grid.LayoutTransform><ScaleTransform x:Name="WidgetScale" /></Grid.LayoutTransform>
     <!-- Shadow sits on its own layer so the effect never softens the text. -->
     <Border x:Name="ShadowLayer" CornerRadius="12" Background="{DynamicResource Bg}" Margin="1">
       <Border.Effect>
@@ -396,14 +398,17 @@
         </StackPanel>
       </StackPanel>
     </Border>
-    <!-- Width grip on the right edge (240–340) -->
-    <Thumb x:Name="WidthGrip" HorizontalAlignment="Right" Width="6" Margin="0,40,-3,12" Cursor="SizeWE" DragDelta="WidthGrip_DragDelta" DragCompleted="WidthGrip_DragCompleted">
+    <local:ChartInspectOverlay x:Name="ChartInspection" />
+  </Grid>
+    <!-- Keep the grip outside the transform: pointer deltas stay in window DIPs. -->
+    <Thumb x:Name="ScaleGrip" HorizontalAlignment="Right" VerticalAlignment="Bottom" Width="14" Height="14" Margin="0,0,-10,-10" Cursor="SizeNWSE"
+           local:Translate.ToolTip="拖动等比例缩放" local:Translate.Name="缩放挂件"
+           DragStarted="ScaleGrip_DragStarted" DragDelta="ScaleGrip_DragDelta" DragCompleted="ScaleGrip_DragCompleted">
       <Thumb.Template>
         <ControlTemplate TargetType="Thumb">
-          <Border Background="Transparent" />
+          <Border Background="Transparent"><Path Data="M3,10 L10,3 M7,10 L10,7" Stroke="{DynamicResource Muted}" StrokeThickness="1" Opacity="0.65" Margin="0,0,2,2" /></Border>
         </ControlTemplate>
       </Thumb.Template>
     </Thumb>
-    <local:ChartInspectOverlay x:Name="ChartInspection" />
   </Grid>
 </Window>

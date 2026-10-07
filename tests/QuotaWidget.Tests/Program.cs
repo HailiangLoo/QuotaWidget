@@ -971,6 +971,20 @@ Test("R2: profile changes replace histories and ignore legacy calibration settin
     True(!File.ReadAllText(paths.Settings).Contains("fableToWeekByProfile"), "obsolete calibration persisted");
 });
 
+Test("settings: proportional scale is backward compatible, bounded and persisted", () =>
+{
+    var path=Path.Combine(TempDir(),"settings.json");
+    AtomicFile.WriteAllText(path,"""{"width":318,"compactMode":true}""");
+    var settings=WidgetSettings.Load(path,out var warning);
+    True(warning is null,"old settings rejected");Near(1,settings.UiScale);Near(318,settings.Width);
+    settings.UiScale=1.35;settings.Save(path);
+    var loaded=WidgetSettings.Load(path,out _);Near(1.35,loaded.UiScale);True(loaded.CompactMode,"resize lost compact preference");
+    foreach(var invalid in new[]{double.NaN,double.PositiveInfinity,double.NegativeInfinity})
+    {settings.UiScale=invalid;settings.Normalize();Near(1,settings.UiScale);}
+    settings.UiScale=.1;settings.Normalize();Near(.8,settings.UiScale);
+    settings.UiScale=9;settings.Normalize();Near(2,settings.UiScale);
+});
+
 Test("R3: 30/60-minute polling still draws, labelled as interval averages", () =>
 {
     foreach (var minutes in new[] { 5, 10, 30, 60 })

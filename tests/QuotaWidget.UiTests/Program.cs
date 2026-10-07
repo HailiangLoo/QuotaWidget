@@ -10,7 +10,7 @@ using QuotaWidget.App;
 static class Probe
 {
     [STAThread]
-    static int Main()
+    static int Main(string[] args)
     {
         // Exercise actual WPF handlers against isolated metadata. Never start App workers/auth.
         var root=Path.Combine(Path.GetTempPath(),"qw-compact-ui-"+Guid.NewGuid().ToString("N")); Directory.CreateDirectory(root);
@@ -19,6 +19,7 @@ static class Probe
             // Dispatcher-based probes must never start collectors or open the user's data.
             var app=(App)Activator.CreateInstance(typeof(App),BindingFlags.Instance|BindingFlags.NonPublic,null,[false],null)!;
             app.InitializeComponent(); Theme.Apply(true);
+            if(args.Contains("--scale-only")) { ScalingProbe.Run(app); return 0; }
             var opts=AppOptions.Parse(["--compact","--snapshot","unused"]);
             var model=new WidgetModel(new DataPaths(root),false){ReadOnly=true};model.Initialize();model.Settings.Language="zh-CN";model.Settings.CompactMode=true;model.Settings.Width=318;
             var codex=new WidgetModel(new DataPaths(Path.Combine(root,"codex")),false){ReadOnly=true};codex.Initialize();
@@ -260,6 +261,7 @@ static class Probe
             ConnectionProbe.Run(app);
             UsageRefreshProbe.Run();
             UsageInteractionProbe.Run();
+            ScalingProbe.Run(app);
             Console.WriteLine("Monitoring UI: real selector transitions both/Claude/Codex; live meters/chart/tokens/chats and compact rows follow; paused-provider status suppressed; both restores; corner icons and palette roles verified.");
             Console.WriteLine("PASS: full-row geometry and hover, table/card same snapshot with platform/scope isolation, fixed window snapshot/drag handle/close, reused-window refresh scope, demo totals consistent. No native windows shown.");
             Console.WriteLine("PASS: both usage groupings visible (2 models / 80 chats), title mapping, no switches, refresh/close actions, provider hover entry/leave wiring.");
