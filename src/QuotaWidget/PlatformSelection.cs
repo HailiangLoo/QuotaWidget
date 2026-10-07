@@ -19,11 +19,25 @@ public partial class MainWindow
         var five=codex&&limits?.FiveHour is not null;
         var week=codex&&(!five||limits?.AllWeek is not null);
         var inline=codexOnly&&s.CompactMode&&!five;
+        var claudeInline=claude&&!codex&&s.CompactMode;
         CodexMeter.SingleProvider=codexOnly&&!five;
         CodexMeter.ShowPlatformIcon=!five;
         CodexCompactSummary.Visibility=Show(inline);
         MeterGrid.Visibility=Show(!inline);
-        CompactRates.Visibility=Show(!inline);
+        CompactRates.Visibility=Show(!inline&&!claudeInline);
+        // Reuse the same rate control so its values and usage-card interactions
+        // remain identical when moving between full, single and dual-provider views.
+        var rateParent=claudeInline?MeterGrid:CompactRates;
+        if(CompactClaudeRate.Parent!=rateParent)
+        {
+            ((Panel)CompactClaudeRate.Parent).Children.Remove(CompactClaudeRate);
+            rateParent.Children.Add(CompactClaudeRate);
+        }
+        Grid.SetColumn(CompactClaudeRate,claudeInline?3:0);
+        CompactClaudeRate.Margin=claudeInline?new Thickness(3,0,2,0):new Thickness(0,0,4,0);
+        CompactClaudeRateContent.Orientation=claudeInline?Orientation.Vertical:Orientation.Horizontal;
+        CompactClaudeRateBox.HorizontalAlignment=claudeInline?HorizontalAlignment.Center:HorizontalAlignment.Left;
+        CompactFableRate.Margin=claudeInline?new Thickness(0,2,0,0):new Thickness(6,0,0,0);
         foreach(var meter in new[]{FiveMeter,WeekMeter,FableMeter}) meter.Visibility=Show(claude);
         CodexFiveMeter.Visibility=Show(five);CodexMeter.Visibility=Show(week);
         // Give each provider a row when five quotas would squeeze the compact or
@@ -48,6 +62,8 @@ public partial class MainWindow
             for(var i=0;i<3;i++)Grid.SetColumn(meters[i],i);
             Grid.SetColumn(CodexFiveMeter,3);Grid.SetColumn(CodexMeter,five?4:3);
             for(var i=0;i<columns;i++)MeterGrid.ColumnDefinitions[i].Width=new((i<3?claude:i==3&&five?five:week)?1:0,GridUnitType.Star);
+            if(claudeInline)
+                for(var i=0;i<4;i++)MeterGrid.ColumnDefinitions[i].Width=new(new[]{1.05,.95,.95,1.25}[i],GridUnitType.Star);
         }
         Grid.SetColumn(MeterDivider,3);
         MeterDivider.Visibility=Show(claude&&codex&&!stacked);

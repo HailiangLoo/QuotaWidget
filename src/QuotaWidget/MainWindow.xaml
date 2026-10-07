@@ -136,11 +136,13 @@
             <Grid x:Name="CompactRates" Height="20" Background="Transparent">
               <Grid.ColumnDefinitions><ColumnDefinition x:Name="CompactClaudeRateColumn"/><ColumnDefinition/></Grid.ColumnDefinitions>
               <StackPanel x:Name="CompactClaudeRate" Grid.Column="0" VerticalAlignment="Center" Background="Transparent" Margin="0,0,4,0">
-                <Viewbox Stretch="Uniform" StretchDirection="DownOnly" HorizontalAlignment="Left">
-                  <StackPanel Orientation="Horizontal">
+                <Viewbox x:Name="CompactClaudeRateBox" Stretch="Uniform" StretchDirection="DownOnly" HorizontalAlignment="Left">
+                  <StackPanel x:Name="CompactClaudeRateContent" Orientation="Horizontal">
+                    <StackPanel Orientation="Horizontal">
                     <TextBlock Text="Claude" Foreground="{DynamicResource Claude}" FontSize="10" Margin="0,0,3,0" VerticalAlignment="Center" />
                     <TextBlock x:Name="CompactClaudeRateValue" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource Claude}" VerticalAlignment="Center" />
                     <TextBlock Text="/h" FontSize="9" Foreground="{DynamicResource Claude}" VerticalAlignment="Center" />
+                    </StackPanel>
                     <StackPanel x:Name="CompactFableRate" Orientation="Horizontal" Visibility="Collapsed" Margin="6,0,0,0">
                       <TextBlock Text="Fable" Foreground="{DynamicResource Fable}" FontSize="10" Margin="0,0,3,0" VerticalAlignment="Center" />
                       <TextBlock x:Name="CompactFableRateValue" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource Fable}" VerticalAlignment="Center" />

@@ -64,7 +64,11 @@ public static class FableDisplay
             // A completed Opus turn cannot veto a later Fable-only turn for another hour.
             // Preserve all raw model spans: provider union may have retained just one
             // model name from concurrent work. Unknown starts/ends stay conservative.
-            known=Merge(work.Where(s=>IsFable(s.Model)&&s.KnownStart&&s.Start<end)
+            // Use the same confirmed short handoffs as the rate timeline. Otherwise
+            // a three-second gap between two Fable turns leaves a tiny Claude stroke
+            // at a different height after the redundant total line is removed.
+            // Contrary model evidence below still vetoes sharing inside that handoff.
+            known=Merge(WorkActivity.Merge(work.Where(s=>IsFable(s.Model)&&s.KnownStart&&s.Start<end),WorkActivity.HandoffWindow)
                 .Select(s=>new ChartSpan(s.Start,s.KnownEnd&&s.End<end?s.End:end)));
             blocked=Merge(work.Where(s=>!IsFable(s.Model)&&s.Start<end)
                 .Select(s=>new ChartSpan(s.KnownStart?s.Start:start,s.KnownEnd&&s.End<end?s.End:end))

@@ -107,8 +107,6 @@ static class ChartInspectProbe
             var card=Card()!;
             Check(Field<string>(card,"Caption").Contains("未定位")&&Field<string>(card,"Caption").Contains("–"),"unknown activity presented as an instantaneous rate or timestamp");
             Check(Field<IEnumerable>(card,"Rows").Cast<object>().Select(r=>Field<string>(r,"Value")).Single()=="+1点","observed amount was erased, zeroed or hourly-extrapolated");
-            var panel=provider?1:0;
-            Check(((IEnumerable)typeof(RateChart).GetMethod("UnlocatedMarks",Private)!.Invoke(chart,[panel])!).Cast<object>().Count()==1,"unknown observation has no inspectable mark");
             var trend=provider?unlocatedView.CodexTrend!:unlocatedView.TotalTrend;
             Check(trend.ValueAt(now.AddMinutes(-47)) is null&&trend.ValueAt(now.AddMinutes(-60))==0,"unknown observation smeared into idle");
         }

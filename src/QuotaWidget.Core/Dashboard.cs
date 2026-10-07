@@ -48,7 +48,7 @@ public static class Dashboard
             ? Loc.T("Fable 点数折合为 Claude 周额度（×0.5），已含在 Claude 中；顶部 Fable 圆环按自身额度。")
             : Loc.T("此套餐的 Fable 换算比例未确认，仍按 Fable 自身周额度计，不与 Claude 对齐或相加。"));
         details.Add(Loc.T("Codex 按自己的周额度计，不能与 Claude 相加。"));
-        details.Add(Loc.T("图底部的 +点数是未匹配本机任务的实测增长；计入累计，不推成速率，也不摊进空闲时间。"));
+        details.Add(Loc.T("未匹配本机任务的增长仍计入累计；悬停相应采样区间可查看点数，不推成速率，也不摊进空闲时间。"));
         details.Add(Loc.T("仅 Fable 时共用一个速率读数；混用时若分项估计超过 Claude 总速率，该段显示分项样本未对齐，不改写原始累计。"));
         details.Add(Loc.T("Claude/Fable 共用动态刻度；Codex 按自己的峰值独立缩放。上下图的高度/面积不能直接比较，需读各自刻度与累计。"));
         foreach (var (name, series) in totals)

@@ -1,5 +1,5 @@
 {
-  "图底部的 +点数是未匹配本机任务的实测增长；计入累计，不推成速率，也不摊进空闲时间。": "Bottom +points markers are observed increases without matching local work. They count toward totals, but do not invent a rate or spread into idle time.",
+  "未匹配本机任务的增长仍计入累计；悬停相应采样区间可查看点数，不推成速率，也不摊进空闲时间。": "Unlocated increases still count toward totals. Inspect the sampling interval to see the points; no rate is invented or spread into idle time.",
   "仅 Fable 时共用一个速率读数；混用时若分项估计超过 Claude 总速率，该段显示分项样本未对齐，不改写原始累计。": "Fable-only work shares one rate readout. In mixed work, a component estimate above the total is marked Samples unaligned; recorded totals stay unchanged.",
   "分项样本未对齐": "Samples unaligned",
   "+{0:0.#}点": "+{0:0.#} pts",

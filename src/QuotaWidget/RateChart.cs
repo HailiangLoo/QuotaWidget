@@ -104,12 +104,7 @@ public sealed class RateChart : FrameworkElement
     {
         if (_view is null || p.X < _left || p.X > PlotRight) return null;
         var lane = _lanes.FirstOrDefault(l => !Collapsed(l.Panel) && p.Y >= PlotTop(l.Panel) && p.Y <= PlotBottom(l.Panel));
-        if(lane is null)return null;
-        // The mark refers to a sample interval, not an instantaneous rate at zero.
-        var mark=UnlocatedMarks(lane.Panel).OrderBy(m=>Math.Abs(X(m.Sample.End)-p.X)).FirstOrDefault();
-        if(mark.Sample is not null&&p.Y>=PlotBottom(lane.Panel)-16&&Math.Abs(X(mark.Sample.End)-p.X)<=6)
-            return new(mark.Sample.Start+(mark.Sample.End-mark.Sample.Start)/2,lane.Name=="Codex");
-        return new(T(p.X),lane.Name=="Codex");
+        return lane is null ? null : new(T(p.X), lane.Name == "Codex");
     }
     void HoverAt(Point p) { _hover = InspectAt(p); Cursor=_hover is null?Cursors.Arrow:Cursors.Cross; InvalidateInspect(); }
     double X(DateTimeOffset t) => _left + (t - _displayStart).TotalSeconds / Math.Max(1, (_view!.End - _displayStart).TotalSeconds) * (PlotRight - _left);
@@ -317,7 +312,6 @@ public sealed class RateChart : FrameworkElement
             if (indices.All(j => !_lanes[j].Source.Segments.Any(s => s.Valid && s.Start >= v.Start && s.End <= v.End)))
                 Label(dc, Loc.T("等待连续采样"), muted, (_left + PlotRight) / 2, PlotTop(i) + 18, 11, TextAlignment.Center);
             else if (!cumulative) DrawPeaks(dc, i, indices, allPoints, Y, labelObstacles);
-            if(!cumulative)DrawUnlocated(dc,i,labelObstacles);
             DrawTimeAxis(dc,i);
         }
 
@@ -332,25 +326,6 @@ public sealed class RateChart : FrameworkElement
     }
 
     public double KernelMinutes => _lanes.SelectMany(l => l.Trend.Runs).Select(r => r.KernelMinutes).DefaultIfEmpty(60).Max();
-
-    IEnumerable<(Lane Lane,RateSegment Sample)> UnlocatedMarks(int panel)=>_view is {Smooth:true} v&&!CumulativePanel(panel)
-        ? _lanes.Where(l=>l.Panel==panel).SelectMany(l=>l.Trend.Unlocated.Where(s=>s.End>=_displayStart&&s.End<=v.End).Select(s=>(Lane:l,Sample:s)))
-            .GroupBy(m=>(m.Sample.Start,m.Sample.End)).Select(g=>g.OrderBy(m=>m.Lane.Name=="Claude"?0:1).First())
-        : [];
-
-    void DrawUnlocated(DrawingContext dc,int panel,List<Rect> occupied)
-    {
-        foreach(var mark in UnlocatedMarks(panel))
-        {
-            var x=X(mark.Sample.End);var y=PlotBottom(panel)-5;var color=Theme.Brush(mark.Lane.Color);
-            dc.DrawEllipse(Theme.Brush("Bg"),new Pen(color,1.4),new Point(x,y),2.7,2.7);
-            var label=Text(Loc.F($"+{mark.Sample.Delta:0.#}点"),color,10);
-            var box=new Rect(Math.Clamp(x-label.Width/2,_left+24,Math.Max(_left+24,PlotRight-label.Width-2)),y-label.Height-5,label.Width+4,label.Height+2);
-            if(occupied.Any(o=>o.IntersectsWith(box)))continue;
-            dc.DrawRectangle(Theme.Brush("Bg"),null,box);
-            dc.DrawText(label,new Point(box.Left+2,box.Top));occupied.Add(box);
-        }
-    }
 
     void DrawBoundaries(DrawingContext dc, int panel, int[] indices, ChartView view, List<Rect> obstacles)
     {

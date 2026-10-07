@@ -13,6 +13,21 @@ static class FableDisplayTests
         bool Contains(IReadOnlyList<ChartSpan> spans,int minute)=>spans.Any(s=>s.Start<=t.AddMinutes(minute)&&s.End>t.AddMinutes(minute));
         double Area(RateTrend trend)=>trend.Runs.Sum(r=>r.Points.Zip(r.Points.Skip(1),(a,b)=>(a.Rate+b.Rate)/2*(b.Time-a.Time).TotalHours).Sum());
 
+        Test("shared strokes use the same confirmed Fable handoffs without exposing tiny total islands",()=>
+        {
+            foreach(var seconds in new[]{3.152,10,10.001,60})
+            {
+                var next=t.AddMinutes(10).AddSeconds(seconds);var mid=t.AddMinutes(10).AddSeconds(seconds/2);
+                WorkSpan[] work=[new(t,t.AddMinutes(10),true,true,"fable"),new(next,t.AddMinutes(30),true,true,"fable")];
+                var spans=FableDisplay.Build(Series(),Series(),[Use(5,"fable"),Use(15,"fable")],t,t.AddMinutes(300),120,work:work);
+                Check(spans.Any(s=>s.Start<=mid&&s.End>mid)==(seconds<=10),"classification disagrees with the fixed rate handoff window");
+                var paths=FableDisplay.Omit([new[]{new TrendPoint(t,8),new TrendPoint(t.AddMinutes(30),8)}],spans);
+                Check((paths.Count==0)==(seconds<=10),"a short Fable handoff left a floating Claude island");
+                var other=new WorkSpan(t.AddMinutes(10),next,true,true,"opus");
+                var blocked=FableDisplay.Build(Series(),Series(),[Use(5,"fable"),Use(10,"opus"),Use(15,"fable")],t,t.AddMinutes(300),120,work:[..work,other]);
+                Check(!blocked.Any(s=>s.Start<=mid&&s.End>mid),"sharing erased a real intervening model");
+            }
+        });
         Test("confirmed Opus completion permits the next Fable turn without a smoothing-window delay",()=>
         {
             ModelActivity[] requests=[Use(24,"claude-opus-5-5"),Use(32,"claude-fable-5-1")];
