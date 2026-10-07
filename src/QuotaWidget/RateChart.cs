@@ -26,7 +26,24 @@ public sealed class RateChart : FrameworkElement
         public List<ChartPeak>? Peaks { get; set; }
     }
     int PanelCount => _lanes.Select(l => l.Panel).Distinct().Count();
-    double LaneHeight => PanelCount <= 1 ? 148 : 102;
+    double? _availableHeight;
+    double LaneHeight
+    {
+        get
+        {
+            var expanded=Enumerable.Range(0,PanelCount).Count(i=>!Collapsed(i));
+            return _availableHeight is {} h && expanded>0
+                ? Math.Max(70,(h-(PanelCount-expanded)*26-expanded*TimeAxisHeight)/expanded)
+                : PanelCount<=1?148:102;
+        }
+    }
+    public void FitHeight(double? height)
+    {
+        height=height is {} h&&double.IsFinite(h)?Math.Max(0,Math.Floor(h)):null;
+        if(_availableHeight==height)return;
+        _availableHeight=height;_axisTicks.Clear();UpdateHeight();InvalidateInspect();
+    }
+    void UpdateHeight() => Height=PanelCount==0?72:Enumerable.Range(0,PanelCount).Sum(PanelExtent);
     bool Collapsed(int i) => _lanes.First(l => l.Panel == i).Name == "Codex" ? _view?.CodexCollapsed == true : _view?.ClaudeCollapsed == true;
     double PanelHeight(int i) => Collapsed(i) ? 26 : LaneHeight;
     double PanelExtent(int i) => PanelHeight(i)+(Collapsed(i)?0:TimeAxisHeight);
@@ -83,7 +100,7 @@ public sealed class RateChart : FrameworkElement
             if (!ValidInspect(_hover)) _hover = null;
             Cursor = _hover is null ? Cursors.Arrow : Cursors.Cross;
             if (!ValidInspect(_pinned)) _pinned = null;
-            Height = PanelCount == 0 ? 72 : Enumerable.Range(0,PanelCount).Sum(PanelExtent);
+            UpdateHeight();
             InvalidateInspect();
         }
     }

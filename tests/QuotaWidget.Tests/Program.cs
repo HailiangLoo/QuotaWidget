@@ -971,16 +971,20 @@ Test("R2: profile changes replace histories and ignore legacy calibration settin
     True(!File.ReadAllText(paths.Settings).Contains("fableToWeekByProfile"), "obsolete calibration persisted");
 });
 
-Test("settings: proportional scale is backward compatible, bounded and persisted", () =>
+Test("settings: window dimensions and legacy scale are backward compatible, bounded and persisted", () =>
 {
     var path=Path.Combine(TempDir(),"settings.json");
     AtomicFile.WriteAllText(path,"""{"width":318,"compactMode":true}""");
     var settings=WidgetSettings.Load(path,out var warning);
     True(warning is null,"old settings rejected");Near(1,settings.UiScale);Near(318,settings.Width);
+    True(settings.Height is null && settings.CompactHeight is null,"old settings lost automatic height");Near(240,settings.CompactWidth);
+    settings.Width=420;settings.Height=600;settings.CompactWidth=270;settings.CompactHeight=180;
     settings.UiScale=1.35;settings.Save(path);
     var loaded=WidgetSettings.Load(path,out _);Near(1.35,loaded.UiScale);True(loaded.CompactMode,"resize lost compact preference");
+    Near(420,loaded.Width);Near(600,loaded.Height!.Value);Near(270,loaded.CompactWidth);Near(180,loaded.CompactHeight!.Value);
     foreach(var invalid in new[]{double.NaN,double.PositiveInfinity,double.NegativeInfinity})
-    {settings.UiScale=invalid;settings.Normalize();Near(1,settings.UiScale);}
+    {settings.UiScale=invalid;settings.Height=invalid;settings.CompactHeight=invalid;settings.CompactWidth=invalid;settings.Normalize();Near(1,settings.UiScale);Near(240,settings.CompactWidth);True(settings.Height is null&&settings.CompactHeight is null,"invalid height accepted");}
+    settings.Height=1;settings.CompactHeight=9999;settings.Normalize();Near(80,settings.Height!.Value);Near(2400,settings.CompactHeight!.Value);
     settings.UiScale=.1;settings.Normalize();Near(.8,settings.UiScale);
     settings.UiScale=9;settings.Normalize();Near(2,settings.UiScale);
 });

@@ -17,6 +17,8 @@ static class NativePlacement
     public static void Move(IntPtr hwnd, int x, int y) => SetWindowPos(hwnd, IntPtr.Zero, x, y, 0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
 
     public static (int X, int Y)? Position(IntPtr hwnd) => GetWindowRect(hwnd, out var r) ? (r.Left, r.Top) : null;
+    public static System.Windows.Rect? Bounds(IntPtr hwnd) => GetWindowRect(hwnd, out var r)
+        ? new System.Windows.Rect(r.Left, r.Top, r.Right-r.Left, r.Bottom-r.Top) : null;
 
     /// <summary>After expanding the small card, keep the window reachable on its current monitor.</summary>
     public static void FitToWorkArea(IntPtr hwnd)

@@ -49,6 +49,10 @@ public sealed class WidgetSettings
     public bool CodexChartCollapsed { get; set; }
 
     public double Width { get; set; } = 300;
+    public double? Height { get; set; }
+    public double CompactWidth { get; set; } = 240;
+    public double? CompactHeight { get; set; }
+    public const double MinWidth = 240, MaxWidth = 1200, MinHeight = 80, MaxHeight = 2400;
     public const double MinUiScale = .8, MaxUiScale = 2;
     public double UiScale { get; set; } = 1;
     public bool Topmost { get; set; } = true;
@@ -109,7 +113,10 @@ public sealed class WidgetSettings
         if (ClaudeChartMode is not ("rate" or "cumulative")) ClaudeChartMode = ChartMode;
         if (CodexChartMode is not ("rate" or "cumulative")) CodexChartMode = ChartMode;
         if (TrendMinutes is not (60 or 90 or 120 or 150)) TrendMinutes = 120;
-        if (!double.IsFinite(Width) || Width < 240 || Width > 340) Width = 300;
+        if (!double.IsFinite(Width) || Width < MinWidth || Width > MaxWidth) Width = 300;
+        if (!double.IsFinite(CompactWidth) || CompactWidth < MinWidth || CompactWidth > MaxWidth) CompactWidth = 240;
+        static double? NormalizeHeight(double? height) => height is not {} h || !double.IsFinite(h) || h <= 0 ? null : Math.Clamp(h, MinHeight, MaxHeight);
+        Height = NormalizeHeight(Height); CompactHeight = NormalizeHeight(CompactHeight);
         UiScale = double.IsFinite(UiScale) ? Math.Clamp(UiScale, MinUiScale, MaxUiScale) : 1;
         if (string.IsNullOrWhiteSpace(FableModelName)) FableModelName = "Fable";
     }

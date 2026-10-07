@@ -8,6 +8,29 @@
         FontFamily="{StaticResource UiFont}" FontSize="13" Foreground="{DynamicResource Ink}"
         TextOptions.TextFormattingMode="Ideal">
   <Grid x:Name="WindowSurface" Margin="12">
+    <Grid.Resources>
+      <Style TargetType="ScrollBar">
+              <Setter Property="Width" Value="8" />
+              <Setter Property="Template">
+                <Setter.Value>
+                  <ControlTemplate TargetType="ScrollBar">
+                    <Track x:Name="PART_Track" Orientation="Vertical" IsDirectionReversed="True" Minimum="{TemplateBinding Minimum}" Maximum="{TemplateBinding Maximum}" Value="{TemplateBinding Value}" ViewportSize="{TemplateBinding ViewportSize}">
+                      <Track.DecreaseRepeatButton><RepeatButton Command="ScrollBar.PageUpCommand"><RepeatButton.Template><ControlTemplate TargetType="RepeatButton"><Border Background="Transparent"/></ControlTemplate></RepeatButton.Template></RepeatButton></Track.DecreaseRepeatButton>
+                      <Track.Thumb><Thumb><Thumb.Template><ControlTemplate TargetType="Thumb"><Border Margin="2,3" CornerRadius="2" Background="{DynamicResource Muted}" Opacity="0.45"/></ControlTemplate></Thumb.Template></Thumb></Track.Thumb>
+                      <Track.IncreaseRepeatButton><RepeatButton Command="ScrollBar.PageDownCommand"><RepeatButton.Template><ControlTemplate TargetType="RepeatButton"><Border Background="Transparent"/></ControlTemplate></RepeatButton.Template></RepeatButton></Track.IncreaseRepeatButton>
+                    </Track>
+                  </ControlTemplate>
+                </Setter.Value>
+              </Setter>
+            </Style>
+      <Style x:Key="ResizeEdge" TargetType="Thumb">
+        <Setter Property="Focusable" Value="False" />
+        <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Thumb"><Border Background="#01000000" /></ControlTemplate></Setter.Value></Setter>
+        <EventSetter Event="DragStarted" Handler="ResizeGrip_DragStarted" />
+        <EventSetter Event="DragDelta" Handler="ResizeGrip_DragDelta" />
+        <EventSetter Event="DragCompleted" Handler="ResizeGrip_DragCompleted" />
+      </Style>
+    </Grid.Resources>
   <Grid x:Name="Outer" Width="300" HorizontalAlignment="Left" VerticalAlignment="Top">
     <Grid.LayoutTransform><ScaleTransform x:Name="WidgetScale" /></Grid.LayoutTransform>
     <!-- Shadow sits on its own layer so the effect never softens the text. -->
@@ -18,7 +41,8 @@
     </Border>
     <Border x:Name="Frame" CornerRadius="12" Background="{DynamicResource Bg}" BorderBrush="{DynamicResource Line}" BorderThickness="1"
             Typography.NumeralAlignment="Tabular">
-      <StackPanel>
+      <Grid>
+        <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
         <!-- Title: drag handle -->
         <Border x:Name="TitleBar" Background="Transparent" BorderBrush="{DynamicResource Line}" BorderThickness="0,0,0,1" Padding="9,3">
           <DockPanel LastChildFill="True">
@@ -75,6 +99,8 @@
           </DockPanel>
         </Border>
 
+        <ScrollViewer x:Name="BodyViewport" Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" PanningMode="VerticalOnly">
+        <StackPanel x:Name="BodyContent">
         <!-- One-line note, only when something needs saying -->
         <Border x:Name="NoteBar" Background="{DynamicResource Raised}" Padding="12,6" Visibility="Collapsed" MouseLeftButtonUp="NoteBar_MouseLeftButtonUp">
           <TextBlock x:Name="NoteText" FontSize="11" Foreground="{DynamicResource Muted}" TextTrimming="CharacterEllipsis" />
@@ -279,23 +305,6 @@
 
         <!-- Settings -->
         <StackPanel x:Name="SettingsPanel" Visibility="Collapsed">
-          <ScrollViewer MaxHeight="560" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
-          <ScrollViewer.Resources>
-            <Style TargetType="ScrollBar">
-              <Setter Property="Width" Value="8" />
-              <Setter Property="Template">
-                <Setter.Value>
-                  <ControlTemplate TargetType="ScrollBar">
-                    <Track x:Name="PART_Track" Orientation="Vertical" IsDirectionReversed="True" Minimum="{TemplateBinding Minimum}" Maximum="{TemplateBinding Maximum}" Value="{TemplateBinding Value}" ViewportSize="{TemplateBinding ViewportSize}">
-                      <Track.DecreaseRepeatButton><RepeatButton Command="ScrollBar.PageUpCommand"><RepeatButton.Template><ControlTemplate TargetType="RepeatButton"><Border Background="Transparent"/></ControlTemplate></RepeatButton.Template></RepeatButton></Track.DecreaseRepeatButton>
-                      <Track.Thumb><Thumb><Thumb.Template><ControlTemplate TargetType="Thumb"><Border Margin="2,3" CornerRadius="2" Background="{DynamicResource Muted}" Opacity="0.45"/></ControlTemplate></Thumb.Template></Thumb></Track.Thumb>
-                      <Track.IncreaseRepeatButton><RepeatButton Command="ScrollBar.PageDownCommand"><RepeatButton.Template><ControlTemplate TargetType="RepeatButton"><Border Background="Transparent"/></ControlTemplate></RepeatButton.Template></RepeatButton></Track.IncreaseRepeatButton>
-                    </Track>
-                  </ControlTemplate>
-                </Setter.Value>
-              </Setter>
-            </Style>
-          </ScrollViewer.Resources>
           <StackPanel Margin="14">
           <TextBlock x:Name="SettingsTitle" local:Translate.Text="显示设置" FontSize="14" FontWeight="Medium" Margin="0,0,0,2" />
           <TextBlock x:Name="SetupIntro" local:Translate.Text="先选择要连接的平台并登录，再开始监听。开始前不会采集额度或读取 chat 日志；之后切换显示不会断开连接。" FontSize="11" TextWrapping="Wrap" Foreground="{DynamicResource Muted}" Margin="0,6,0,0" Visibility="Collapsed" />
@@ -394,22 +403,21 @@
             <Button x:Name="LicensesButton" Style="{StaticResource FlatButton}" local:Translate.Content="开源许可" Click="LicensesButton_Click" />
           </UniformGrid>
           </StackPanel>
-          </ScrollViewer>
         </StackPanel>
-      </StackPanel>
+        </StackPanel>
+        </ScrollViewer>
+      </Grid>
     </Border>
     <local:ChartInspectOverlay x:Name="ChartInspection" />
   </Grid>
-    <!-- Keep the grip outside the transform: pointer deltas stay in window DIPs. -->
-    <Thumb x:Name="ScaleGrip" HorizontalAlignment="Right" VerticalAlignment="Bottom" Width="14" Height="14" Margin="0,0,-11,-11" Cursor="SizeNWSE"
-           local:Translate.ToolTip="拖动等比例缩放" local:Translate.Name="缩放挂件"
-           DragStarted="ScaleGrip_DragStarted" DragDelta="ScaleGrip_DragDelta" DragCompleted="ScaleGrip_DragCompleted">
-      <Thumb.Template>
-        <ControlTemplate TargetType="Thumb">
-          <!-- Nonzero alpha keeps the layered window hit-testable outside the frame. -->
-          <Border Background="#01000000"><Path Data="M3,10 L10,3 M7,10 L10,7" Stroke="{DynamicResource Muted}" StrokeThickness="1" Opacity="0.65" Margin="0,0,2,2" /></Border>
-        </ControlTemplate>
-      </Thumb.Template>
-    </Thumb>
+    <!-- Invisible hit areas sit mostly in the shadow margin, clear of content. -->
+    <Thumb x:Name="LeftGrip" Style="{StaticResource ResizeEdge}" Tag="L" Width="6" HorizontalAlignment="Left" Margin="-3,3,0,3" Cursor="SizeWE" local:Translate.ToolTip="拖动调整宽度" local:Translate.Name="拖动调整宽度" />
+    <Thumb x:Name="RightGrip" Style="{StaticResource ResizeEdge}" Tag="R" Width="6" HorizontalAlignment="Right" Margin="0,3,-3,3" Cursor="SizeWE" local:Translate.ToolTip="拖动调整宽度" local:Translate.Name="拖动调整宽度" />
+    <Thumb x:Name="TopGrip" Style="{StaticResource ResizeEdge}" Tag="T" Height="6" VerticalAlignment="Top" Margin="3,-3,3,0" Cursor="SizeNS" local:Translate.ToolTip="拖动调整高度" local:Translate.Name="拖动调整高度" />
+    <Thumb x:Name="BottomGrip" Style="{StaticResource ResizeEdge}" Tag="B" Height="6" VerticalAlignment="Bottom" Margin="3,0,3,-3" Cursor="SizeNS" local:Translate.ToolTip="拖动调整高度" local:Translate.Name="拖动调整高度" />
+    <Thumb x:Name="TopLeftGrip" Style="{StaticResource ResizeEdge}" Tag="LT" Width="14" Height="14" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="-11,-11,0,0" Cursor="SizeNWSE" local:Translate.ToolTip="拖动调整窗口大小" local:Translate.Name="拖动调整窗口大小" />
+    <Thumb x:Name="TopRightGrip" Style="{StaticResource ResizeEdge}" Tag="RT" Width="14" Height="14" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,-11,-11,0" Cursor="SizeNESW" local:Translate.ToolTip="拖动调整窗口大小" local:Translate.Name="拖动调整窗口大小" />
+    <Thumb x:Name="BottomLeftGrip" Style="{StaticResource ResizeEdge}" Tag="LB" Width="14" Height="14" HorizontalAlignment="Left" VerticalAlignment="Bottom" Margin="-11,0,0,-11" Cursor="SizeNESW" local:Translate.ToolTip="拖动调整窗口大小" local:Translate.Name="拖动调整窗口大小" />
+    <Thumb x:Name="BottomRightGrip" Style="{StaticResource ResizeEdge}" Tag="RB" Width="14" Height="14" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,-11,-11" Cursor="SizeNWSE" local:Translate.ToolTip="拖动调整窗口大小" local:Translate.Name="拖动调整窗口大小" />
   </Grid>
 </Window>
