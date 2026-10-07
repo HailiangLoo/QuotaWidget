@@ -948,12 +948,13 @@ public partial class MainWindow : Window
             var backdrop = new SolidColorBrush(Theme.IsDark ? Color.FromRgb(0x18, 0x18, 0x18) : Color.FromRgb(0xee, 0xef, 0xf1));
             dc.DrawRectangle(backdrop, null, new Rect(0, 0, w, h));
             // Absolute viewbox: the shadow's overflow must not shift the content.
-            var m = root.Margin;
             dc.DrawRectangle(new VisualBrush(root)
             {
                 Stretch = Stretch.Fill,
                 ViewboxUnits = BrushMappingMode.Absolute,
-                Viewbox = new Rect(-m.Left, -m.Top, w, h),
+                // The arranged visual already includes its margin offset. Applying
+                // it again shifts the frame right/down and crops the opposite edges.
+                Viewbox = new Rect(0, 0, w, h),
             }, null, new Rect(0, 0, w, h));
         }
         var rtb = new RenderTargetBitmap((int)Math.Ceiling(w * scale), (int)Math.Ceiling(h * scale), 96 * scale, 96 * scale, PixelFormats.Pbgra32);

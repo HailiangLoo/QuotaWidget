@@ -39,7 +39,7 @@ A small Windows desktop widget for Claude and Codex quota, usage trends, and loc
 
 ### 本机用量明细
 
-悬停在平台的 token 行或用量标题上，再点击卡片即可固定。Claude 和 Codex 各有一个可拖动的明细窗口，展示 IN 未缓存输入、CACHE 缓存命中、OUT 输出，并同时按模型和 chat / 模型分组。确认归属的 subagent 用量计入父 chat。初始范围沿用完整视图，精简模式默认 1h；明细中可独立选择 **1h / 5h / 12h / 24h / 3d / all**。主窗口和固定明细都可拖动内容区域，按钮和滚动保留原操作。
+悬停在平台的 token 行或用量标题上，再点击卡片即可固定。Claude 和 Codex 各有一个可拖动的明细窗口，展示 IN 未缓存输入、CACHE 缓存命中、OUT 输出，并同时按模型和 chat / 模型分组。有项目信息时，chat 名称后会以较小、较淡的文字显示项目名。确认归属的 subagent 用量计入父 chat。初始范围沿用完整视图，精简模式默认 1h；明细中可独立选择 **1h / 5h / 12h / 24h / 3d / all**。主窗口和固定明细都可拖动内容区域，按钮和滚动保留原操作。
 
 **估算点数**按实际观测的周额度总量、模型及 IN / CACHE / OUT 用量分摊。只有历史校准、独立时段验证和权重稳定性检查通过时才显示；样本不足或冲突时显示横线。这依赖“相关消耗已被本机日志覆盖”的假设，是估算，不是官方账单。
 
@@ -61,7 +61,7 @@ token 列保留本机原始统计，估算列不改写原始记录。上图的�
 
 ## 开始使用
 
-1. 在 [Releases](https://github.com/HailiangLoo/QuotaWidget/releases/latest) 下载 `QuotaWidget-v0.13.5-win-x64.zip`，解压到自己的文件夹。
+1. 在 [Releases](https://github.com/HailiangLoo/QuotaWidget/releases/latest) 下载 `QuotaWidget-v0.13.9-win-x64.zip`，解压到自己的文件夹。
 2. 双击 `QuotaWidget.exe`，或者 `启动小挂件.cmd`。发布包包含 .NET 运行时，无需另外安装。
 3. 首次启动先选择监听平台、完成官方登录，再点“开始监听”。开始前不采集额度或读取 chat 日志。精简模式也保留齿轮设置入口。
 4. 设置显示各平台的当前状态，并提供登录/安装、检查连接和断开按钮。断开只停止挂件监听，不退出官方应用的账号，也不删除历史。
