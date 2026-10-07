@@ -420,7 +420,7 @@ public sealed class ChatCacheMonitor(string codexHome, string claudeHome)
     void Discover(DateTimeOffset now,bool claude,bool codex)
     {
         Warning = null;
-        if(codex) _projects.Refresh();
+        if(claude||codex) _projects.Refresh(); // Path labels also serve Claude-only monitoring.
         var candidates = new List<(string Path, ChatPlatform Platform, DateTime Write)>();
         foreach (var (root, platform) in new[] { (Path.Combine(codexHome, "sessions"), ChatPlatform.Codex), (Path.Combine(claudeHome, "projects"), ChatPlatform.Claude) })
         {

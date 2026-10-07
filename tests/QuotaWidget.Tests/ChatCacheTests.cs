@@ -225,6 +225,71 @@ static class ChatCacheTests
             var claude = new ChatCacheState(ChatPlatform.Claude, "a"); claude.Read("{\"type\":\"custom-title\",\"customTitle\":\"Name\",\"cwd\":\"D:/repo\"}");
             Check(claude.WorkingDirectory == "D:/repo", "Claude cwd missing");
         });
+        Test("cache: shared project roots never assign a chat by configuration order", () =>
+        {
+            var root=Temp();
+            try
+            {
+                var projects=new ChatProjects(root);
+                var desktop="\"desktop\":{\"name\":\"Desktop project\",\"rootPaths\":[\"D:/Desktop\"]}";
+                var other="\"other\":{\"name\":\"Other project\",\"rootPaths\":[\"D:/other\",\"d:\\\\desktop\\\\\"]}";
+                foreach(var order in new[]{desktop+","+other,other+","+desktop})
+                {
+                    var path=Path.Combine(root,".codex-global-state.json");
+                    File.WriteAllText(path,"{\"local-projects\":{"+order+"},\"electron-workspace-root-labels\":{\"D:/Desktop/tools\":\"Tools\"},\"thread-project-assignments\":{\"assigned\":{\"projectKind\":\"local\",\"projectId\":\"other\"}}}");
+                    File.SetLastWriteTimeUtc(path,order.StartsWith(desktop)?T.UtcDateTime:T.AddSeconds(1).UtcDateTime);
+                    projects.Refresh();
+                    Check(projects.Name(ChatPlatform.Claude,"unassigned","D:/Desktop/repo/src")=="Desktop","shared root chose a project or a changing subdirectory");
+                    Check(projects.Name(ChatPlatform.Codex,"unassigned","D:/Desktop")=="Desktop","unassigned Codex chat inherited another chat's project");
+                    Check(projects.Name(ChatPlatform.Codex,"assigned","D:/Desktop")=="Other project","explicit assignment lost");
+                    Check(projects.Name(ChatPlatform.Claude,"assigned","D:/Desktop")=="Desktop","Codex assignment leaked across platforms");
+                    Check(projects.Name(ChatPlatform.Claude,"unassigned","D:/other/sub")=="Other project","unique root lost");
+                    Check(projects.Name(ChatPlatform.Claude,"unassigned","D:/Desktop/tools/sub")=="Tools","more specific explicit label lost");
+                }
+            }
+            finally { Directory.Delete(root,true); }
+        });
+        Test("cache: project refresh discards stale or partially parsed assignments", () =>
+        {
+            var root=Temp();
+            try
+            {
+                var path=Path.Combine(root,".codex-global-state.json");var projects=new ChatProjects(root);
+                void Write(string json) {File.WriteAllText(path,json);projects.Refresh();}
+                Write("""{"local-projects":{"a":{"name":"Alias","rootPaths":["D:/Desktop"]}}}""");
+                Check(projects.Name(ChatPlatform.Claude,"chat","D:/Desktop")=="Alias","initial mapping missing");
+                Write("{torn");
+                Check(projects.Name(ChatPlatform.Claude,"chat","D:/Desktop")=="Desktop","invalid file retained stale mapping");
+                Write("""{"local-projects":{"a":{"name":"New alias","rootPaths":["D:/Desktop"]}}}""");
+                Check(projects.Name(ChatPlatform.Claude,"chat","D:/Desktop")=="New alias","corrected file not reloaded");
+                File.Delete(path);projects.Refresh();
+                Check(projects.Name(ChatPlatform.Claude,"chat","D:/Desktop")=="Desktop","removed config retained stale mapping");
+            }
+            finally { Directory.Delete(root,true); }
+        });
+        Test("cache: Claude-only refresh corrects retained project metadata without changing activity", () =>
+        {
+            var root=Temp();
+            try
+            {
+                var claude=Path.Combine(root,"claude");Directory.CreateDirectory(Path.Combine(claude,"projects"));
+                var path=Path.Combine(claude,"projects",Guid.NewGuid()+".jsonl");
+                File.WriteAllText(path,"""{"type":"custom-title","customTitle":"Fixture","cwd":"D:/Desktop/repo"}"""+"\n"+Claude(1,"r1")+"\n");
+                var state=Path.Combine(root,".codex-global-state.json");
+                File.WriteAllText(state,"""{"local-projects":{"a":{"name":"Alias","rootPaths":["D:/Desktop"]}}}""");
+                var monitor=new ChatCacheMonitor(root,claude);var now=T.AddMinutes(2);
+                var before=monitor.Poll(now,claude:true,codex:false).Single();
+                Check(before.Project=="Alias","Claude-only never loads path labels");
+                var data=Path.Combine(root,"data");var history=new ChatSessionHistory(data);history.Capture([before],now);history.Flush(now);
+                File.WriteAllText(state,"""{"local-projects":{"a":{"name":"Alias","rootPaths":["D:/Desktop"]},"b":{"name":"Other","rootPaths":["D:/Desktop"]}}}""");
+                var after=monitor.Poll(now.AddMinutes(1),claude:true,codex:false).Single();
+                Check(after.Project=="Desktop"&&after with{Project=before.Project}==before,"label refresh changed request or work state");
+                history.Capture([after],now.AddMinutes(1));history.Flush(now.AddMinutes(1));
+                var saved=new ChatSessionHistory(data).Current(now.AddMinutes(1))!.Chats.Single().Last;
+                Check(saved==after,"retained metadata kept the wrong project");
+            }
+            finally { Directory.Delete(root,true); }
+        });
         Test("cache: partial UTF8 lines, append-only reads, truncation, oversized lines", () =>
         {
             var root = Temp(); var path = Path.Combine(root, "tail.jsonl");
