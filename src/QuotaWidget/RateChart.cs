@@ -252,6 +252,31 @@ public sealed class RateChart : FrameworkElement
         return new(left,right,font,Math.Max(_left,modeX));
     }
 
+    IReadOnlyList<(double Value,FormattedText Text,Rect Bounds)> YAxisLabels(int panel,ChartScale scale)
+    {
+        var top=PlotTop(panel);var bottom=PlotBottom(panel);
+        // Keep the data scale fixed while resizing. Try fewer evenly spaced labels,
+        // measuring their actual font bounds (end labels sit INSIDE the plot).
+        foreach(var intervals in new[]{(int)Math.Round(scale.Top/scale.Step),2,1}.Distinct())
+        {
+            var labels=new List<(double Value,FormattedText Text,Rect Bounds)>();
+            var ticks=new ChartScale(scale.Top,scale.Top/intervals);
+            for(var i=0;i<=intervals;i++)
+            {
+                var value=i==intervals?scale.Top:i*ticks.Step;
+                var text=Text(ticks.Label(value),Theme.Brush("Axis"),11.5);
+                text.SetFontWeight(FontWeights.SemiBold);
+                var y=bottom-value/scale.Top*(bottom-top);
+                y=i==0?y-text.Height-1:i==intervals?y+1:y-text.Height/2;
+                labels.Add((value,text,new Rect(_left,y,text.Width+7,text.Height)));
+            }
+            if(labels.All(l=>l.Bounds.Top>=top&&l.Bounds.Bottom<=bottom)&&
+                labels.Zip(labels.Skip(1),(below,above)=>below.Bounds.Top-above.Bounds.Bottom>=3).All(fits=>fits))
+                return labels;
+        }
+        return [];
+    }
+
     protected override void OnRender(DrawingContext dc)
     {
         _inspectOverlay?.InvalidateVisual();
@@ -272,8 +297,6 @@ public sealed class RateChart : FrameworkElement
         {
             var labelObstacles = new List<Rect>();
             var scale = scales[i];
-            var (top, step) = (scale.Top, scale.Step);
-            string Tick(double n) => scale.Label(n);
             var indices = Enumerable.Range(0, _lanes.Count).Where(j => _lanes[j].Panel == i).ToArray();
             var cumulative=CumulativePanel(i);
             var drawn=indices.Where(j=>allPoints[j].Count>0).ToArray();
@@ -281,9 +304,10 @@ public sealed class RateChart : FrameworkElement
             Label(dc,header.Left,Theme.Brush(_lanes[indices[0]].Color),_left,PanelTop(i)+3,header.FontSize);
             Label(dc,header.Right,Theme.Brush(_lanes[indices[^1]].Color),PlotRight-23,PanelTop(i)+3,header.FontSize,TextAlignment.Right);
             if (Collapsed(i)) continue;
-            for (double tick = 0; tick <= top + step / 2; tick += step)
+            var axisLabels=YAxisLabels(i,scale);
+            foreach(var tick in axisLabels)
             {
-                var y = Y(i, tick);
+                var y = Y(i, tick.Value);
                 dc.DrawLine(new Pen(line, 0.6), new Point(_left, y), new Point(PlotRight, y));
             }
             dc.PushClip(new RectangleGeometry(new Rect(_left, PlotTop(i) - 2, PlotRight - _left, PlotBottom(i) - PlotTop(i) + 4)));
@@ -314,17 +338,13 @@ public sealed class RateChart : FrameworkElement
             DrawBoundaries(dc, i, indices, v, labelObstacles);
             // Put ticks inside the plot: the data reaches both edges of the narrow widget.
             // A small background keeps the labels legible if a curve crosses them.
-            for (double tick = 0; tick <= top + step / 2; tick += step)
+            foreach(var tick in axisLabels)
             {
-                if (top / step > 3.5 && (int)Math.Round(tick / step) % 2 != 0) continue;
-                var label = Text(Tick(tick), Theme.Brush("Axis"), 11.5);
-                label.SetFontWeight(FontWeights.SemiBold);
-                var labelY = tick == 0 ? Y(i, tick) - label.Height - 1 : tick >= top ? Y(i, tick) + 1 : Y(i, tick) - label.Height / 2;
-                labelObstacles.Add(new Rect(_left, labelY, label.Width + 7, label.Height));
+                labelObstacles.Add(tick.Bounds);
                 dc.PushOpacity(0.88);
-                dc.DrawRectangle(Theme.Brush("Bg"), null, new Rect(_left, labelY, label.Width + 7, label.Height));
+                dc.DrawRectangle(Theme.Brush("Bg"), null,tick.Bounds);
                 dc.Pop();
-                dc.DrawText(label, new Point(_left + 3, labelY));
+                dc.DrawText(tick.Text,new Point(_left+3,tick.Bounds.Top));
             }
             if (indices.All(j => !_lanes[j].Source.Segments.Any(s => s.Valid && s.Start >= v.Start && s.End <= v.End)))
                 Label(dc, Loc.T("等待连续采样"), muted, (_left + PlotRight) / 2, PlotTop(i) + 18, 11, TextAlignment.Center);
