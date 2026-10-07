@@ -170,6 +170,33 @@ static class ChartInspectProbe
         Separate(true);
         Check(Ticks(0).SequenceEqual(claudeTicks)&&!Ticks(1).SequenceEqual(codexTicks),"mode selection changed another provider's axis or reused rate landmarks for cumulative");
         Console.WriteLine("Axis snapping: shared time mapping, provider-local stages, cumulative/rate strategies isolated, and mode changes invalidate only the relevant landmark semantics.");
+        // Exercise both label consumers against a real sparse post-gap estimate.
+        SeriesData Restart(double amount)=>new(){Key=SeriesKey.Total,Segments=[
+            new(){Start=now.AddMinutes(-30),End=now.AddMinutes(-15),Issue=SegmentIssue.Gap},
+            new(){Start=now.AddMinutes(-15),End=now.AddMinutes(-10),Delta=amount,Group=1},
+            new(){Start=now.AddMinutes(-10),End=now,Delta=0,Group=1}]};
+        foreach(var both in new[]{true,false})
+        {
+            var work=new[]{new WorkSpan(now.AddHours(-1),now,true,false,null)};
+            var startup=new ChartView{Start=now.AddHours(-1),End=now,Total=Restart(1),Fable=Restart(.5),Codex=Restart(1),
+                Gaps=[],Smooth=true,TotalVisible=both,FableVisible=both,FableToClaudeFactor=.5,Activity=new(work,work,work)};
+            Set(startup);
+            var startupLanes=((IEnumerable)typeof(RateChart).GetField("_lanes",Private)!.GetValue(chart)!).Cast<object>().ToArray();
+            var startupPaths=startupLanes.Select(l=>(List<IReadOnlyList<TrendPoint>>)typeof(RateChart).GetMethod("Points",BindingFlags.Static|BindingFlags.NonPublic)!.Invoke(null,[l,startup])!).ToList();
+            foreach(var panel in startupLanes.Select(l=>Field<int>(l,"Panel")).Distinct())
+            {
+                var ticks=(IReadOnlyList<AxisTick>)typeof(RateChart).GetMethod("AxisTicks",Private)!.Invoke(chart,[panel])!;
+                Check(ticks.All(t=>t.Kind!=AxisLandmarkKind.Peak),"startup average became a time-axis peak landmark");
+                var indices=Enumerable.Range(0,startupLanes.Length).Where(i=>Field<int>(startupLanes[i],"Panel")==panel).ToArray();
+                var drawing=new System.Windows.Media.DrawingGroup();
+                using(var dc=drawing.Open())typeof(RateChart).GetMethod("DrawPeaks",Private)!.Invoke(chart,
+                    [dc,panel,indices,startupPaths,new Func<int,double,double>((_,v)=>70-v*5),new List<Rect>()]);
+                Check(drawing.Children.Count==0,"startup average painted as a peak annotation");
+            }
+            chart.PinInspect(now.AddMinutes(-2),true);Verify(true,["Codex"]);
+            Check(Field<IEnumerable>(Card()!,"Rows").Cast<object>().Single() is {} row&&Field<string>(row,"Value")=="4.0","startup hover lost its one-decimal observed average");
+        }
+        Console.WriteLine("Gap recovery: sparse startup stays visible with one-decimal hover, without peak labels or peak axis ticks in both/single-provider layouts.");
         chart.View=null;Check(Card() is null,"release leaves overlay");
         Check(!overlay.IsHitTestVisible&&!overlay.Focusable,"overlay steals pointer or keyboard input");
         Console.WriteLine("Chart inspection: both graphs, single-provider/collapsed, rate/cumulative, edge positions, source-only values, no active-plot overlap, pinned-source identity, leave/clear/release and noninteractive overlay passed.");

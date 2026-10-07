@@ -17,21 +17,21 @@ public static class ActiveRateEstimator
         // source still owns cumulative points, coverage, reset labels and recent-hour facts.
         var continuity=TrendContinuity.Prepare(source,asOf,activity);
         source=continuity.Source;
-        var result=new RateTrend();var run=new List<RateSegment>();var afterReset=false;
+        var result=new RateTrend();var run=new List<RateSegment>();var afterBreak=false;
         foreach(var s in source.Segments)
         {
             if(s.End>asOf)break;
             if(!s.Valid||s.Minutes<=0||!double.IsFinite(s.Delta)||s.Delta<0)
             {
-                Flush(s.Issue==SegmentIssue.Reset);
-                afterReset=s.Issue==SegmentIssue.Reset;continue;
+                Flush(closedByReset:s.Issue==SegmentIssue.Reset,closedByBreak:true);
+                afterBreak=true;continue;
             }
-            if(run.Count>0&&(run[^1].End!=s.Start||run[^1].Group!=s.Group)){Flush();afterReset=false;}
+            if(run.Count>0&&(run[^1].End!=s.Start||run[^1].Group!=s.Group)){Flush(closedByBreak:true);afterBreak=true;}
             run.Add(s);
         }
         Flush();result.Runs.Sort((a,b)=>a.Points[0].Time.CompareTo(b.Points[0].Time));return result;
 
-        void Flush(bool closedByReset=false)
+        void Flush(bool closedByReset=false,bool closedByBreak=false)
         {
             if(run.Count==0)return;
             var origin=run[0].Start;var end=run[^1].End;
@@ -99,11 +99,15 @@ public static class ActiveRateEstimator
             // A reset closes the old counter: do not leave an unreported prediction
             // permanently appended to a completed accounting period. The reset interval
             // itself remains unknown and is never assigned to either side.
-            // At the new counter's start, fewer than three quanta cannot identify a
-            // local peak. Include its unchanged samples instead of scaling up the
-            // first jump's short interval and then inventing a separate decaying tail.
-            var warmingUp=afterReset&&jumps.Sum(j=>j.Delta)<3*Math.Max(.0001,quantum)-1e-8;
-            var observedThrough=closedByReset||warmingUp?activeMinutes:from;var idleSample=0;
+            // An observation break also closes the estimate of still-open work at
+            // the last valid sample. Settle its trailing zero increments instead of
+            // freezing a live prediction next to a now-historical gap. This does not
+            // settle a completed task whose reporting delay lacks an idle sample.
+            // After any break, fewer than three quanta cannot identify a local peak.
+            // Include unchanged readings rather than scale the first jump's short
+            // interval up and then append a separate decaying prediction.
+            var warmingUp=afterBreak&&jumps.Sum(j=>j.Delta)<3*Math.Max(.0001,quantum)-1e-8;
+            var observedThrough=closedByReset||(closedByBreak&&!spans[^1].HardEnd)||warmingUp?activeMinutes:from;var idleSample=0;
             for(var i=0;i<spans.Count;i++)
             {
                 var span=spans[i];if(!span.HardEnd||span.V<=observedThrough)continue;
@@ -115,7 +119,7 @@ public static class ActiveRateEstimator
             // minute cost nothing. Smooth this final interval with the preceding bins;
             // its area is redistributed from the observed total, never added to it.
             if(observedThrough>from+1e-8)bins.Add(new(){Start=clock.AddMinutes(from),End=clock.AddMinutes(observedThrough),Delta=0});
-            if(afterReset)bins=PoolResetStart(bins,quantum);
+            if(afterBreak)bins=PoolStart(bins,quantum);
             var confirmed=RateTrend.Build(new(){Key=source.Key,Segments=bins},clock,clock.AddMinutes(observedThrough),adaptive);
             var points=confirmed.Runs.Single().Points;
             Map(points,0,observedThrough,false,confirmed.Runs.Single().KernelMinutes);
@@ -166,7 +170,7 @@ public static class ActiveRateEstimator
                     var mapped=cut.Select(p=>new TrendPoint(span.Start.AddMinutes((p.Time-clock).TotalMinutes-span.U),p.Rate)).ToArray();
                     if(left==span.U)mapped[0]=mapped[0] with{Time=span.Start};
                     if(right==span.V)mapped[^1]=mapped[^1] with{Time=span.End};
-                    result.Runs.Add(new(mapped,Area(mapped),kernel,span.HardStart&&left==span.U,span.HardEnd&&right==span.V,provisional));
+                    result.Runs.Add(new(mapped,Area(mapped),kernel,span.HardStart&&left==span.U,span.HardEnd&&right==span.V,provisional,warmingUp));
                 }
             }
             void Fallback()
@@ -178,17 +182,20 @@ public static class ActiveRateEstimator
                 var limits=new[]{origin}.Concat(inner).Append(end).ToArray();
                 var consumed=limits.Zip(limits.Skip(1),(a,b)=>run.Any(s=>s.Delta>0&&s.End>a&&s.Start<b)).ToArray();
                 var supported=cuts.Where(t=>t==origin||t==end||!consumed[Array.BinarySearch(inner,t)]||!consumed[Array.BinarySearch(inner,t)+1]).ToArray();
-                var estimate=RateTrend.Build(new(){Key=source.Key,Segments=afterReset?PoolResetStart(run,quantum):run.ToList()},origin,end,maxWindowMinutes,supported);
-                result.Runs.AddRange(estimate.Runs);run.Clear();
+                var estimate=RateTrend.Build(new(){Key=source.Key,Segments=afterBreak?PoolStart(run,quantum):run.ToList()},origin,end,maxWindowMinutes,supported);
+                var limited=afterBreak&&run.Sum(s=>s.Delta)<3*Math.Max(.0001,quantum)-1e-8;
+                result.Runs.AddRange(estimate.Runs.Select(r=>r with{LimitedSupport=limited}));run.Clear();
             }
             void Zero(DateTimeOffset a,DateTimeOffset b)=>result.Runs.Add(new([new(a,0),new(b,0)],0,0));
         }
     }
-    // The first new-period jump has an unknown integer-counter phase. Pool it with
+    // The first jump after a break has an unknown integer-counter phase. Pool it with
     // the next two quanta before estimating shape. If that much evidence has not
     // arrived, use the whole observed prefix, including zero increments. This affects
-    // only the new period; no rates or quota are borrowed across the reset boundary.
-    static List<RateSegment> PoolResetStart(IReadOnlyList<RateSegment> bins,double quantum)
+    // only the new context; no rates or quota are borrowed across the missing interval.
+    // Keep the prefix pooled after more readings arrive, so its initial short jump
+    // cannot reappear as a historical peak.
+    static List<RateSegment> PoolStart(IReadOnlyList<RateSegment> bins,double quantum)
     {
         var count=0;double delta=0;
         while(count<bins.Count&&delta<3*Math.Max(.0001,quantum)-1e-8)delta+=bins[count++].Delta;

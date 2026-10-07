@@ -185,7 +185,7 @@ public sealed class RateChart : FrameworkElement
             var edges=lane.Trend.Runs.Where(r=>r.Points.Any(p=>p.Rate>0)).SelectMany(r=>
                 (r.HardStart?new[]{r.Points[0].Time}:[]).Concat(r.HardEnd?new[]{r.Points[^1].Time}:[]))
                 .Where(t=>!(lane.Name=="Claude"&&view.FableOnlyAt(t)));
-            var peaks=(lane.Peaks??=PeakLabels.Find(Points(lane,view))).Where(p=>!lane.Trend.IsProvisional(p.Time));
+            var peaks=(lane.Peaks??=PeakLabels.Find(Points(lane,view))).Where(p=>lane.Trend.CanLabelPeak(p.Time));
             landmarks.AddRange(TimeAxis.RateLandmarks(edges,peaks));
         }
         double Measure(DateTimeOffset time){var text=AxisText(time);return Math.Max(text.Main.Width,text.Date?.Width??0);}
@@ -371,7 +371,7 @@ public sealed class RateChart : FrameworkElement
         var curves = indices.SelectMany(j => allPoints[j]).Select(run =>
             run.Select(p => new Point(X(p.Time), y(panel, p.Rate))).ToArray()).ToArray();
         var candidates = indices.SelectMany(j => (_lanes[j].Peaks ??= PeakLabels.Find(allPoints[j]))
-            .Where(peak=>!_lanes[j].Trend.IsProvisional(peak.Time))
+            .Where(peak=>_lanes[j].Trend.CanLabelPeak(peak.Time))
             .Select((peak, rank) => (Lane: j, Peak: peak, Rank: rank))).OrderBy(c => c.Rank).ThenByDescending(c => c.Peak.Value);
         var shown = new Dictionary<int, List<double>>();
         var count = 0;

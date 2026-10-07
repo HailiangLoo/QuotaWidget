@@ -2,7 +2,7 @@ namespace QuotaWidget.Core;
 
 public sealed record TrendPoint(DateTimeOffset Time, double Rate);
 public sealed record TrendRun(IReadOnlyList<TrendPoint> Points, double Delta, double KernelMinutes,
-    bool HardStart = false, bool HardEnd = false, bool Provisional = false);
+    bool HardStart = false, bool HardEnd = false, bool Provisional = false, bool LimitedSupport = false);
 
 /// <summary>
 /// Retrospective display estimate, NOT a more precise server observation.
@@ -16,6 +16,10 @@ public sealed class RateTrend
     public List<TrendRun> Runs { get; } = [];
     public double Delta => Runs.Where(r=>!r.Provisional).Sum(r => r.Delta);
     public bool IsProvisional(DateTimeOffset time)=>Runs.Any(r=>r.Provisional&&time>=r.Points[0].Time&&time<=r.Points[^1].Time);
+    // A startup average conserves observed quota, but sparse readings cannot yet
+    // establish a local peak. Keep its curve and hover without promoting it to a label.
+    public bool CanLabelPeak(DateTimeOffset time)=>Runs.Any(r=>time>=r.Points[0].Time&&time<=r.Points[^1].Time)&&
+        !Runs.Any(r=>(r.Provisional||r.LimitedSupport)&&time>=r.Points[0].Time&&time<=r.Points[^1].Time);
 
     public static RateTrend Build(SeriesData source, DateTimeOffset start, DateTimeOffset end, double windowMinutes = 120,
         IReadOnlyList<DateTimeOffset>? boundaries = null, IReadOnlyList<WorkSpan>? activity = null)
