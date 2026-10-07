@@ -93,7 +93,21 @@ static class ActiveRateEstimatorTests
             var data=Data(S(0,5,1),S(5,20,0,SegmentIssue.Gap,1),S(20,25,2,group:1));
             var curve=ActiveRateEstimator.Build(data,t.AddMinutes(25),[new(t,t.AddMinutes(3),true,true,null)]);
             Near(3,curve.Delta);Check(curve.ValueAt(t.AddMinutes(12)) is null,"bridged gap");
-            Check(curve.ValueAt(t.AddMinutes(22))>0,"erased unexplained account consumption");
+            Check(curve.UnlocatedAt(t.AddMinutes(22))?.Delta==2&&curve.ValueAt(t.AddMinutes(22)) is null,"unexplained consumption was erased or invented a task rate");
+        });
+        Test("one unmatched counter jump cannot smear an idle night or erase supported task boundaries",()=>
+        {
+            SeriesData Source(double unmatched)=>Data(Enumerable.Range(0,108).Select(i=>S(i*5,(i+1)*5,i==1||i==99?1:i==10?unmatched:0)).ToArray());
+            WorkSpan[] work=[new(t,t.AddMinutes(20),true,true,"fable"),new(t.AddMinutes(480),t.AddMinutes(510),true,true,"fable")];
+            var reference=ActiveRateEstimator.Build(Source(0),t.AddMinutes(540),work);
+            var data=Source(1);var curve=ActiveRateEstimator.Build(data,t.AddMinutes(540),work);
+            Near(3,curve.Delta);Near(2,Area(curve.Runs.Where(r=>!r.Provisional)));Near(1,curve.Unlocated.Sum(s=>s.Delta));
+            Check(curve.Unlocated.Single().Start==t.AddMinutes(50)&&curve.Unlocated.Single().End==t.AddMinutes(55),"unmatched observation moved outside its sample");
+            Check(curve.ValueAt(t.AddMinutes(52)) is null,"unknown timing pretends to be an instantaneous rate");
+            foreach(var minute in new[]{25d,45,60,200,470,520})Near(0,curve.ValueAt(t.AddMinutes(minute))??0);
+            foreach(var minute in new[]{2d,12,481,490,509})Near(reference.ValueAt(t.AddMinutes(minute))??0,curve.ValueAt(t.AddMinutes(minute))??0);
+            Check(curve.Runs.Any(r=>r.HardEnd&&r.Points[^1].Time==t.AddMinutes(20)),"one unmatched reading removed a confirmed completion");
+            Check(data.Segments[10].Delta==1&&data.Segments.Sum(s=>s.Delta)==3,"raw ledger changed");
         });
         Test("pending tail is marked capped and excluded from confirmed quota",()=>
         {

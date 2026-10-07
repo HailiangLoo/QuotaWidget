@@ -56,7 +56,7 @@ public sealed class ChartView
     public List<GapRegion> CodexGaps { get; init; } = [];
     IReadOnlyList<ChartSpan> _fableOnlySpans=[];
     bool? _cumulativeFableCoverage;
-    public IReadOnlyList<ChartSpan> FableOnlySpans {get=>_fableOnlySpans;set{_fableOnlySpans=value;_cumulativeFableCoverage=null;}}
+    public IReadOnlyList<ChartSpan> FableOnlySpans {get=>_fableOnlySpans;set{_fableOnlySpans=value;_cumulativeFableCoverage=null;_fableRateConflicts=null;_displayFableTrend=null;}}
     public bool MergesFable => TotalVisible&&FableDrawable&&FableToClaudeFactor is not null&&FableOnlySpans.Count>0&&
         (!ClaudeCumulativeMode||(_cumulativeFableCoverage??=FableDisplay.CoversCumulativeRange(Total,Fable,FableOnlySpans,Start,End)));
     public bool FableOnlyAt(DateTimeOffset time)=>MergesFable&&FableOnlySpans.Any(s=>time>=s.Start&&time<s.End);
@@ -65,7 +65,7 @@ public sealed class ChartView
     // Keep its quota/summary and the user's visibility preference; reappear when usage occurs.
     public bool FableDrawable => FableVisible && (ClaudeCumulativeMode
         ? FableCumulative?.Segments.Any(s => s.To > 0) == true
-        : Smooth ? ChartPath.Clip(FableTrend.Runs.Select(r=>r.Points),Start,End).Any(p=>p.Any(t=>t.Rate>0))
+        : Smooth ? ChartPath.Clip(FableTrend.Runs.Select(r=>r.Points),Start,End).Any(p=>p.Any(t=>t.Rate>0))||FableTrend.Unlocated.Any(s=>s.End>Start&&s.Start<End)
         : Fable.Segments.Any(s => s.Valid && s.Delta > 0 && s.End > Start && s.Start < End));
     RateTrend? _totalTrend, _fableTrend, _codexTrend;
     public DateTimeOffset EstimationStart => Total.Segments.Concat(Fable.Segments).Concat(Codex?.Segments??[]).Select(s=>s.Start).DefaultIfEmpty(Start).Min();
@@ -73,10 +73,17 @@ public sealed class ChartView
     public QuotaAlignment Alignment => new(Total,Fable,0,0);
     public RateTrend TotalTrend => _totalTrend ??= Activity.ClaudeReady?ActiveRateEstimator.Build(Total,End,Activity.Claude,TrendMinutes,1,TrendBoundaries,ClaudeModelChanges):new();
     public RateTrend FableTrend => _fableTrend ??= Activity.ClaudeReady?ActiveRateEstimator.Build(Fable,End,Activity.Fable,TrendMinutes,FableToClaudeFactor??1,TrendBoundaries):new();
-    public RateTrend DisplayFableTrend => FableTrend;
+    IReadOnlyList<ChartSpan>? _fableRateConflicts;
+    RateTrend? _displayFableTrend;
+    public IReadOnlyList<ChartSpan> FableRateConflicts=>_fableRateConflicts??=FableToClaudeFactor is not null
+        ?FableDisplay.RateConflicts(TotalTrend,FableTrend,FableOnlySpans):[];
+    public bool FableRateConflictAt(DateTimeOffset t)=>Smooth&&!ClaudeCumulativeMode&&FableRateConflicts.Any(s=>t>=s.Start&&t<s.End);
+    public RateTrend DisplayFableTrend => _displayFableTrend??=FableDisplay.Omit(FableTrend,FableRateConflicts);
     public RateTrend? CodexTrend => Codex is null ? null : _codexTrend ??= Activity.CodexReady?ActiveRateEstimator.Build(Codex,End,Activity.Codex,TrendMinutes,1,TrendBoundaries):new();
-    public double? TotalAt(DateTimeOffset t) => ClaudeCumulativeMode ? TotalCumulative?.ValueAt(t) : Smooth ? TotalTrend.ValueAt(t) : Total.ValueAt(t, false);
-    public double? FableAt(DateTimeOffset t) => ClaudeCumulativeMode ? FableCumulative?.ValueAt(t) : Smooth ? DisplayFableTrend.ValueAt(t) : Fable.ValueAt(t, false);
+    // Sharing a rate stroke must share its readout too; neither changes the raw
+    // counters used for totals. Cumulative counters retain their observed values.
+    public double? TotalAt(DateTimeOffset t) => !ClaudeCumulativeMode&&FableOnlyAt(t) ? FableAt(t) : ClaudeCumulativeMode ? TotalCumulative?.ValueAt(t) : Smooth ? TotalTrend.ValueAt(t) : Total.ValueAt(t, false);
+    public double? FableAt(DateTimeOffset t) => FableRateConflictAt(t)?null:ClaudeCumulativeMode ? FableCumulative?.ValueAt(t) : Smooth ? DisplayFableTrend.ValueAt(t) : Fable.ValueAt(t, false);
     public double? CodexAt(DateTimeOffset t) => CodexCumulativeMode ? CodexCumulative?.ValueAt(t) : Smooth ? CodexTrend?.ValueAt(t) : Codex?.ValueAt(t, false);
 
     public GapRegion? GapAt(DateTimeOffset t)

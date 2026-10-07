@@ -14,7 +14,11 @@ public sealed record TrendRun(IReadOnlyList<TrendPoint> Points, double Delta, do
 public sealed class RateTrend
 {
     public List<TrendRun> Runs { get; } = [];
-    public double Delta => Runs.Where(r=>!r.Provisional).Sum(r => r.Delta);
+    // Real counter increments without matching local work remain observations,
+    // not invented task rates or a reason to discard all other lifecycle evidence.
+    public List<RateSegment> Unlocated { get; } = [];
+    public RateSegment? UnlocatedAt(DateTimeOffset time)=>Unlocated.LastOrDefault(s=>time>=s.Start&&time<s.End);
+    public double Delta => Runs.Where(r=>!r.Provisional).Sum(r => r.Delta)+Unlocated.Sum(s=>s.Delta);
     public bool IsProvisional(DateTimeOffset time)=>Runs.Any(r=>r.Provisional&&time>=r.Points[0].Time&&time<=r.Points[^1].Time);
     // A startup average conserves observed quota, but sparse readings cannot yet
     // establish a local peak. Keep its curve and hover without promoting it to a label.
@@ -111,6 +115,7 @@ public sealed class RateTrend
 
     public double? ValueAt(DateTimeOffset time)
     {
+        if(UnlocatedAt(time) is not null)return null;
         // At a hard boundary the right-hand segment owns the timestamp.
         foreach (var run in Runs.AsEnumerable().Reverse())
         {

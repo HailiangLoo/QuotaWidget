@@ -81,7 +81,8 @@ static class ChartInspectProbe
         Check(chart.Cursor==System.Windows.Input.Cursors.Arrow,"header shows plot crosshair");
         Set(View(fable:false));Hover(50,35);Verify(false,["Claude"]);
         var solo=View();solo.FableOnlySpans=[new(now.AddMinutes(-90),now.AddMinutes(-30))];Set(solo);
-        Hover(chart.ActualWidth/2,35);Verify(false,["Fable"]);
+        Hover(chart.ActualWidth/2,35);Verify(false,["Claude","Fable"]);
+        Check(Field<IEnumerable>(Card()!,"Rows").Cast<object>().Select(r=>Field<string>(r,"Value")).SequenceEqual(new[]{"1.0","1.0"}),"shared Fable rate was not retained in the Claude readout");
         var lanes=(IEnumerable)typeof(RateChart).GetField("_lanes",Private)!.GetValue(chart)!;
         var totalLane=lanes.Cast<object>().Single(l=>Field<string>(l,"Name")=="Claude");
         var paths=(List<IReadOnlyList<TrendPoint>>)typeof(RateChart).GetMethod("Points",BindingFlags.Static|BindingFlags.NonPublic)!.Invoke(null,[totalLane,solo])!;
@@ -94,6 +95,23 @@ static class ChartInspectProbe
         var cumulativePaths=(List<IReadOnlyList<TrendPoint>>)typeof(RateChart).GetMethod("Points",BindingFlags.Static|BindingFlags.NonPublic)!.Invoke(null,[cumulativeLane,cumulativeView])!;
         Check(cumulativePaths.Count==1&&cumulativePaths[0][0].Time==now.AddHours(-2)&&cumulativePaths[0][^1].Time==now,"partial Fable evidence cut cumulative Claude into fragments");
         Hover(chart.ActualWidth-40,10);Check(chart.Cursor==System.Windows.Input.Cursors.Arrow&&Card() is null,"Fable header retains crosshair/card");
+        var observedSource=new SeriesData{Key=SeriesKey.Total,Segments=Enumerable.Range(0,24).Select(i=>new RateSegment{
+            Start=now.AddMinutes(-120+i*5),End=now.AddMinutes(-115+i*5),Delta=i is 1 or 14?1:0}).ToList()};
+        WorkSpan[] recordedWork=[new(now.AddHours(-2),now.AddMinutes(-100),true,true,null)];
+        var unlocatedView=new ChartView{Start=now.AddHours(-2),End=now,Total=observedSource,Fable=Source(0),Codex=observedSource,Gaps=[],Smooth=true,
+            Activity=new(recordedWork,[],recordedWork)};
+        Set(unlocatedView);
+        foreach(var provider in new[]{false,true})
+        {
+            chart.PinInspect(now.AddMinutes(-47),provider);Verify(provider,provider?["Codex"]:["Claude"]);
+            var card=Card()!;
+            Check(Field<string>(card,"Caption").Contains("未定位")&&Field<string>(card,"Caption").Contains("–"),"unknown activity presented as an instantaneous rate or timestamp");
+            Check(Field<IEnumerable>(card,"Rows").Cast<object>().Select(r=>Field<string>(r,"Value")).Single()=="+1点","observed amount was erased, zeroed or hourly-extrapolated");
+            var panel=provider?1:0;
+            Check(((IEnumerable)typeof(RateChart).GetMethod("UnlocatedMarks",Private)!.Invoke(chart,[panel])!).Cast<object>().Count()==1,"unknown observation has no inspectable mark");
+            var trend=provider?unlocatedView.CodexTrend!:unlocatedView.TotalTrend;
+            Check(trend.ValueAt(now.AddMinutes(-47)) is null&&trend.ValueAt(now.AddMinutes(-60))==0,"unknown observation smeared into idle");
+        }
         var origin=now.AddHours(-12); var edge=origin.AddHours(3).AddMinutes(37).AddMilliseconds(408);
         SeriesData boundedSource = new() { Key=SeriesKey.Total, Segments=Enumerable.Range(0,144)
             .Select(i=>new RateSegment{Start=origin.AddMinutes(i*5),End=origin.AddMinutes((i+1)*5),Delta=i==48?1:0}).ToList() };

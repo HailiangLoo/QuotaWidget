@@ -104,7 +104,12 @@ public sealed class RateChart : FrameworkElement
     {
         if (_view is null || p.X < _left || p.X > PlotRight) return null;
         var lane = _lanes.FirstOrDefault(l => !Collapsed(l.Panel) && p.Y >= PlotTop(l.Panel) && p.Y <= PlotBottom(l.Panel));
-        return lane is null ? null : new(T(p.X), lane.Name == "Codex");
+        if(lane is null)return null;
+        // The mark refers to a sample interval, not an instantaneous rate at zero.
+        var mark=UnlocatedMarks(lane.Panel).OrderBy(m=>Math.Abs(X(m.Sample.End)-p.X)).FirstOrDefault();
+        if(mark.Sample is not null&&p.Y>=PlotBottom(lane.Panel)-16&&Math.Abs(X(mark.Sample.End)-p.X)<=6)
+            return new(mark.Sample.Start+(mark.Sample.End-mark.Sample.Start)/2,lane.Name=="Codex");
+        return new(T(p.X),lane.Name=="Codex");
     }
     void HoverAt(Point p) { _hover = InspectAt(p); Cursor=_hover is null?Cursors.Arrow:Cursors.Cross; InvalidateInspect(); }
     double X(DateTimeOffset t) => _left + (t - _displayStart).TotalSeconds / Math.Max(1, (_view!.End - _displayStart).TotalSeconds) * (PlotRight - _left);
@@ -312,6 +317,7 @@ public sealed class RateChart : FrameworkElement
             if (indices.All(j => !_lanes[j].Source.Segments.Any(s => s.Valid && s.Start >= v.Start && s.End <= v.End)))
                 Label(dc, Loc.T("等待连续采样"), muted, (_left + PlotRight) / 2, PlotTop(i) + 18, 11, TextAlignment.Center);
             else if (!cumulative) DrawPeaks(dc, i, indices, allPoints, Y, labelObstacles);
+            if(!cumulative)DrawUnlocated(dc,i,labelObstacles);
             DrawTimeAxis(dc,i);
         }
 
@@ -326,6 +332,25 @@ public sealed class RateChart : FrameworkElement
     }
 
     public double KernelMinutes => _lanes.SelectMany(l => l.Trend.Runs).Select(r => r.KernelMinutes).DefaultIfEmpty(60).Max();
+
+    IEnumerable<(Lane Lane,RateSegment Sample)> UnlocatedMarks(int panel)=>_view is {Smooth:true} v&&!CumulativePanel(panel)
+        ? _lanes.Where(l=>l.Panel==panel).SelectMany(l=>l.Trend.Unlocated.Where(s=>s.End>=_displayStart&&s.End<=v.End).Select(s=>(Lane:l,Sample:s)))
+            .GroupBy(m=>(m.Sample.Start,m.Sample.End)).Select(g=>g.OrderBy(m=>m.Lane.Name=="Claude"?0:1).First())
+        : [];
+
+    void DrawUnlocated(DrawingContext dc,int panel,List<Rect> occupied)
+    {
+        foreach(var mark in UnlocatedMarks(panel))
+        {
+            var x=X(mark.Sample.End);var y=PlotBottom(panel)-5;var color=Theme.Brush(mark.Lane.Color);
+            dc.DrawEllipse(Theme.Brush("Bg"),new Pen(color,1.4),new Point(x,y),2.7,2.7);
+            var label=Text(Loc.F($"+{mark.Sample.Delta:0.#}点"),color,10);
+            var box=new Rect(Math.Clamp(x-label.Width/2,_left+24,Math.Max(_left+24,PlotRight-label.Width-2)),y-label.Height-5,label.Width+4,label.Height+2);
+            if(occupied.Any(o=>o.IntersectsWith(box)))continue;
+            dc.DrawRectangle(Theme.Brush("Bg"),null,box);
+            dc.DrawText(label,new Point(box.Left+2,box.Top));occupied.Add(box);
+        }
+    }
 
     void DrawBoundaries(DrawingContext dc, int panel, int[] indices, ChartView view, List<Rect> obstacles)
     {
@@ -458,7 +483,7 @@ public sealed class RateChart : FrameworkElement
         return ChartPath.PositiveRuns(ChartPath.Clip(points,v.Start,v.End));
     }
 
-    double? InspectValue(Lane lane, ChartView view, DateTimeOffset time) => view.IsCumulative(lane.Name=="Codex") ? lane.Cumulative.ValueAt(time) : view.Smooth ? lane.Trend.ValueAt(time)
+    double? InspectValue(Lane lane, ChartView view, DateTimeOffset time) => lane.Name=="Fable"&&view.FableRateConflictAt(time)?null:!view.ClaudeCumulativeMode&&lane.Name=="Claude"&&view.FableOnlyAt(time) ? view.FableAt(time) : view.IsCumulative(lane.Name=="Codex") ? lane.Cumulative.ValueAt(time) : view.Smooth ? lane.Trend.ValueAt(time)
         : lane.Source.SegmentAt(time) is { Valid: true } s && s.Start >= view.Start && s.End <= view.End ? s.Rate : null;
 
     sealed record InspectRow(string Name, string Value, Brush Color);
@@ -470,16 +495,19 @@ public sealed class RateChart : FrameworkElement
         var time = inspect.Time;
         var cumulative=view.IsCumulative(inspect.Codex);
         var rows = new List<InspectRow>();
-        foreach (var lane in _lanes.Where(l => l.Panel == panel&&!(l.Name=="Claude"&&view.FableOnlyAt(time))))
+        var unlocatedSample=!cumulative&&view.Smooth?_lanes.Where(l=>l.Panel==panel).Select(l=>l.Trend.UnlocatedAt(time)).FirstOrDefault(s=>s is not null):null;
+        var unlocated=unlocatedSample is not null;
+        foreach (var lane in _lanes.Where(l => l.Panel == panel))
         {
             var color = Theme.Brush(lane.Color);
             var value = InspectValue(lane, view, time);
             var observed = lane.Source.SegmentAt(time);
             var gap = (lane.Name=="Codex" ? view.CodexGaps : view.ClaudeGaps).LastOrDefault(g=>time>=g.Start && time<g.End);
             var name=lane.Name=="Fable"&&view.FableToClaudeFactor is null?Loc.T("Fable 自身"):lane.Name;
-            var missing = observed?.Label ?? (gap?.Label=="断开" ? "未更新" : gap?.Label) ?? "未记录";
+            var missing = lane.Name=="Fable"&&view.FableRateConflictAt(time)?"分项样本未对齐":observed?.Label ?? (gap?.Label=="断开" ? "未更新" : gap?.Label) ?? "未记录";
             if (missing == "已暂停") missing = "监听切换";
-            rows.Add(new(name, value is { } reading ? cumulative?Number(reading):RatePresentation.Estimate(reading) : Loc.T(missing), color));
+            var unmatched=!cumulative&&view.Smooth?lane.Trend.UnlocatedAt(time):null;
+            rows.Add(new(name, unmatched is not null?Loc.F($"+{unmatched.Delta:0.#}点") : value is { } reading ? cumulative?Number(reading):RatePresentation.Estimate(reading)+(unlocated?Loc.T(" 点/h"):"") : Loc.T(missing), color));
         }
         // The window overlay can use space beyond the chart without covering the active plot
         // or intercepting the pointer. Fall back to the other side near the window edge.
@@ -494,7 +522,9 @@ public sealed class RateChart : FrameworkElement
         if (top < 4 || top + height > surface.ActualHeight - 4) top = preferBelow ? above : below;
         if (top < 4 || top + height > surface.ActualHeight - 4) return null;
         var rect = new Rect(Math.Clamp(at.X + 8, 4, surface.ActualWidth - width - 4), top, width, height);
-        return new(rect, plot, Clock(time) + (cumulative ? Loc.T(" · 累计点") : view.Smooth ? Loc.T(" · 估计点/h") : Loc.T(" · 点/h")), rows);
+        var caption=unlocatedSample is {} sample?Clock(sample.Start)+"–"+sample.End.ToLocalTime().ToString("HH:mm")+Loc.T(" · 未定位")
+            :Clock(time)+(cumulative ? Loc.T(" · 累计点") : view.Smooth ? Loc.T(" · 估计点/h") : Loc.T(" · 点/h"));
+        return new(rect, plot, caption, rows);
     }
     internal void DrawInspectCard(DrawingContext dc, FrameworkElement surface)
     {

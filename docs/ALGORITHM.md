@@ -12,6 +12,7 @@ QuotaWidget receives intermittent quota counters, not a stream of the provider's
 | Header total / cumulative | Sum of complete, valid observed increments in the selected range | Recorded usage; resets, missing samples, and account changes do not invent increments |
 | Compact hourly rate | Difference between actual readings roughly an hour apart, divided by their actual elapsed time | An observed average over about one hour, not a live speedometer |
 | Smoothed rate curve | Observed increments distributed across supported work intervals, then smoothed | An estimate of the consumption pattern |
+| Bottom +points marker | An observed increment with no matching local work | Included in totals; its timing within the sample is unknown, so it has no inferred task rate |
 
 The recent-hour rate ends at the latest reading, then picks a continuous earlier reading closest to 60 minutes away, within 45–75 minutes. It does not proportionally split a partial sample interval or drift just because the clock advances. A `*` marks stale readings or coverage outside 55–65 minutes. If there is too little continuous data, the rate is unavailable.
 
@@ -35,7 +36,7 @@ Keep subsequent unchanged observations in their original positions. With fewer t
 
 These sparse startup curves remain solid with one-decimal hover values and no peak labels. Phase regularization and diminishing tails are display estimates, not measured instantaneous changes; new readings can revise them. Retain the initial phase treatment as more readings arrive. A known gap also settles the preceding still-open work context through its last valid sample; it does not imply task completion, fill the gap, or borrow consumption from the other side. Idle time remains excluded.
 
-When local activity cannot explain an observed increment, the estimator falls back to observation intervals. It does not silently attribute other-device or web usage to an unrelated local chat.
+When local work records exist but cannot explain an increment, retain that increment separately at its original sampling interval. A bottom `+points` marker and its interval readout expose it without assigning an instantaneous rate. Other supported work keeps its exact lifecycle boundaries and active-clock estimate: one unmatched sample cannot switch an entire night back to wall-clock smoothing. Confirmed curve area plus these unlocated increments conserves the observed total before display-only stroke sharing/filtering. If no local work history is available at all, the fallback remains an observation-interval trend; it cannot establish task boundaries. Neither path attributes other-device or web usage to an unrelated local chat.
 
 Task boundaries depend on the local log import: lifecycle events → complete published work history → activity intervals → rate estimate → chart. Import runs in bounded batches and skips oversized output rows without blocking later completion events. An unchanged quota counter alone is not a task completion; confirmed completion cuts the curve at its recorded timestamp.
 
@@ -64,6 +65,10 @@ Compact Fable shows an observed recent-hour average, converted to Claude weekly 
 ## Sharing the Fable stroke
 
 On supported plans, Fable is converted to Claude weekly units. A locally confirmed Fable-only fragment can share its converted rate stroke when the counter difference fits the combined quantization tolerance.
+
+Only the Fable-colored rate stroke is drawn in that fragment. Inspection still lists both Claude and Fable with the same rate; Claude already includes Fable. Recorded header totals and cumulative readouts stay independent, so integer rounding or reporting delay may leave a small difference. Never add Fable to the Claude counter again.
+
+In mixed work, independent bucket timing and active-clock estimates can conflict. Where Fable's estimate exceeds Claude's total estimate, the unsupported Fable rate fragment is omitted and inspection says **Samples unaligned**, rather than clamping it or changing the total. Its raw counter and cumulative value remain available. Filtering does not introduce a task completion or a peak at the cut.
 
 With complete lifecycle evidence, classify exclusive Fable work by the actual model start/end times. A completed Opus task is not extended into later work by half a smoothing window. Concurrent or unknown models and conflicting records still veto sharing. Request-neighbourhood inference remains a conservative fallback when lifecycle evidence is unavailable. Claude always means the platform total including Fable, not a separate Opus bill; sharing a stroke does not rewrite either counter.
 

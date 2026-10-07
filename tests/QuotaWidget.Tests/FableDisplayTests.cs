@@ -86,6 +86,29 @@ static class FableDisplayTests
             Check(visible.Count==2&&visible[0][^1].Time==t.AddMinutes(5)&&visible[1][0].Time==t.AddMinutes(15),"clipping connected across hidden curve");
             Near(3,visible[0][^1].Rate);Near(5,visible[1][0].Rate);Check(points.Length==3&&points[1].Rate==4,"source curve mutated");
         });
+        Test("component conflict cuts follow actual intersections and never invent peaks or lifecycle ends",()=>
+        {
+            var total=new RateTrend();total.Runs.Add(new([new(t,2),new(t.AddMinutes(10),2)],1d/3,0));
+            var fable=new RateTrend();fable.Runs.Add(new([new(t,4),new(t.AddMinutes(10),0)],1d/3,0));
+            var conflicts=FableDisplay.RateConflicts(total,fable,[]);
+            Check(conflicts.Count==1&&conflicts[0].Start==t&&Math.Abs((conflicts[0].End-t.AddMinutes(5)).TotalSeconds)<.001,"conflict boundary rounded to an arbitrary grid");
+            var display=FableDisplay.Omit(fable,conflicts);
+            Check(display.ValueAt(t.AddMinutes(2)) is null&&display.ValueAt(t.AddMinutes(7))>0,"valid component evidence lost or contradictory interval retained");
+            Check(!display.Runs[0].HardStart&&!display.CanLabelPeak(display.Runs[0].Points[0].Time),"filter made a fake task start or peak");
+            Near(1d/3,fable.Delta);
+        });
+        Test("incompatible component rates stay unknown without clamping or rewriting either ledger",()=>
+        {
+            var total=Series(.1);var fable=Series(.2);
+            var view=new ChartView{Start=t,End=t.AddMinutes(300),Total=total,Fable=fable,Gaps=[],Smooth=true,FableToClaudeFactor=.5};
+            Check(view.FableRateConflictAt(t.AddMinutes(60))&&view.FableAt(t.AddMinutes(60)) is null,"component rate exceeded its total as if both were measured");
+            Near(6,RateEngine.SumRange(view.Total,t,t.AddMinutes(300)).Delta);Near(12,RateEngine.SumRange(view.Fable,t,t.AddMinutes(300)).Delta);
+            Near(12,Area(view.FableTrend));Near(0,Area(view.DisplayFableTrend));
+            view.FableOnlySpans=[new(t.AddMinutes(30),t.AddMinutes(90))];
+            Check(!view.FableRateConflictAt(t.AddMinutes(60)),"new exclusive evidence retained an old mixed-model conflict");
+            Near(view.FableAt(t.AddMinutes(60))!.Value,view.TotalAt(t.AddMinutes(60))!.Value);
+            Check(view.FableRateConflictAt(t.AddMinutes(120)),"exclusive fragment changed neighbouring mixed evidence");
+        });
         Test("native totals stay distinct while either display mode can share the Fable curve",()=>
         {
             var total=Series(.1);var fable=Series(5.5/60);var spans=new[]{new ChartSpan(t,t.AddMinutes(300))};
@@ -93,6 +116,7 @@ static class FableDisplayTests
             var v=View();Check(v.MergesFable&&v.FableOnlyAt(t.AddMinutes(30)),"display classification absent");
             Near(6,RateEngine.SumRange(v.Total,v.Start,v.End).Delta);Near(5.5,RateEngine.SumRange(v.Fable,v.Start,v.End).Delta);
             Near(5.5,Area(v.DisplayFableTrend));Near(6,Area(v.TotalTrend));
+            Near(v.FableAt(t.AddMinutes(30))!.Value,v.TotalAt(t.AddMinutes(30))!.Value);
             Check(View(true).MergesFable&&!View(visible:false).MergesFable,"cumulative did not merge, or explicitly hidden Fable was substituted");
         });
         Test("cumulative keeps an unchanged plateau merged, but respects unknown models and resets",()=>

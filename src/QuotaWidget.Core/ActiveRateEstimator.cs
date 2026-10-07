@@ -54,8 +54,13 @@ public static class ActiveRateEstimator
                     activeMinutes+=(a.End-a.Start).TotalMinutes;
                 }
             }
-            if(spans.Count==0){Fallback();return;}
-            var jumps=new List<(double U,double Delta)>();bool unexplained=false;
+            if(spans.Count==0)
+            {
+                if(activity.Count==0){Fallback();return;}
+                result.Unlocated.AddRange(run.Where(s=>s.Delta>0));
+                Zero(origin,end);run.Clear();return;
+            }
+            var jumps=new List<(double U,double Delta)>();
             foreach(var s in run.Where(s=>s.Delta>0))
             {
                 var overlap=spans.LastOrDefault(a=>a.End>s.Start&&a.Start<s.End);
@@ -71,13 +76,13 @@ public static class ActiveRateEstimator
                     if(previous is not null&&s.Start-previous.End<=TimeSpan.FromSeconds(60)&&s.End-previous.End<=grace)
                         u=previous.V;
                 }
-                if(u is not { } at||at<=0){unexplained=true;break;}
+                if(u is not { } at||at<=0){result.Unlocated.Add(s);continue;}
                 if(jumps.Count>0&&Math.Abs(at-jumps[^1].U)<1e-8)jumps[^1]=(at,jumps[^1].Delta+s.Delta);
                 else jumps.Add((at,s.Delta));
             }
-            // Local logs are not an account-wide activity ledger. Preserve unexplained
-            // real increments without silently attaching them to an unrelated local task.
-            if(unexplained){Fallback();return;}
+            // Unmatched increments stay at their observed sample intervals. Do not
+            // spread them across hours of confirmed idle, or let one unmatched sample
+            // switch the entire continuous context back to wall-clock smoothing.
             var idleFrom=origin;
             foreach(var span in spans)
             {
@@ -87,7 +92,7 @@ public static class ActiveRateEstimator
             if(spans[^1].HardEnd&&idleFrom<end)Zero(idleFrom,end);
             if(jumps.Count==0)
             {
-                result.Runs.Add(new([new(origin,0),new(end,0)],0,0));run.Clear();return;
+                Zero(origin,end);run.Clear();return;
             }
             var clock=DateTimeOffset.UnixEpoch;var bins=new List<RateSegment>();double from=0;
             foreach(var jump in jumps)

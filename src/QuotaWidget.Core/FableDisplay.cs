@@ -9,6 +9,46 @@ public static class FableDisplay
     public static bool IsFable(string? model)=>model is not null&&
         (model.Equals("fable",StringComparison.OrdinalIgnoreCase)||model.StartsWith("claude-fable-",StringComparison.OrdinalIgnoreCase));
 
+    // Separately rounded counters and different active clocks can produce incompatible
+    // component estimates. Do not clamp or invent a replacement; keep the raw counters
+    // and mark only the unsupported component interval unavailable. Confirmed Fable-only
+    // work uses its shared stroke/readout instead of comparing two redundant estimates.
+    public static IReadOnlyList<ChartSpan> RateConflicts(RateTrend total,RateTrend fable,IReadOnlyList<ChartSpan> shared)
+    {
+        var knots=total.Runs.Concat(fable.Runs).SelectMany(r=>r.Points.Select(p=>p.Time))
+            .Concat(shared.SelectMany(s=>new[]{s.Start,s.End}))
+            .Concat(total.Unlocated.SelectMany(s=>new[]{s.Start,s.End})).Distinct().Order().ToArray();
+        var conflicts=new List<ChartSpan>();
+        for(var i=1;i<knots.Length;i++)
+        {
+            var a=knots[i-1];var b=knots[i];var mid=a+(b-a)/2;
+            if(shared.Any(s=>mid>=s.Start&&mid<s.End))continue;
+            // Interior probes avoid interpreting an exact lifecycle end as a
+            // zero-rate sample belonging to the interval on its left.
+            var p=a+(b-a)/4;var q=b-(b-a)/4;
+            if(total.ValueAt(p) is not {} tp||total.ValueAt(q) is not {} tq||fable.ValueAt(p) is not {} fp||fable.ValueAt(q) is not {} fq)continue;
+            var dp=fp-tp;var dq=fq-tq;var left=1.5*dp-.5*dq;var right=1.5*dq-.5*dp;
+            const double epsilon=1e-6;
+            if(left<=epsilon&&right<=epsilon)continue;
+            if(left>epsilon&&right>epsilon){conflicts.Add(new(a,b));continue;}
+            var cut=a+TimeSpan.FromTicks((long)((b-a).Ticks*Math.Clamp((epsilon-left)/(right-left),0,1)));
+            conflicts.Add(left>epsilon?new(a,cut):new(cut,b));
+        }
+        return Merge(conflicts);
+    }
+
+    public static RateTrend Omit(RateTrend source,IReadOnlyList<ChartSpan> spans)
+    {
+        if(spans.Count==0)return source;
+        var result=new RateTrend();result.Unlocated.AddRange(source.Unlocated);
+        foreach(var run in source.Runs)
+        foreach(var points in Omit([run.Points],spans))
+            result.Runs.Add(run with{Points=points,Delta=points.Zip(points.Skip(1),(a,b)=>(a.Rate+b.Rate)/2*(b.Time-a.Time).TotalHours).Sum(),
+                LimitedSupport=run.LimitedSupport||points[0].Time!=run.Points[0].Time||points[^1].Time!=run.Points[^1].Time,
+                HardStart=run.HardStart&&points[0].Time==run.Points[0].Time,HardEnd=run.HardEnd&&points[^1].Time==run.Points[^1].Time});
+        return result;
+    }
+
     public static IReadOnlyList<ChartSpan> Build(SeriesData total,SeriesData fable,IReadOnlyList<ModelActivity> activity,
         DateTimeOffset start,DateTimeOffset end,double smoothingMinutes,bool cumulative=false,IReadOnlyList<WorkSpan>? work=null)
     {
