@@ -2,13 +2,13 @@ namespace QuotaWidget.Core;
 
 /// <summary>
 /// Synthetic history for previewing the window. It is written only under the demo root with
-/// sourceId "demo-only", which the real history store refuses. q=0.5 here is a demo assumption.
+/// sourceId "demo-only", which the real history store refuses.
 /// </summary>
 public static class DemoData
 {
     public const string SourceId = "demo-only";
     public const string ProfileKey = "demo-max-5x";
-    public const double DemoQ = 0.5;
+    static readonly double FableFactor = QuotaUnits.FableToClaude("Max (5x)")!.Value;
 
     public static void Generate(DataPaths paths, DateTimeOffset now, string scenario, bool codex = false)
     {
@@ -20,8 +20,6 @@ public static class DemoData
 
         var settings = WidgetSettings.Load(paths.Settings, out _);
         settings.CollectorEnabled = false;
-        settings.FableToWeekByProfile.Clear();
-        settings.SetQ(SourceId, ProfileKey, scenario == "unknown-q" ? null : DemoQ);
         settings.LastSourceId = SourceId;
         settings.LastProfileKey = ProfileKey;
         settings.Save(paths.Settings);
@@ -79,7 +77,7 @@ public static class DemoData
                 if (p < weekResetAt && obs >= weekResetAt) { week = 0; fab = 0; weekResetAt = weekResetAt.AddDays(7); }
                 if (obs >= fiveResetAt) { five = 0; fiveResetAt = obs.AddHours(5); }
                 week = Math.Min(100, week + rate * hours);
-                fab = Math.Min(100, fab + rate * share * hours / DemoQ);
+                fab = Math.Min(100, fab + rate * share * hours / FableFactor);
                 five = Math.Min(100, five + rate * hours * 4.5);
             }
             prev = obs;

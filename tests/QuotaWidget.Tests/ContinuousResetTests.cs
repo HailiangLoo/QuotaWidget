@@ -43,6 +43,27 @@ static class ContinuousResetTests
                 Check(!curve.Runs.Any(r=>r.HardEnd&&r.Points[^1].Time==edge||r.HardStart&&r.Points[0].Time==edge),"reset became a work edge");
             }
         });
+        Test("clean reset continuity follows configured cadence while missed samples stay gaps",()=>
+        {
+            foreach(var minutes in new[]{5,10,30,60})
+            {
+                HistoryRecord At(int step,double used,bool old)=>Rec(step*minutes,used,old?t:t.AddDays(7)) with{PollSeconds=minutes*60};
+                var records=new[]{At(-2,98,true),At(-1,99,true),At(0,0,false),At(1,1,false),At(2,2,false)};
+                var source=RateEngine.Build(records,SeriesKey.Total,[]);
+                var crossing=source.Segments.Single(s=>s.Issue==SegmentIssue.Reset);
+                Check(crossing.CounterResetOnly&&!crossing.Valid,"normal cadence cannot share reset context: "+minutes);
+                var work=new[]{new WorkSpan(t.AddMinutes(-2*minutes),t.AddMinutes(2*minutes),true,false,null)};
+                var curve=ActiveRateEstimator.Build(source,t.AddMinutes(2*minutes),work);
+                Check(curve.ValueAt(t.AddMinutes(-minutes/2d))>0,"continuous work split at clean reset");
+                Near(3,curve.Delta);Near(3,RateEngine.SumRange(source,records[0].T,records[^1].T).Delta);
+                var missing=RateEngine.Build(new[]{records[0],records[2]},SeriesKey.Total,[]).Segments.Single();
+                Check(!missing.CounterResetOnly,"missed reset observation was bridged");
+                var failed=RateEngine.Build(records,SeriesKey.Total,[new(t.AddMinutes(-minutes/2d),EventTypes.CollectFail)]);
+                Check(!failed.Segments.Single(s=>s.Issue==SegmentIssue.Reset).CounterResetOnly,"failure hidden by configured cadence");
+                var closed=new[]{work[0] with{End=t.AddMinutes(-minutes/2d),KnownEnd=true}};
+                Check(ActiveRateEstimator.Build(source,records[^1].T,closed).ValueAt(t.AddMinutes(-minutes/4d)) is null,"reset extends completed work");
+            }
+        });
         Test("saturated counter carries context immediately without waiting for later increments",()=>
         {
             var source=RateEngine.Build(Records(),SeriesKey.Total,[]);

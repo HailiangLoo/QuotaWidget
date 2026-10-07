@@ -488,7 +488,7 @@ public partial class App : Application
         try { return _tokens?.Sum(start,end,source,chat?.Id) ?? _snapshotTokens?.Sum(start,end,source,chat?.Id) ?? TokenSummary.Empty; }
         catch { return TokenSummary.Empty; }
     }
-    public string TokenDetail => (_tokenWarning is { } warning ? Loc.T(warning) : null) ?? _tokens?.Coverage ?? _snapshotTokens?.Meta(Loc.IsEnglish?"coverage.en":"coverage") ?? (_opts.Demo ? Loc.T("演示 token 数值") : Loc.T("本机已记录日志；非账号账单。IN 为未命中输入（含缓存写入），CACHE 为命中输入，OUT 已含推理输出。首次补读可能尚未完成。"));
+    public string TokenDetail => (_tokenWarning is { } warning ? Loc.T(warning) : null) ?? _tokens?.Coverage ?? (_snapshotTokens is { } snapshot ? TokenCoverage.ReadText(snapshot,Loc.IsEnglish) : null) ?? (_opts.Demo ? Loc.T("演示 token 数值") : Loc.T("本机已记录日志；非账号账单。IN 为未命中输入（含缓存写入），CACHE 为命中输入，OUT 已含推理输出。首次补读可能尚未完成。"));
     public Task<ChatQuotaEstimate> EstimateChatQuota(ChatPlatform platform,SeriesData quota,DateTimeOffset start,DateTimeOffset end)
     {
         if(_opts.Demo)

@@ -1,5 +1,7 @@
 # 开发
 
+修改采集、记账或归属算法前，先读[架构与证据边界](docs/ARCHITECTURE.zh-CN.md)，确认现有链路及数据能够支持的结论。
+
 [English](CONTRIBUTING.md) · **简体中文**
 
 使用 Windows 和 .NET 10 SDK。UI 为 WPF，存储使用 Windows 自带 SQLite；核心项目无第三方 NuGet 依赖。

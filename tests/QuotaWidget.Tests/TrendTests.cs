@@ -60,17 +60,6 @@ static class TrendTests
             var closed = SessionTrendBoundaries.Build([Session(400,500)], t.AddMinutes(740));
             Check(closed.SequenceEqual(new[] { t.AddMinutes(400), t.AddMinutes(500) }), "confirmed end missing");
         });
-        Test("Claude Fable alignment respects the same hard session boundaries", () =>
-        {
-            var total = Data(S(0,5,1), S(5,10,0)); var fable = Data(S(0,5,0), S(5,10,1));
-            foreach (var cut in new[] { 3d, 5d, 7d })
-            {
-                var aligned = QuotaAlignment.Build(total, fable, t, t.AddMinutes(10), [t.AddMinutes(cut)]);
-                Check(aligned.MatchedBatches == 0, "alignment moved a jump across the edge");
-                Near(1, aligned.Total.Segments[0].Delta); Near(1, aligned.Fable.Segments[1].Delta);
-            }
-        });
-
         Test("long archive keeps short bursts and exact area with bounded display vertices", () =>
         {
             var source = Data(Enumerable.Range(0, 365 * 24 * 12).Select(i => S(i * 5, (i + 1) * 5, i is 11 or 57033 or 100103 ? 1 : 0)).ToArray());

@@ -21,6 +21,42 @@ static class TokenTests
         TokenCursor Cursor()=>new() {Platform="Codex",Chat="chat",Turn="t1"};
         void Read(string line,TokenCursor cursor,TokenStore store)=>TokenParser.Read(line,cursor,store,now.AddDays(-1),now);
         TokenSummary Sum(TokenStore s)=>s.Sum(now.AddDays(-1),now);
+        Test("coverage facts survive read-only reopen and render in the reader's language",()=>Temp(root=>
+        {
+            var path=Path.Combine(root,"tokens.sqlite");
+            var facts=new TokenCoverage(now,3,true,2,true);
+            using(var store=new TokenStore(path))
+            {
+                store.SetMeta("coverage","legacy zh");store.SetMeta("coverage.en","legacy en");
+                Check(TokenCoverage.ReadText(store,true)=="legacy en","old snapshot cannot be read");
+                store.SetMeta(TokenCoverage.MetaKey,JsonSerializer.Serialize(facts));
+            }
+            var language=Loc.Language;
+            try
+            {
+                Loc.Configure("zh-CN"); // Explicit English must win over the global UI language.
+                using var snapshot=new TokenStore(path,readOnly:true);
+                Check(TokenCoverage.ReadText(snapshot,true)==facts.Text(true),"read-only coverage changed");
+                var english=TokenCoverage.ReadText(snapshot,true)!;
+                Check(!english.Any(c=>c is >= '\u4e00' and <= '\u9fff'),"English coverage includes Chinese fallback");
+                Check(TokenCoverage.ReadText(snapshot,false)!.Contains("正在补读 3 个文件"),"Chinese coverage lost counts");
+                using var writer=new TokenStore(path);
+                writer.SetMeta(TokenCoverage.MetaKey,"{}");
+                Check(TokenCoverage.ReadText(snapshot,true)=="legacy en","incomplete metadata invented a since date");
+                writer.SetMeta(TokenCoverage.MetaKey,"{torn");
+                Check(TokenCoverage.ReadText(snapshot,true)=="legacy en","corrupt optional metadata broke snapshot");
+            }
+            finally { Loc.Configure(language); }
+        }));
+        Test("importer persists coverage facts without rendered bilingual strings",()=>Temp(root=>
+        {
+            var dbRoot=Path.Combine(root,"data");
+            using(var index=new TokenIndex(dbRoot,Path.Combine(root,"codex"),Path.Combine(root,"claude"),now))
+                index.Poll(now);
+            using var store=new TokenStore(Path.Combine(dbRoot,"tokens.sqlite"),readOnly:true);
+            Check(store.Meta(TokenCoverage.MetaKey) is not null,"coverage facts missing");
+            Check(store.Meta("coverage") is null&&store.Meta("coverage.en") is null,"rendered strings persisted");
+        }));
         Test("model and chat breakdowns conserve totals with account range and platform isolation",()=>Temp(root=>
         {
             using var db=new TokenStore(Path.Combine(root,"group.db"));db.SetMeta("since",now.AddHours(-1).ToString("O"));

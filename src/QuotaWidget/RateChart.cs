@@ -516,11 +516,6 @@ public sealed class RateChart : FrameworkElement
         }
     }
 
-    public static (double Top, double Step) Nice(double max, int count)
-    {
-        var scale = ChartScale.Create(max, count);
-        return (scale.Top, scale.Step);
-    }
 }
 
 /// <summary>Top window layer for chart readings; never takes mouse input or layout space.</summary>

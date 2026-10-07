@@ -5,7 +5,7 @@ namespace QuotaWidget.Core;
 
 /// <summary>
 /// settings.json. pollIntervalSeconds is the single source for the collection interval.
-/// Legacy Fable conversion entries are retained for compatibility, not used by the dashboard.
+/// Unknown legacy fields are ignored on load and dropped on the next save.
 /// </summary>
 public sealed class WidgetSettings
 {
@@ -40,11 +40,6 @@ public sealed class WidgetSettings
     public string? ClaudeChartMode { get; set; }
     public string? CodexChartMode { get; set; }
     public string ChartModeFor(ChatPlatform platform) => (platform==ChatPlatform.Codex?CodexChartMode:ClaudeChartMode) ?? ChartMode;
-    /// <summary>
-    /// Legacy q per "sourceId|profileKey". Since 0.3 all lines use their own quota units;
-    /// these values are no longer displayed or used for chart calculations.
-    /// </summary>
-    public Dictionary<string, double> FableToWeekByProfile { get; set; } = new();
     public int RangeMinutes { get; set; } = 300;
     public bool TotalVisible { get; set; } = true;
     public bool FableVisible { get; set; } = true;
@@ -112,25 +107,8 @@ public sealed class WidgetSettings
         if (ClaudeChartMode is not ("rate" or "cumulative")) ClaudeChartMode = ChartMode;
         if (CodexChartMode is not ("rate" or "cumulative")) CodexChartMode = ChartMode;
         if (TrendMinutes is not (60 or 90 or 120 or 150)) TrendMinutes = 120;
-        FableToWeekByProfile ??= new();
-        foreach (var key in FableToWeekByProfile.Where(kv => !ValidQ(kv.Value)).Select(kv => kv.Key).ToList())
-            FableToWeekByProfile.Remove(key);
         if (!double.IsFinite(Width) || Width < 240 || Width > 340) Width = 300;
         if (string.IsNullOrWhiteSpace(FableModelName)) FableModelName = "Fable";
-    }
-
-    public static bool ValidQ(double q) => double.IsFinite(q) && q > 0 && q <= 100;
-
-    public static string ProfileId(string sourceId, string profileKey) => sourceId + "|" + profileKey;
-
-    public double? QFor(string? sourceId, string? profileKey) =>
-        sourceId is not null && profileKey is not null && FableToWeekByProfile.TryGetValue(ProfileId(sourceId, profileKey), out var q) ? q : null;
-
-    public void SetQ(string sourceId, string profileKey, double? q)
-    {
-        var id = ProfileId(sourceId, profileKey);
-        if (q is { } v && ValidQ(v)) FableToWeekByProfile[id] = v;
-        else FableToWeekByProfile.Remove(id);
     }
 
     public string ResolveClaudeConfigDir(DataPaths paths) =>

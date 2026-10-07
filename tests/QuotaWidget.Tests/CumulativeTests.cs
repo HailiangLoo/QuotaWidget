@@ -8,7 +8,7 @@ static class CumulativeTests
         void Test(string name, Action body) => tests.Add((name, () => { body(); return Task.CompletedTask; }));
         void Check(bool ok, string why) { if (!ok) throw new Exception(why); }
         RateSegment S(int start, int end, double delta, int group = 0, SegmentIssue issue = SegmentIssue.None) =>
-            new() { Start = t.AddMinutes(start), End = t.AddMinutes(end), Delta = delta, Group = group, Issue = issue, Smooth = 12345 };
+            new() { Start = t.AddMinutes(start), End = t.AddMinutes(end), Delta = delta, Group = group, Issue = issue };
         Test("cumulative: sum uses raw increments, not rate or smoothed values", () =>
         {
             var data = new SeriesData { Key = SeriesKey.Total, Segments = [S(0,5,1), S(5,10,2), S(10,15,0)] };

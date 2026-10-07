@@ -20,10 +20,6 @@ public sealed class RateSegment
     public bool CounterResetOnly { get; init; }
     /// <summary>The old counter was capped, so a flat reading cannot constrain further trend.</summary>
     public bool StartsAtCapacity { get; init; }
-    /// <summary>Trailing time-weighted rate in own points/h; null when coverage is too thin.</summary>
-    public double? Smooth { get; set; }
-    /// <summary>How many minutes of data <see cref="Smooth"/> averages (≤ ~15, or one longer interval).</summary>
-    public double SmoothMinutes { get; set; }
 
     public bool Valid => Issue == SegmentIssue.None;
     public double Minutes => (End - Start).TotalMinutes;
@@ -50,40 +46,12 @@ public sealed class SeriesData
         return t < s.End || (found == Segments.Count - 1 && t == s.End) ? s : null;
     }
 
-    (RateSegment? Before, RateSegment? After) SmoothNeighbours(DateTimeOffset t, RateSegment s)
-    {
-        RateSegment? before = null, after = null;
-        var i = Segments.IndexOf(s);
-        for (var j = i; j >= 0 && Segments[j].Group == s.Group; j--)
-            if (Segments[j].Valid && Segments[j].Smooth is not null && Segments[j].End <= t) { before = Segments[j]; break; }
-        for (var j = Math.Max(0, i); j < Segments.Count && Segments[j].Group == s.Group; j++)
-            if (Segments[j].Valid && Segments[j].Smooth is not null && Segments[j].End >= t) { after = Segments[j]; break; }
-        return (before, after);
-    }
-
-    /// <summary>Rate in the bucket's own points/h at time t; null inside gaps or before smoothing has enough coverage.</summary>
-    public double? ValueAt(DateTimeOffset t, bool smooth)
+    /// <summary>Observed interval average in own points/h; null outside valid coverage.
+    /// Trend estimation belongs to ActiveRateEstimator, never to the ledger.</summary>
+    public double? ValueAt(DateTimeOffset t)
     {
         var s = SegmentAt(t);
-        if (s is null || !s.Valid) return null;
-        if (!smooth) return s.Rate;
-        var (before, after) = SmoothNeighbours(t, s);
-        // The first measured interval is still usable before a full smoothing window exists.
-        // Its retrospective interval average is drawn from its known start, not hidden.
-        if (before is null) return after?.Smooth;
-        if (after is null) return null;
-        if (before.End == after.End) return before.Smooth;
-        var f = (t - before.End).TotalSeconds / (after.End - before.End).TotalSeconds;
-        return before.Smooth + (after.Smooth - before.Smooth) * f;
-    }
-
-    /// <summary>Span of data behind the smoothed value at t (for the tooltip label).</summary>
-    public double? SmoothMinutesAt(DateTimeOffset t)
-    {
-        var s = SegmentAt(t);
-        if (s is null || !s.Valid) return null;
-        var (_, after) = SmoothNeighbours(t, s);
-        return after?.SmoothMinutes;
+        return s is { Valid: true } ? s.Rate : null;
     }
 }
 
@@ -99,8 +67,6 @@ public static class RateEngine
 {
     /// <summary>An interval longer than this multiple of the poll interval in effect is a gap.</summary>
     public const double GapFactor = 1.8;
-    public static readonly TimeSpan SmoothWindow = TimeSpan.FromMinutes(15);
-    public static readonly TimeSpan SmoothTolerance = TimeSpan.FromSeconds(30);
 
     /// <summary>
     /// How far two reports of the same reset instant may differ. Observed jitter is milliseconds;
@@ -187,8 +153,7 @@ public static class RateEngine
             var delta = la is not null && lb is not null ? lb.UsedPercent - la.UsedPercent : 0;
             segments.Add(new RateSegment { Start = a.T, End = b.T, Delta = delta, Issue = issue, Label = label,
                 CounterResetOnly=issue==SegmentIssue.Reset&&structural=="重置"&&delta<0&&
-                    a.SourceId==b.SourceId&&a.ProfileKey==b.ProfileKey&&a.PlanLabel==b.PlanLabel&&!longGap&&eventLabel is null&&
-                    b.T-a.T<=TimeSpan.FromMinutes(10),
+                    a.SourceId==b.SourceId&&a.ProfileKey==b.ProfileKey&&a.PlanLabel==b.PlanLabel&&!longGap&&eventLabel is null,
                 StartsAtCapacity=la?.UsedPercent>=100 });
         }
 
@@ -197,34 +162,6 @@ public static class RateEngine
         {
             if (!s.Valid) group++;
             s.Group = group;
-        }
-
-        // Trailing, time-weighted, never across a gap, never using later data. An interval that
-        // alone spans the window (30/60-minute polling) is its own average and says so.
-        for (var i = 0; i < segments.Count; i++)
-        {
-            var s = segments[i];
-            if (!s.Valid) continue;
-            if (s.End - s.Start >= SmoothWindow)
-            {
-                s.Smooth = s.Rate;
-                s.SmoothMinutes = s.Minutes;
-                continue;
-            }
-            double sumDelta = 0, sumMinutes = 0;
-            var windowStart = s.End - SmoothWindow - SmoothTolerance;
-            for (var j = i; j >= 0; j--)
-            {
-                var p = segments[j];
-                if (!p.Valid || p.Group != s.Group || p.Start < windowStart) break;
-                sumDelta += p.Delta;
-                sumMinutes += p.Minutes;
-            }
-            if (sumMinutes > 0)
-            {
-                s.Smooth = sumDelta * 60.0 / sumMinutes;
-                s.SmoothMinutes = sumMinutes;
-            }
         }
 
         return new SeriesData { Key = key, Segments = segments };

@@ -69,8 +69,6 @@ public sealed class ChartView
         : Fable.Segments.Any(s => s.Valid && s.Delta > 0 && s.End > Start && s.Start < End));
     RateTrend? _totalTrend, _fableTrend, _codexTrend;
     public DateTimeOffset EstimationStart => Total.Segments.Concat(Fable.Segments).Concat(Codex?.Segments??[]).Select(s=>s.Start).DefaultIfEmpty(Start).Min();
-    // No viewport-local counter pairing or work-segment renormalization in the rate path.
-    public QuotaAlignment Alignment => new(Total,Fable,0,0);
     public RateTrend TotalTrend => _totalTrend ??= Activity.ClaudeReady?ActiveRateEstimator.Build(Total,End,Activity.Claude,TrendMinutes,1,TrendBoundaries,ClaudeModelChanges):new();
     public RateTrend FableTrend => _fableTrend ??= Activity.ClaudeReady?ActiveRateEstimator.Build(Fable,End,Activity.Fable,TrendMinutes,FableToClaudeFactor??1,TrendBoundaries):new();
     IReadOnlyList<ChartSpan>? _fableRateConflicts;
@@ -82,9 +80,9 @@ public sealed class ChartView
     public RateTrend? CodexTrend => Codex is null ? null : _codexTrend ??= Activity.CodexReady?ActiveRateEstimator.Build(Codex,End,Activity.Codex,TrendMinutes,1,TrendBoundaries):new();
     // Sharing a rate stroke must share its readout too; neither changes the raw
     // counters used for totals. Cumulative counters retain their observed values.
-    public double? TotalAt(DateTimeOffset t) => !ClaudeCumulativeMode&&FableOnlyAt(t) ? FableAt(t) : ClaudeCumulativeMode ? TotalCumulative?.ValueAt(t) : Smooth ? TotalTrend.ValueAt(t) : Total.ValueAt(t, false);
-    public double? FableAt(DateTimeOffset t) => FableRateConflictAt(t)?null:ClaudeCumulativeMode ? FableCumulative?.ValueAt(t) : Smooth ? DisplayFableTrend.ValueAt(t) : Fable.ValueAt(t, false);
-    public double? CodexAt(DateTimeOffset t) => CodexCumulativeMode ? CodexCumulative?.ValueAt(t) : Smooth ? CodexTrend?.ValueAt(t) : Codex?.ValueAt(t, false);
+    public double? TotalAt(DateTimeOffset t) => !ClaudeCumulativeMode&&FableOnlyAt(t) ? FableAt(t) : ClaudeCumulativeMode ? TotalCumulative?.ValueAt(t) : Smooth ? TotalTrend.ValueAt(t) : Total.ValueAt(t);
+    public double? FableAt(DateTimeOffset t) => FableRateConflictAt(t)?null:ClaudeCumulativeMode ? FableCumulative?.ValueAt(t) : Smooth ? DisplayFableTrend.ValueAt(t) : Fable.ValueAt(t);
+    public double? CodexAt(DateTimeOffset t) => CodexCumulativeMode ? CodexCumulative?.ValueAt(t) : Smooth ? CodexTrend?.ValueAt(t) : Codex?.ValueAt(t);
 
     public GapRegion? GapAt(DateTimeOffset t)
     {
@@ -152,23 +150,11 @@ public sealed class WidgetModel
     public LatestEnvelope? LastEnvelope { get; private set; }
     public string? LatestError { get; private set; }
     public int IngestedCount { get; private set; }
-    /// <summary>Bumped whenever the account/plan in view changes; the window re-reads per-profile settings.</summary>
-    public int ProfileVersion { get; private set; }
     /// <summary>Which CLI the collector runs (or why none), for the settings panel.</summary>
     public string? CliSummary { get; set; }
 
     /// <summary>Kept in memory: covers a full weekly window plus a day. Older days stay on disk.</summary>
     public static readonly TimeSpan Lookback = TimeSpan.FromDays(8);
-
-    /// <summary>Legacy per-profile calibration, retained only for settings compatibility.</summary>
-    public double? CurrentQ => Settings.QFor(SourceId, ProfileKey);
-
-    public void SetCurrentQ(double? q)
-    {
-        if (SourceId is null || ProfileKey is null) return;
-        Settings.SetQ(SourceId, ProfileKey, q);
-        SaveSettings();
-    }
 
     // Derived series are rebuilt only when records or events change, not on every clock tick.
     int _dataVersion, _cachedVersion = -1;
@@ -343,7 +329,6 @@ public sealed class WidgetModel
             Records = Store.Load(SourceId, ProfileKey, _clock() - Lookback);
             Bounds = Store.Bounds(SourceId, ProfileKey, _clock());
             ReleaseArchive();
-            ProfileVersion++;
             Touch();
         }
         var rec = HistoryRecord.FromEnvelope(env);

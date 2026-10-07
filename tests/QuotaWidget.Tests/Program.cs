@@ -105,18 +105,14 @@ Test("schema: write/parse round trip keeps nulls as null", () =>
 
 // ---------------- rate engine ----------------
 
-Test("rate: steady 6 pt/h, raw and 15m smooth, range sum", () =>
+Test("rate: steady 6 pt/h interval averages and range sum", () =>
 {
     var recs = Steady(13, 0.5); // 12 intervals of 5 min, +0.5 each = 6 pt/h
     var s = RateEngine.Build(recs, SeriesKey.Total, []);
     Eq(12, s.Segments.Count);
     True(s.Segments.All(x => x.Valid), "all valid");
     Near(6, s.Segments[0].Rate);
-    Near(6, s.Segments[0].Smooth, "first measured interval is visible");
-    Near(5, s.Segments[0].SmoothMinutes, "do not call warmup 15m");
-    Near(6, s.ValueAt(T0.AddMinutes(2), true), "first interval has an average before next sample");
-    Near(6, s.Segments[1].Smooth);
-    Near(6, s.Segments[11].Smooth);
+    Near(6, s.ValueAt(T0.AddMinutes(2)), "first interval has a retrospective average");
     var sum = RateEngine.SumRange(s, T0, T0.AddHours(1));
     Near(6, sum.Delta);
     Near(60, sum.CoverageMinutes);
@@ -135,8 +131,7 @@ Test("rate: zero change is a real zero, not a gap", () =>
     var recs = new List<HistoryRecord> { Rec(0, 40), Rec(5, 40), Rec(10, 40), Rec(15, 40) };
     var s = RateEngine.Build(recs, SeriesKey.Total, []);
     True(s.Segments.All(x => x.Valid), "flat segments must stay valid");
-    Near(0, s.Segments[2].Smooth);
-    Near(0, s.ValueAt(T0.AddMinutes(12), smooth: false));
+    Near(0, s.ValueAt(T0.AddMinutes(12)));
 });
 
 Test("rate: a hole is a gap; no smoothing across; sums skip it; cumulative spans it", () =>
@@ -146,10 +141,8 @@ Test("rate: a hole is a gap; no smoothing across; sums skip it; cumulative spans
     var gap = s.Segments[2];
     Eq(SegmentIssue.Gap, gap.Issue);
     Eq("缺口", gap.Label);
-    Near(6, s.Segments[3].Smooth, "first interval after a gap is displayed independently");
-    Near(5, s.Segments[3].SmoothMinutes, "warmup excludes the earlier group");
-    Near(6, s.Segments[4].Smooth);
-    True(s.ValueAt(T0.AddMinutes(25), true) is null, "value inside a gap must be unknown");
+    Near(6, s.ValueAt(T0.AddMinutes(42)), "first interval after a gap is usable");
+    True(s.ValueAt(T0.AddMinutes(25)) is null, "value inside a gap must be unknown");
     var sum = RateEngine.SumRange(s, T0, T0.AddMinutes(55));
     Near(25, sum.CoverageMinutes, "coverage excludes the gap");
     Near(2.5, sum.Delta, "gap increment is not counted as recorded");
@@ -179,7 +172,7 @@ Test("rate: short restart without missed samples keeps curve and cumulative cont
     var data = RateEngine.Build(recs, SeriesKey.Total, brief);
     True(data.Segments.All(s => s.Valid), "two-second restart created a false gap");
     Near(1, RateEngine.SumRange(data, T0, T0.AddMinutes(10)).Delta);
-    Near(6, data.ValueAt(T0.AddMinutes(4), true));
+    Near(6, data.ValueAt(T0.AddMinutes(4)));
     var missingPair = new List<AppEvent> { new(T0.AddMinutes(2), EventTypes.AppStart) };
     Eq(SegmentIssue.Gap, RateEngine.Build(recs, SeriesKey.Total, missingPair).Segments[0].Issue);
     var failure = brief.Append(new AppEvent(T0.AddMinutes(3), EventTypes.CollectFail, Statuses.Error, "network")).ToList();
@@ -306,12 +299,13 @@ Test("rate: missing Fable bucket is unknown, not zero", () =>
     True(RateEngine.Build(recs, SeriesKey.Total, []).Segments.All(x => x.Valid), "total unaffected");
 });
 
-Test("rate: smoothing tolerates a few seconds of jitter", () =>
+Test("rate: sampling jitter preserves amount and actual elapsed time", () =>
 {
     var recs = new List<HistoryRecord> { Rec(0, 40), Rec(5.1, 40.5), Rec(10.15, 41), Rec(15.2, 41.5) };
     var s = RateEngine.Build(recs, SeriesKey.Total, []);
     var last = s.Segments[2];
-    Near(1.5 * 60 / 15.2, last.Smooth, "three intervals used", 1e-6);
+    Near(1.5, RateEngine.SumRange(s, T0, last.End).Delta, "observed increments retained");
+    Near(last.Delta * 60 / last.Minutes, s.ValueAt(last.End), "actual interval duration used");
 });
 
 // ---------------- history ----------------
@@ -409,7 +403,6 @@ Test("model: Fable uses own weekly points, independent of legacy q", () =>
     True(v.Summary.StartsWith("近5h · 已记录 6.0点"), "summary: " + v.Summary);
     Near(3, v.SummaryFable);
     Near(3, v.Chart.FableAt(T0.AddMinutes(30)));
-    model.SetCurrentQ(0.5);
     var v2 = model.BuildView(now);
     Near(3, v2.SummaryFable, "legacy q does not affect own points");
     Near(3, v2.Chart.FableAt(T0.AddMinutes(30)), "orange = own rate");
@@ -891,8 +884,9 @@ Test("dashboard: Max Fable is half native points throughout rate, cumulative and
     var nativeJson = SnapshotJson.WriteEnvelope(m.LastEnvelope!);
     foreach (var mode in new[] { "rate", "cumulative" })
     {
-        var settings = new WidgetSettings { ChartMode = mode, RangeMinutes = 60 };
-        settings.SetQ(m.SourceId!, m.ProfileKey!, 8); // obsolete user values cannot silently alter the unit
+        AtomicFile.WriteAllText(paths.Settings, """{"fableToWeekByProfile":{"claude-oauth-usage|p1":8}}""");
+        var settings = WidgetSettings.Load(paths.Settings, out _);
+        settings.ChartMode = settings.ClaudeChartMode = settings.CodexChartMode = mode; settings.RangeMinutes = 60;
         var d = Dashboard.Combine(raw, raw, settings, now, null);
         Near(.5, d.Chart.FableToClaudeFactor);
         Near(12, RateEngine.SumRange(d.Chart.Fable, T0, now).Delta);
@@ -918,7 +912,6 @@ Test("dashboard: conversion requires a known Max plan, not another account's leg
     foreach (var r in Steady(13, 1, fableFactor: 2)) Feed(m, paths, r with { PlanLabel = "Team", ProfileKey = "another-account" });
     var raw = m.BuildView(now,60);
     var settings = new WidgetSettings { RangeMinutes = 60 };
-    settings.SetQ(m.SourceId!, m.ProfileKey!, .5);
     var d = Dashboard.Combine(raw,raw,settings,now,null);
     True(d.Chart.FableToClaudeFactor is null && d.Detail.Contains("换算比例未确认"), "unknown plan treated as Max");
     Near(24, d.Chart.FableTrend.Delta);
@@ -958,25 +951,24 @@ Test("chart: a brief repair restart does not mask the preceding collection failu
     Eq("采集失败",RateEngine.ClassifyEvents(events,T0,T0.AddHours(6)));
 });
 
-Test("R2: Fable q belongs to one account/plan; a new profile starts unknown", () =>
+Test("R2: profile changes replace histories and ignore legacy calibration settings", () =>
 {
     var root = TempDir();
     var paths = new DataPaths(root);
     var now = T0.AddMinutes(30);
     var m = ModelWith(paths, () => now);
     foreach (var r in Steady(4, 0.5)) Feed(m, paths, r);
-    m.SetCurrentQ(0.5);
-    Near(0.5, m.CurrentQ);
-    var version = m.ProfileVersion;
     foreach (var r in Steady(4, 0.5)) Feed(m, paths, r with { ProfileKey = "p2", Snapshot = r.Snapshot with { Id = r.Snapshot.Id + "-b", ObservedAt = r.T.AddSeconds(5) } });
     Eq("p2", m.ProfileKey);
-    True(m.ProfileVersion > version, "window is told to refresh the q box");
-    True(m.CurrentQ is null, "account B must not inherit A's q");
     var v = m.BuildView(now);
     Near(0.75, v.SummaryFable, "new profile uses its own raw Fable increment");
+    AtomicFile.WriteAllText(paths.Settings, """{"language":"en","rangeMinutes":60,"fableToWeekByProfile":{"claude-oauth-usage|p1":8}}""");
+    var migrated = WidgetSettings.Load(paths.Settings, out var error);
+    True(error is null, "obsolete settings prevented loading");
+    migrated.Save(paths.Settings);
     var reloaded = WidgetSettings.Load(paths.Settings, out _);
-    Near(0.5, reloaded.QFor("claude-oauth-usage", "p1"), "A's q persisted for A only");
-    True(reloaded.QFor("claude-oauth-usage", "p2") is null, "nothing stored for B");
+    Eq("en", reloaded.Language); Eq(60, reloaded.RangeMinutes);
+    True(!File.ReadAllText(paths.Settings).Contains("fableToWeekByProfile"), "obsolete calibration persisted");
 });
 
 Test("R3: 30/60-minute polling still draws, labelled as interval averages", () =>
@@ -986,14 +978,13 @@ Test("R3: 30/60-minute polling still draws, labelled as interval averages", () =
         var recs = Enumerable.Range(0, 7).Select(i => Rec(i * minutes, 10 + i, 10 + i / 2.0, poll: minutes * 60)).ToList();
         var s = RateEngine.Build(recs, SeriesKey.Total, []);
         var valid = s.Segments.Count(x => x.Valid);
-        var smooth = s.Segments.Count(x => x.Smooth is not null);
         Eq(6, valid, $"{minutes}m valid");
-        True(smooth >= 5, $"{minutes}m: only {smooth} smoothed points");
         var mid = T0.AddMinutes(minutes * 3.5);
-        Near(60.0 / minutes, s.ValueAt(mid, smooth: true), $"{minutes}m value");
-        var span = s.SmoothMinutesAt(mid);
-        if (minutes >= 30) Near(minutes, span, $"{minutes}m span is the interval itself");
-        else True(span <= 15.5, $"{minutes}m span {span} should be ≤ 15 min");
+        Near(60.0 / minutes, s.ValueAt(mid), $"{minutes}m interval average");
+        Near(minutes, s.SegmentAt(mid)!.Minutes);
+        var trend = ActiveRateEstimator.Build(s, recs[^1].T);
+        Near(60.0 / minutes, trend.ValueAt(mid), $"{minutes}m trend");
+        Near(6, trend.Delta, "slow sampling changed observed mass");
     }
 });
 
@@ -1108,7 +1099,7 @@ RecentUsageRateTests.Register(tests);
 MonitoringTests.Register(tests);
 ActivityPublicationTests.Register(tests);
 FableDisplayTests.Register(tests);
-AlignmentTests.Register(tests);
+LedgerIsolationTests.Register(tests);
 WorkActivityTests.Register(tests);
 ActiveRateEstimatorTests.Register(tests);
 ResetRateTests.Register(tests);

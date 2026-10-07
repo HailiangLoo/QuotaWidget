@@ -123,7 +123,7 @@ public sealed class TokenIndex : IDisposable
     string[] _active = [];
     DateTimeOffset _discovered;
     DateTimeOffset _parentsRead;
-    string? _parentWarning;
+    bool _parentReadFailed;
     (bool Claude,bool Codex)? _monitoring;
     // Publish complete lifecycle generations. A partial log import is not an empty
     // work history and must never replace the evidence used by the rate estimator.
@@ -182,14 +182,8 @@ public sealed class TokenIndex : IDisposable
             return _store.QuotaTokens(start,end,platform);
         }
     }
-    public string Coverage { get { lock(_gate) return CoverageText(Loc.IsEnglish); } }
-    string CoverageText(bool english) => Loc.F($"本机日志 · 自 {Since.ToLocalTime():M/d HH:mm}；仅已记录用量，非账号账单。",english) +
-        (PendingFiles > 0 ? Loc.F($"\n正在补读 {PendingFiles} 个文件。",english) : "") +
-        (LimitedDiscovery ? Loc.T("\n跟踪最近 256 个日志，其余未包含。",english) : "") +
-        (Skipped > 0 ? Loc.F($"\n有 {Skipped} 条缺失、损坏或过长记录未计入。",english) : "") +
-        Loc.T("\n已确认归属的 Codex 子代理（含多层）并入所属 chat；未知或冲突关系保持单列。模型分组仍按实际模型，平台总量不变。",english)+
-        (_parentWarning is null?"":"\n"+Loc.T(_parentWarning,english))+
-        Loc.T("\n包含能识别的子代理请求；IN 含缓存写入，CACHE 为命中输入，OUT 已含推理输出。\n按首次用量记录时间记账；不代表每秒实际生成速度。",english);
+    TokenCoverage CoverageFacts => new(Since, PendingFiles, LimitedDiscovery, Skipped, _parentReadFailed);
+    public string Coverage { get { lock(_gate) return CoverageFacts.Text(Loc.IsEnglish); } }
 
     public void Poll(DateTimeOffset now, CancellationToken ct = default, bool claude = true, bool codex = true)
     {
@@ -201,9 +195,9 @@ public sealed class TokenIndex : IDisposable
             IReadOnlyList<ChatParent> parents=[];
             if(codex&&(now-_parentsRead>=TimeSpan.FromMinutes(1)||now<_parentsRead))
             {
-                try {parents=CodexChatParents.Read(_codexHome,_store.ChatIds("Codex"));_parentWarning=null;}
+                try {parents=CodexChatParents.Read(_codexHome,_store.ChatIds("Codex"));_parentReadFailed=false;}
                 catch(Exception e) when(e is IOException or UnauthorizedAccessException)
-                {_parentWarning="子代理归属暂不可读；保留已确认关系，稍后重试。";}
+                {_parentReadFailed=true;}
                 _parentsRead=now;
             }
             var watch = Stopwatch.StartNew(); var changed = false;
@@ -243,10 +237,8 @@ public sealed class TokenIndex : IDisposable
                 }
             if (changed || pending != PendingFiles) Version++;
             PendingFiles = pending;
-            var coverage=CoverageText(false);
-            if(_store.Meta("coverage")!=coverage) _store.SetMeta("coverage",coverage);
-            var englishCoverage=CoverageText(true);
-            if(_store.Meta("coverage.en")!=englishCoverage) _store.SetMeta("coverage.en",englishCoverage);
+            var coverage=JsonSerializer.Serialize(CoverageFacts);
+            if(_store.Meta(TokenCoverage.MetaKey)!=coverage) _store.SetMeta(TokenCoverage.MetaKey,coverage);
         }
     }
     void Discover(DateTimeOffset now,bool claude,bool codex)
