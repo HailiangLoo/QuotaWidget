@@ -69,7 +69,12 @@ static class ScalingProbe
                     Near(buttonSize.Height*scale,buttonBounds.Height,"control Y scale");
                     Check(grip.Visibility==Visibility.Visible&&grip.ActualWidth==14,"grip scaled or hidden in compact mode");
                     var gripBounds=grip.TransformToAncestor(surface).TransformBounds(new Rect(grip.RenderSize));
-                    Check(gripBounds.Top>=bounds.Bottom-4.1&&gripBounds.Left>=bounds.Right-4.1,"grip overlaps the last chat's timer");
+                    Check(gripBounds.Right<=surface.ActualWidth+12&&gripBounds.Bottom<=surface.ActualHeight+12,"grip extends outside the window");
+                    if(compact&&C<StackPanel>("CompactChatRows").Children.OfType<FrameworkElement>().LastOrDefault() is {} lastRow)
+                    {
+                        var lastBounds=lastRow.TransformToAncestor(surface).TransformBounds(new Rect(lastRow.RenderSize));
+                        Check(!lastBounds.IntersectsWith(gripBounds),"grip overlaps the last chat row");
+                    }
                     var hit=VisualTreeHelper.HitTest(surface,new Point(buttonBounds.Left+buttonBounds.Width/2,buttonBounds.Top+buttonBounds.Height/2))?.VisualHit;
                     Check(hit is not null&&WindowDrag.IsControl(hit,frame),$"scaled button became a drag surface: {language}/{provider}/{compact}/{scale}, hit={hit?.GetType().Name}");
                     var chart=C<RateChart>("Chart");

@@ -401,12 +401,13 @@
     <local:ChartInspectOverlay x:Name="ChartInspection" />
   </Grid>
     <!-- Keep the grip outside the transform: pointer deltas stay in window DIPs. -->
-    <Thumb x:Name="ScaleGrip" HorizontalAlignment="Right" VerticalAlignment="Bottom" Width="14" Height="14" Margin="0,0,-10,-10" Cursor="SizeNWSE"
+    <Thumb x:Name="ScaleGrip" HorizontalAlignment="Right" VerticalAlignment="Bottom" Width="14" Height="14" Margin="0,0,-11,-11" Cursor="SizeNWSE"
            local:Translate.ToolTip="拖动等比例缩放" local:Translate.Name="缩放挂件"
            DragStarted="ScaleGrip_DragStarted" DragDelta="ScaleGrip_DragDelta" DragCompleted="ScaleGrip_DragCompleted">
       <Thumb.Template>
         <ControlTemplate TargetType="Thumb">
-          <Border Background="Transparent"><Path Data="M3,10 L10,3 M7,10 L10,7" Stroke="{DynamicResource Muted}" StrokeThickness="1" Opacity="0.65" Margin="0,0,2,2" /></Border>
+          <!-- Nonzero alpha keeps the layered window hit-testable outside the frame. -->
+          <Border Background="#01000000"><Path Data="M3,10 L10,3 M7,10 L10,7" Stroke="{DynamicResource Muted}" StrokeThickness="1" Opacity="0.65" Margin="0,0,2,2" /></Border>
         </ControlTemplate>
       </Thumb.Template>
     </Thumb>
