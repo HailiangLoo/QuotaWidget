@@ -72,12 +72,14 @@ public partial class MainWindow : Window
         TokenCheck.IsChecked = s.TokenTrackingEnabled;
         CacheCheck.IsChecked = s.CacheRemindersEnabled;
         AutoLogoutCheck.IsChecked = s.AutoLogoutOnExit;
+        RefreshStartup();
         if(opts.HistoryDay is { } historyDay) { _historyDay=historyDay.Date; _historyMonth=new(historyDay.Year,historyDay.Month,1); }
         ExpiredChats.IsExpanded = opts.ExpandArchive;
         if (opts.SettingsOpen || !s.SetupCompleted) ShowSettings(true);
         if (opts.HistoryOpen) ShowHistory(true);
         OnThemeChanged();
         _suppress = false;
+        Activated += (_, _) => { if (SettingsPanel.Visibility == Visibility.Visible) RefreshStartup(); };
 
         _saveTimer = new DispatcherTimer(TimeSpan.FromSeconds(1), DispatcherPriority.Background, (_, _) => { _saveTimer!.Stop(); PersistPlacement(); }, Dispatcher);
         _saveTimer.Stop();
@@ -121,6 +123,7 @@ public partial class MainWindow : Window
         _model.SaveSettings();
         Loc.Configure(language);
         Translate.RefreshResources();
+        RefreshStartup();
         CloseUsage();
         CacheDiagnosticsText.Text = _app.CacheWarning ?? Loc.T("状态读取正常");
         _flash = null;
@@ -810,6 +813,7 @@ public partial class MainWindow : Window
     void ShowSettings(bool open)
     {
         CloseUsage();
+        if (open) RefreshStartup();
         CacheDiagnosticsText.Text=_app.CacheWarning??Loc.T("状态读取正常");
         ClaudeLoginButton.IsEnabled=ClaudeLogoutButton.IsEnabled=_app.CollectorAvailable&&_model.Settings.Monitors(ChatPlatform.Claude);
         HistoryPanel.Visibility = Visibility.Collapsed;
@@ -820,6 +824,31 @@ public partial class MainWindow : Window
         ApplyCompactLayout();
         RenderConnections();
         SettingsButton.Background = open ? Theme.Brush("Raised") : Brushes.Transparent;
+    }
+
+    void RefreshStartup()
+    {
+        // Preview/QA windows must never read or modify the real user's startup preference.
+        StartupCheck.IsEnabled = !_opts.Demo && _opts.Snapshot is null && !_model.ReadOnly;
+        StartupHint.Text = Loc.T(StartupCheck.IsEnabled
+            ? "登录 Windows 后显示挂件。开启后请保留程序所在位置。"
+            : "演示中不修改开机启动。" );
+        if (!StartupCheck.IsEnabled) { StartupCheck.IsChecked = false; return; }
+        try { StartupCheck.IsChecked = WindowsStartup.IsEnabled(); }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or System.Security.SecurityException)
+        { StartupCheck.IsChecked = false; StartupCheck.IsEnabled = false; StartupHint.Text = Loc.T("无法读取开机启动设置。"); }
+    }
+
+    void StartupCheck_Click(object sender, RoutedEventArgs e)
+    {
+        if (_suppress || !StartupCheck.IsEnabled || _opts.Demo || _opts.Snapshot is not null || _model.ReadOnly) return;
+        try
+        {
+            WindowsStartup.SetEnabled(StartupCheck.IsChecked == true, Environment.ProcessPath!, _model.Paths.Root);
+            RefreshStartup();
+        }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException or System.Security.SecurityException or ArgumentException)
+        { RefreshStartup(); StartupHint.Text = Loc.T("未能更改开机启动，请检查程序路径和 Windows 权限。"); }
     }
 
     void SaveAndRender()

@@ -19,6 +19,7 @@ static class Probe
             // Dispatcher-based probes must never start collectors or open the user's data.
             var app=(App)Activator.CreateInstance(typeof(App),BindingFlags.Instance|BindingFlags.NonPublic,null,[false],null)!;
             app.InitializeComponent(); Theme.Apply(true);
+            StartupProbe.Run();
             if(args.Contains("--scale-only")) { ScalingProbe.Run(app); return 0; }
             var opts=AppOptions.Parse(["--compact","--snapshot","unused"]);
             var model=new WidgetModel(new DataPaths(root),false){ReadOnly=true};model.Initialize();model.Settings.Language="zh-CN";model.Settings.CompactMode=true;model.Settings.Width=318;
@@ -29,6 +30,11 @@ static class Probe
             ChatCacheEntry Entry(string id,int minutes,int ttl=30,bool running=false)=>new(ChatPlatform.Codex,id,id,now.AddMinutes(-minutes),ttl,"fixture",running);
             Set("_cacheEntries",new[]{Entry("urgent-x",26),Entry("urgent-c",51,60) with{Platform=ChatPlatform.Claude},Entry("running",80,running:true),Entry("idle",10),Entry("expired",80),Entry("compacted",1) with{Compacted=true,CompactedAt=now},Entry("unknown",1) with{ActivityUncertain=true}});
             var window=new MainWindow(app,model,codex,opts);Set("_window",window);window.Render();
+            var startup=(CheckBox)window.FindName("StartupCheck");
+            if(startup.IsEnabled)throw new Exception("Snapshot must not modify Windows startup");
+            var startupBefore=WindowsStartup.IsEnabled();
+            startup.IsChecked=!startupBefore;startup.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
+            if(WindowsStartup.IsEnabled()!=startupBefore)throw new Exception("Snapshot click changed real startup setting");
             T Control<T>(string name)=>(T)window.FindName(name);
             void Check(bool ok,string why){if(!ok) throw new Exception(why);}
             void Click(string name)=>Control<ButtonBase>(name).RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));

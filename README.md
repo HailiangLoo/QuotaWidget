@@ -85,7 +85,7 @@ There is no automatic updater. When you want a newer version, download its EXE, 
 
 ## Data and accuracy
 
-Data stays under `%USERPROFILE%\.quotawidget\data` for the current Windows user. It is not uploaded to GitHub with the application. Use `--data-dir "your-directory"` to choose a different location. The app does not add itself to Windows startup automatically.
+Data stays under `%USERPROFILE%\.quotawidget\data` for the current Windows user. It is not uploaded to GitHub with the application. Use `--data-dir "your-directory"` to choose a different location. Enable **Start with Windows** in Settings to show the widget when you sign in; turn it off there to remove the startup entry. This is opt-in, needs no administrator access and keeps the current data directory. Keep the EXE in the same location; if you move it, turn the option off and on again from the new location.
 
 Official quota readings are the source of truth. **Rates estimate a trend from discrete quota readings and local activity.** Totals use valid raw readings; gaps are not invented or filled with zero. Activity on other devices or the web may be absent from local logs. Token totals are not an account bill and are not converted into precise per-chat weekly quota costs.
 

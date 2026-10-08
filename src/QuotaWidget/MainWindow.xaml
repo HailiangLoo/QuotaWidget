@@ -328,6 +328,11 @@
           <Button x:Name="SetupStart" Style="{StaticResource FlatButton}" Background="{DynamicResource Raised}" Padding="7" Margin="0,9,0,0" local:Translate.Content="开始监听" Click="SetupStart_Click" Visibility="Collapsed" />
           <StackPanel x:Name="AppearanceSettings">
           <DockPanel Margin="0,12,0,0">
+            <CheckBox x:Name="StartupCheck" DockPanel.Dock="Right" Style="{StaticResource FlatCheck}" Click="StartupCheck_Click" VerticalAlignment="Center" local:Translate.Name="开机自启动" />
+            <TextBlock local:Translate.Text="开机自启动" VerticalAlignment="Center" />
+          </DockPanel>
+          <TextBlock x:Name="StartupHint" Margin="0,5,0,0" FontSize="10" Foreground="{DynamicResource Muted}" TextWrapping="Wrap" />
+          <DockPanel Margin="0,12,0,0">
             <ComboBox x:Name="DisplayCombo" DockPanel.Dock="Right" Style="{StaticResource FlatCombo}" SelectionChanged="DisplayCombo_SelectionChanged">
               <ComboBoxItem Tag="used" local:Translate.Content="已用额度" />
               <ComboBoxItem Tag="remaining" local:Translate.Content="剩余额度" />

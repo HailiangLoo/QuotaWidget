@@ -447,5 +447,10 @@
   "仅平滑图：短暂停顿用虚线连接，空闲不计消耗；不合并 chat。": "Smoothed chart only: dashed links mark short idle gaps. No idle usage or chat merging.",
   "空闲 · 仅连接": "Idle · visual link",
   "关闭": "Off",
-  "15 分钟": "15 minutes"
+  "15 分钟": "15 minutes",
+  "开机自启动": "Start with Windows",
+  "登录 Windows 后显示挂件。开启后请保留程序所在位置。": "Show the widget when you sign in to Windows. Keep the EXE in its current location.",
+  "演示中不修改开机启动。": "Startup changes are disabled in previews.",
+  "无法读取开机启动设置。": "Unable to read Windows startup settings.",
+  "未能更改开机启动，请检查程序路径和 Windows 权限。": "Could not change startup. Check the EXE path and Windows permissions."
 }
