@@ -59,16 +59,13 @@ public partial class MainWindow : Window
         DisplayCombo.SelectedIndex = s.Display == "remaining" ? 1 : 0;
         LanguageCombo.SelectedIndex = Array.IndexOf(new[]{"auto","zh-CN","en"},s.Language);
         MonitoringCombo.SelectedIndex=Array.IndexOf(new[]{"both","claude","codex"},s.Monitoring);
-        var poll = Array.IndexOf(WidgetSettings.PollChoices, s.PollIntervalSeconds);
-        if (poll < 0)
-        {
-            IntervalCombo.Items.Add(new ComboBoxItem { Tag = s.PollIntervalSeconds.ToString(CultureInfo.InvariantCulture), Content = Loc.F($"{s.PollIntervalSeconds / 60.0:0.#} 分钟") });
-            poll = IntervalCombo.Items.Count - 1;
-        }
-        IntervalCombo.SelectedIndex = poll;
+        IntervalSlider.Configure("采集间隔", WidgetSettings.PollChoices, s.PollIntervalSeconds, seconds: true);
+        TrendSlider.Configure("平滑上限", [60,90,120,150], s.TrendMinutes);
+        IdleLinkSlider.Configure("连接短暂空闲", WidgetSettings.IdleLinkChoices, s.IdleLinkMinutes, off: true);
+        IntervalSlider.SelectionChanged += IntervalSlider_SelectionChanged;
+        TrendSlider.SelectionChanged += TrendSlider_SelectionChanged;
+        IdleLinkSlider.SelectionChanged += IdleLinkSlider_SelectionChanged;
         SmoothCheck.IsChecked = s.Smoothing;
-        TrendCombo.SelectedIndex = Array.IndexOf(new[] {60,90,120,150}, s.TrendMinutes);
-        IdleLinkCombo.SelectedIndex = Array.IndexOf(WidgetSettings.IdleLinkChoices, s.IdleLinkMinutes);
         TokenCheck.IsChecked = s.TokenTrackingEnabled;
         CacheCheck.IsChecked = s.CacheRemindersEnabled;
         AutoLogoutCheck.IsChecked = s.AutoLogoutOnExit;
@@ -124,6 +121,7 @@ public partial class MainWindow : Window
         Loc.Configure(language);
         Translate.RefreshResources();
         RefreshStartup();
+        foreach (var slider in new[] { IntervalSlider, TrendSlider, IdleLinkSlider }) slider.RefreshLanguage();
         CloseUsage();
         CacheDiagnosticsText.Text = _app.CacheWarning ?? Loc.T("状态读取正常");
         _flash = null;
@@ -585,15 +583,15 @@ public partial class MainWindow : Window
 
     void TokenDiagnostics_Click(object sender,RoutedEventArgs e) { ShowSettings(true); TokenDiagnostics.IsExpanded=true; TokenCalculation.IsExpanded=true; RenderTokens(); }
 
-    void TrendCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    void TrendSlider_SelectionChanged(object? sender, EventArgs e)
     {
-        if(_suppress || TrendCombo.SelectedItem is not ComboBoxItem item) return;
-        _model.Settings.TrendMinutes=int.Parse((string)item.Tag,CultureInfo.InvariantCulture); _model.SaveSettings(); Render();
+        if (_suppress) return;
+        _model.Settings.TrendMinutes=TrendSlider.Selected; _model.SaveSettings(); Render();
     }
-    void IdleLinkCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    void IdleLinkSlider_SelectionChanged(object? sender, EventArgs e)
     {
-        if (_suppress || IdleLinkCombo.SelectedItem is not ComboBoxItem { Tag: string minutes }) return;
-        _model.Settings.IdleLinkMinutes = int.Parse(minutes, CultureInfo.InvariantCulture); _model.SaveSettings(); Render();
+        if (_suppress) return;
+        _model.Settings.IdleLinkMinutes = IdleLinkSlider.Selected; _model.SaveSettings(); Render();
     }
     void TokenCheck_Click(object sender, RoutedEventArgs e)
     {
@@ -925,10 +923,10 @@ public partial class MainWindow : Window
         SaveAndRender();
     }
 
-    void IntervalCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    void IntervalSlider_SelectionChanged(object? sender, EventArgs e)
     {
-        if (_suppress || IntervalCombo.SelectedItem is not ComboBoxItem item) return;
-        _model.Settings.PollIntervalSeconds = int.Parse((string)item.Tag, CultureInfo.InvariantCulture);
+        if (_suppress) return;
+        _model.Settings.PollIntervalSeconds = IntervalSlider.Selected;
         SaveAndRender();
     }
 

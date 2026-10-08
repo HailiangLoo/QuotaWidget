@@ -123,6 +123,27 @@
       </Setter>
     </Style>
 
+    <Style x:Key="SliderTrackButton" TargetType="RepeatButton">
+      <Setter Property="Focusable" Value="False" />
+      <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="RepeatButton"><Border Background="Transparent" /></ControlTemplate></Setter.Value></Setter>
+    </Style>
+    <Style x:Key="SettingSliderInput" TargetType="Slider">
+      <Setter Property="FocusVisualStyle" Value="{StaticResource FocusRing}" />
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="Slider">
+            <Grid Background="Transparent">
+              <Border Height="3" Margin="7,0" CornerRadius="1.5" Background="{DynamicResource Track}" />
+              <Track x:Name="PART_Track">
+                <Track.DecreaseRepeatButton><RepeatButton Style="{StaticResource SliderTrackButton}" Command="Slider.DecreaseLarge" /></Track.DecreaseRepeatButton>
+                <Track.Thumb><Thumb Width="14" Height="14"><Thumb.Template><ControlTemplate TargetType="Thumb"><Ellipse Fill="{DynamicResource Blue}" /></ControlTemplate></Thumb.Template></Thumb></Track.Thumb>
+                <Track.IncreaseRepeatButton><RepeatButton Style="{StaticResource SliderTrackButton}" Command="Slider.IncreaseLarge" /></Track.IncreaseRepeatButton>
+              </Track>
+            </Grid>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
     <Style x:Key="FlatCombo" TargetType="ComboBox">
       <Setter Property="Foreground" Value="{DynamicResource Ink}" />
       <Setter Property="FontSize" Value="13" />

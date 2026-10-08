@@ -51,6 +51,8 @@ The gear is available in full and compact modes. Settings includes language, pro
 
 **Link idle gaps** defaults to **10 minutes**, with Off, 5, 10 and 15-minute choices. Faint dashed links connect confirmed short pauses in the smoothed chart, without shading or counting idle usage. Hover shows “Idle · visual link.” Missing samples, resets and known model changes remain separate; chat statistics are unchanged.
 
+Polling, smoothing and idle-gap settings use sliders with labelled stops. Click or drag to snap to a value; dragging previews it and release saves it. Arrow keys also move between stops.
+
 ## Features
 
 - Claude: five-hour, total weekly, and Fable weekly quota.

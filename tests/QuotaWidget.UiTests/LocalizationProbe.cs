@@ -76,11 +76,13 @@ static class LocalizationProbe
                 Click("CompactButton");Layout();
             }
             window.OpenSettings();Layout();
-            C<ComboBox>("TrendCombo").SelectedIndex=3;
+            C<SettingSlider>("IntervalSlider").Selected=600;
+            Check(model.Settings.PollIntervalSeconds==600&&WidgetSettings.Load(paths.Settings,out _).PollIntervalSeconds==600,"poll slider did not persist seconds");
+            C<SettingSlider>("TrendSlider").Selected=150;
             Check(model.Settings.TrendMinutes==150&&WidgetSettings.Load(paths.Settings,out _).TrendMinutes==150,"150 minute UI choice did not persist");
             foreach (var index in new[] { 0, 3, 1, 2 })
             {
-                C<ComboBox>("IdleLinkCombo").SelectedIndex=index; Layout();
+                C<SettingSlider>("IdleLinkSlider").Selected=WidgetSettings.IdleLinkChoices[index]; Layout();
                 Check(model.Settings.IdleLinkMinutes==WidgetSettings.IdleLinkChoices[index]&&WidgetSettings.Load(paths.Settings,out _).IdleLinkMinutes==WidgetSettings.IdleLinkChoices[index],"idle gap choice did not persist");
                 Check(C<RateChart>("Chart").View!.IdleLinkMinutes==WidgetSettings.IdleLinkChoices[index],"idle gap choice did not refresh chart");
             }

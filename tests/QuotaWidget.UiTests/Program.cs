@@ -20,6 +20,7 @@ static class Probe
             var app=(App)Activator.CreateInstance(typeof(App),BindingFlags.Instance|BindingFlags.NonPublic,null,[false],null)!;
             app.InitializeComponent(); Theme.Apply(true);
             StartupProbe.Run();
+            SettingSliderProbe.Run();
             if(args.Contains("--scale-only")) { ScalingProbe.Run(app); return 0; }
             var opts=AppOptions.Parse(["--compact","--snapshot","unused"]);
             var model=new WidgetModel(new DataPaths(root),false){ReadOnly=true};model.Initialize();model.Settings.Language="zh-CN";model.Settings.CompactMode=true;model.Settings.Width=318;

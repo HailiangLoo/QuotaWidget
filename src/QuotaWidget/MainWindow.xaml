@@ -339,31 +339,13 @@
             </ComboBox>
             <TextBlock local:Translate.Text="显示方式" VerticalAlignment="Center" />
           </DockPanel>
-          <DockPanel Margin="0,12,0,0">
-            <ComboBox x:Name="IntervalCombo" DockPanel.Dock="Right" Style="{StaticResource FlatCombo}" SelectionChanged="IntervalCombo_SelectionChanged">
-              <ComboBoxItem Tag="300" local:Translate.Content="5 分钟" />
-              <ComboBoxItem Tag="600" local:Translate.Content="10 分钟" />
-              <ComboBoxItem Tag="1800" local:Translate.Content="30 分钟" />
-              <ComboBoxItem Tag="3600" local:Translate.Content="60 分钟" />
-            </ComboBox>
-            <TextBlock local:Translate.Text="采集间隔" VerticalAlignment="Center" />
-          </DockPanel>
+          <local:SettingSlider x:Name="IntervalSlider" Margin="0,12,0,0" />
           <DockPanel Margin="0,12,0,0">
             <CheckBox x:Name="SmoothCheck" DockPanel.Dock="Right" Style="{StaticResource FlatCheck}" Click="SmoothCheck_Click" VerticalAlignment="Center" />
             <TextBlock local:Translate.Text="速率趋势平滑" VerticalAlignment="Center" />
           </DockPanel>
-          <DockPanel Margin="0,10,0,0">
-            <ComboBox x:Name="TrendCombo" DockPanel.Dock="Right" Style="{StaticResource FlatCombo}" SelectionChanged="TrendCombo_SelectionChanged">
-              <ComboBoxItem Tag="60" local:Translate.Content="60 分钟" /><ComboBoxItem Tag="90" local:Translate.Content="90 分钟" /><ComboBoxItem Tag="120" local:Translate.Content="120 分钟" /><ComboBoxItem Tag="150" local:Translate.Content="150 分钟" />
-            </ComboBox>
-            <TextBlock local:Translate.Text="平滑上限" VerticalAlignment="Center" />
-          </DockPanel>
-          <DockPanel Margin="0,10,0,0">
-            <ComboBox x:Name="IdleLinkCombo" DockPanel.Dock="Right" Style="{StaticResource FlatCombo}" SelectionChanged="IdleLinkCombo_SelectionChanged" local:Translate.Name="连接短暂空闲">
-              <ComboBoxItem Tag="0" local:Translate.Content="关闭" /><ComboBoxItem Tag="5" local:Translate.Content="5 分钟" /><ComboBoxItem Tag="10" local:Translate.Content="10 分钟" /><ComboBoxItem Tag="15" local:Translate.Content="15 分钟" />
-            </ComboBox>
-            <TextBlock local:Translate.Text="连接短暂空闲" VerticalAlignment="Center" />
-          </DockPanel>
+          <local:SettingSlider x:Name="TrendSlider" Margin="0,10,0,0" />
+          <local:SettingSlider x:Name="IdleLinkSlider" Margin="0,10,0,0" />
           <TextBlock Margin="0,5,0,0" FontSize="10" Foreground="{DynamicResource Muted}" TextWrapping="Wrap" local:Translate.Text="仅平滑图：短暂停顿用虚线连接，空闲不计消耗；不合并 chat。" />
           <TextBlock x:Name="CollectorText" Margin="0,6,0,0" FontSize="11" Foreground="{DynamicResource Muted}" TextWrapping="Wrap" />
           <DockPanel Margin="0,14,0,0">
