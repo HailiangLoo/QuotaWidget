@@ -41,7 +41,9 @@ public partial class MainWindow
         SizeToContent = LayoutHeight is null ? SizeToContent.Height : SizeToContent.Manual;
         Width = LayoutWidth * scale + 2 * ShadowMargin;
         if (LayoutHeight is {} height) Height = height * scale + 2 * ShadowMargin;
-        BodyViewport.MaxHeight = SettingsPanel.Visibility == Visibility.Visible ? 560 : double.PositiveInfinity;
+        // Cap natural settings height only. A resized window owns its height;
+        // a capped child would otherwise center inside the star row, wasting both ends.
+        BodyViewport.MaxHeight = SettingsPanel.Visibility == Visibility.Visible && LayoutHeight is null ? 560 : double.PositiveInfinity;
         FitChartHeight();
     }
 
