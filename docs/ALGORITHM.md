@@ -48,6 +48,8 @@ Task boundaries depend on the local log import: lifecycle events → complete pu
 
 Implementation: [ActiveRateEstimator](../src/QuotaWidget.Core/ActiveRateEstimator.cs), [RateTrend](../src/QuotaWidget.Core/RateTrend.cs), [TrendContinuity](../src/QuotaWidget.Core/TrendContinuity.cs), and [RecentUsageRate](../src/QuotaWidget.Core/RecentUsageRate.cs).
 
+“Link idle gaps” operates only at the drawing stage: 10 minutes by default, with Off, 5, 10 and 15-minute choices. It replaces the two inner vertical edges with an unfilled, faint dashed link only when both lifecycle edges are known and the original samples cover the gap without resets, known model changes or unlocated usage. A link is not a rate; hover identifies idle time. It does not enter smoothing, area, peaks, totals, the recent-hour average or chat allocation. A finished tail never extends while waiting for future work. This connects provider work fragments without merging chat identities; cumulative and unsmoothed charts stay unchanged.
+
 ## How far can it differ from the real rate?
 
 There is no provider-supplied instantaneous ground truth here, so the app cannot honestly claim a measured percentage accuracy. A counter can stay unchanged while work consumes quota, then jump later. An abrupt real burst and steady work can produce the same sampled readings; smoothing cannot distinguish them perfectly.

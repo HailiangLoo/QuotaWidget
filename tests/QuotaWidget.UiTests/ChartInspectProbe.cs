@@ -156,7 +156,7 @@ static class ChartInspectProbe
         foreach(var seconds in new[]{.052,5.193,60d})
         {
             var handoff=now.AddMinutes(-50);
-            var joined=new ChartView{Start=now.AddHours(-2),End=now,Total=Source(0),Fable=Source(0),Codex=WorkSource(1),Gaps=[],Smooth=true,
+            var joined=new ChartView{Start=now.AddHours(-2),End=now,Total=Source(0),Fable=Source(0),Codex=WorkSource(1),Gaps=[],Smooth=true,IdleLinkMinutes=0,
                 TotalVisible=false,FableVisible=false,CodexVisible=true,Activity=new([],[],[new(now.AddMinutes(-80),handoff,true,true,null),new(handoff.AddSeconds(seconds),workEnd,true,true,null)])};
             Set(joined);
             var lane=((IEnumerable)typeof(RateChart).GetField("_lanes",Private)!.GetValue(chart)!).Cast<object>().Single();

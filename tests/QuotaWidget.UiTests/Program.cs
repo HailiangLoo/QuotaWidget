@@ -255,6 +255,7 @@ static class Probe
             axisChart.View=AxisView(true,true);Check(axisChart.Height==52&&axisChart.AxisBounds(false) is null&&axisChart.AxisBounds(true) is null,"fully collapsed chart kept blank axis space");
             Console.WriteLine("Chart axes: each expanded provider has its own axis; collapsed providers reserve no axis space; headers never overlap either axis.");
             ChartInspectProbe.Run();
+            IdleLinkProbe.Run();
             MonitoringRefreshProbe.Run(app);
             FableTransitionProbe.Run(app);
             LocalizationProbe.Run(app);

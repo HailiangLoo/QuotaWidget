@@ -24,7 +24,7 @@ public static class Dashboard
         var codexCumulative=settings.ChartModeFor(ChatPlatform.Codex)=="cumulative";
         var chart = new ChartView
         {
-            Start = start, End = end, Smooth = settings.Smoothing, TrendMinutes = settings.TrendMinutes,
+            Start = start, End = end, Smooth = settings.Smoothing, TrendMinutes = settings.TrendMinutes, IdleLinkMinutes = settings.IdleLinkMinutes,
             TrendBoundaries = trendBoundaries ?? [],
             Activity = activity ?? TrendActivity.Empty,
             Total = c.Total, Fable = fable, Codex = x, Gaps = gaps, FableToClaudeFactor = fableFactor,

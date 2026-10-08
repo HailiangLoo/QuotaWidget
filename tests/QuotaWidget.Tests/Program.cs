@@ -1120,6 +1120,7 @@ FableDisplayTests.Register(tests);
 LedgerIsolationTests.Register(tests);
 WorkActivityTests.Register(tests);
 ActiveRateEstimatorTests.Register(tests);
+IdleLinkTests.Register(tests);
 ResetRateTests.Register(tests);
 ContinuousResetTests.Register(tests);
 TimeAxisTests.Register(tests);

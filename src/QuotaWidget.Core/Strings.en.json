@@ -442,5 +442,10 @@
   "合成演示数值，不参与实际额度校准。": "Synthetic illustration; not used to calibrate real quota.",
   "拖动调整宽度": "Drag to adjust width",
   "拖动调整高度": "Drag to adjust height",
-  "拖动调整窗口大小": "Drag to resize window"
+  "拖动调整窗口大小": "Drag to resize window",
+  "连接短暂空闲": "Link idle gaps",
+  "仅平滑图：短暂停顿用虚线连接，空闲不计消耗；不合并 chat。": "Smoothed chart only: dashed links mark short idle gaps. No idle usage or chat merging.",
+  "空闲 · 仅连接": "Idle · visual link",
+  "关闭": "Off",
+  "15 分钟": "15 minutes"
 }

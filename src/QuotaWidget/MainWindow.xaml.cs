@@ -68,6 +68,7 @@ public partial class MainWindow : Window
         IntervalCombo.SelectedIndex = poll;
         SmoothCheck.IsChecked = s.Smoothing;
         TrendCombo.SelectedIndex = Array.IndexOf(new[] {60,90,120,150}, s.TrendMinutes);
+        IdleLinkCombo.SelectedIndex = Array.IndexOf(WidgetSettings.IdleLinkChoices, s.IdleLinkMinutes);
         TokenCheck.IsChecked = s.TokenTrackingEnabled;
         CacheCheck.IsChecked = s.CacheRemindersEnabled;
         AutoLogoutCheck.IsChecked = s.AutoLogoutOnExit;
@@ -169,6 +170,7 @@ public partial class MainWindow : Window
         _codex.Settings.RangeMinutes = s.RangeMinutes;
         _codex.Settings.Smoothing = s.Smoothing;
         _codex.Settings.TrendMinutes = s.TrendMinutes;
+        _codex.Settings.IdleLinkMinutes = s.IdleLinkMinutes;
         _codex.Settings.Display = s.Display;
         _codex.Settings.PollIntervalSeconds = s.PollIntervalSeconds;
         var cv = _codex.BuildView(now, watchCodex?range:60);
@@ -584,6 +586,11 @@ public partial class MainWindow : Window
     {
         if(_suppress || TrendCombo.SelectedItem is not ComboBoxItem item) return;
         _model.Settings.TrendMinutes=int.Parse((string)item.Tag,CultureInfo.InvariantCulture); _model.SaveSettings(); Render();
+    }
+    void IdleLinkCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_suppress || IdleLinkCombo.SelectedItem is not ComboBoxItem { Tag: string minutes }) return;
+        _model.Settings.IdleLinkMinutes = int.Parse(minutes, CultureInfo.InvariantCulture); _model.SaveSettings(); Render();
     }
     void TokenCheck_Click(object sender, RoutedEventArgs e)
     {

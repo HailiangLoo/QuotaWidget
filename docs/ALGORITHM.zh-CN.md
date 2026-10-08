@@ -47,6 +47,8 @@ Chat 计时表示距本机模型请求的时间，不代表已确认的服务端
 
 实现见 [ActiveRateEstimator](../src/QuotaWidget.Core/ActiveRateEstimator.cs)、[RateTrend](../src/QuotaWidget.Core/RateTrend.cs)、[TrendContinuity](../src/QuotaWidget.Core/TrendContinuity.cs) 和 [RecentUsageRate](../src/QuotaWidget.Core/RecentUsageRate.cs)。
 
+“连接短暂空闲”只处理最后的绘图，默认 10 分钟，可选关闭、5、10、15 分钟。只有前段明确结束、后段明确开始、中间原始采样连续且没有重置、已知模型切换或未定位增量时，才用不填色的淡虚线替代内侧的两根竖边。虚线不是速率，悬停显示空闲；它不进入平滑、面积、峰值、累计、近一小时均速或 chat 分摊。没有后续工作时不延长尾段；该选项连接平台工作片段，不把不同 chat 合并。累计图和关闭平滑时保持原样。
+
 ## 跟真实速率差多少
 
 没有官方瞬时消耗真值，就不能承诺一个经过测量的“准确率百分比”。额度没有跳点时，工作可能仍在持续消耗；一次突发和一段匀速工作，也可能产生相同的采样读数。单靠平滑无法完全区分。

@@ -24,6 +24,7 @@ public sealed class RateChart : FrameworkElement
     sealed record Lane(string Name, string Color, SeriesData Source, RateTrend Trend, CumulativeSeries Cumulative, int Panel)
     {
         public List<ChartPeak>? Peaks { get; set; }
+        public List<IReadOnlyList<TrendPoint>> IdleLinks { get; set; } = [];
     }
     int PanelCount => _lanes.Select(l => l.Panel).Distinct().Count();
     double? _availableHeight;
@@ -86,8 +87,16 @@ public sealed class RateChart : FrameworkElement
             _lanes = [];
             if (value is { } v)
             {
-                void Add(string name, string color, SeriesData source, RateTrend trend, CumulativeSeries? cumulative, int panel) =>
-                    _lanes.Add(new(name, color, source, trend, cumulative ?? CumulativeSeries.Build(source, v.Start, v.End), panel));
+                void Add(string name, string color, SeriesData source, RateTrend trend, CumulativeSeries? cumulative, int panel)
+                {
+                    var lane = new Lane(name, color, source, trend, cumulative ?? CumulativeSeries.Build(source, v.Start, v.End), panel);
+                    if (v.Smooth && !v.IsCumulative(name == "Codex") && v.IdleLinkMinutes > 0)
+                        lane.IdleLinks = ChartPath.IdleLinks(trend, source,
+                            name == "Codex" ? v.Episodes.Codex : name == "Fable" ? v.Episodes.Fable : v.Episodes.Claude,
+                            v.IdleLinkMinutes, name == "Codex" ? [] : v.ClaudeModelChanges,
+                            name == "Claude" && v.MergesFable ? v.FableOnlySpans : name == "Fable" ? v.FableRateConflicts : []);
+                    _lanes.Add(lane);
+                }
                 if (v.TotalVisible) Add("Claude", "Claude", v.Total, v.TotalTrend, v.TotalCumulative, 0);
                 if (v.FableDrawable) Add("Fable", "Fable", v.Fable, v.DisplayFableTrend, v.FableCumulative, 0);
                 if (v.CodexVisible && v.Codex is { } codex) Add("Codex", "Violet", codex, v.CodexTrend!, v.CodexCumulative, _lanes.Count > 0 ? 1 : 0);
@@ -289,8 +298,9 @@ public sealed class RateChart : FrameworkElement
 
         // Each panel follows its own visible peak. Claude/Fable share a panel; Codex does not.
         var allPoints = _lanes.Select(l => Collapsed(l.Panel) ? new List<IReadOnlyList<TrendPoint>>() : Points(l, v)).ToList();
+        var idleLinks = _lanes.Select(l => Collapsed(l.Panel) ? [] : ChartPath.Clip(l.IdleLinks, v.Start, v.End)).ToList();
         var scales = ChartScale.ForPanels(_lanes.Select((lane, j) =>
-            (lane.Panel, allPoints[j].SelectMany(points => points).Select(point => point.Rate))));
+            (lane.Panel, allPoints[j].Concat(idleLinks[j]).SelectMany(points => points).Select(point => point.Rate))));
         double Y(int panel, double value) => PlotBottom(panel) - value / scales[panel].Top * (PlotBottom(panel) - PlotTop(panel));
 
         for (var i = 0; i < PanelCount; i++)
@@ -333,6 +343,15 @@ public sealed class RateChart : FrameworkElement
                 var thickness = drawn.Length>1 ? lane.Name == "Claude" ? 2.6 : 1.6 : 1.8;
                 var pen = new Pen(color, thickness) { LineJoin = PenLineJoin.Round, StartLineCap = PenLineCap.Round, EndLineCap = PenLineCap.Round };
                 dc.DrawGeometry(null, pen, Geometry(pts));
+            }
+            // Idle links have no fill and never enter totals, peaks or numeric hover.
+            foreach (var j in indices)
+            foreach (var link in idleLinks[j])
+            {
+                var pen = new Pen(Theme.Brush(_lanes[j].Color), 1.3) { DashStyle = new DashStyle([3, 3], 0) };
+                dc.PushOpacity(.6);
+                dc.DrawGeometry(null, pen, Geometry(link.Select(p => new Point(X(p.Time), Y(i, p.Rate))).ToArray()));
+                dc.Pop();
             }
             dc.Pop();
             DrawBoundaries(dc, i, indices, v, labelObstacles);
@@ -405,7 +424,7 @@ public sealed class RateChart : FrameworkElement
     {
         // Use the small band above the top gridline, while staying below the summary text.
         var bounds = new Rect(_left + 1, PlotTop(panel) - 6, PlotRight - _left - 2, PlotBottom(panel) - PlotTop(panel) + 5);
-        var curves = indices.SelectMany(j => allPoints[j]).Select(run =>
+        var curves = indices.SelectMany(j => allPoints[j].Concat(_lanes[j].IdleLinks)).Select(run =>
             run.Select(p => new Point(X(p.Time), y(panel, p.Rate))).ToArray()).ToArray();
         var candidates = indices.SelectMany(j => (_lanes[j].Peaks ??= PeakLabels.Find(allPoints[j]))
             .Where(peak=>_lanes[j].Trend.CanLabelPeak(peak.Time))
@@ -488,7 +507,11 @@ public sealed class RateChart : FrameworkElement
         List<IReadOnlyList<TrendPoint>> points;
         if (v.IsCumulative(lane.Name=="Codex"))
             points = lane.Cumulative.Segments.GroupBy(s => s.Group).Select(g => (IReadOnlyList<TrendPoint>)g.SelectMany(s => new[] { new TrendPoint(s.Start, s.From), new TrendPoint(s.End, s.To) }).ToArray()).ToList();
-        else if (v.Smooth) points = lane.Trend.Runs.Select(ChartPath.HardEdges).ToList();
+        else if (v.Smooth) points = lane.Trend.Runs.Select(r => ChartPath.HardEdges(r with
+        {
+            HardStart = r.HardStart && !lane.IdleLinks.Any(link => link[^1].Time == r.Points[0].Time),
+            HardEnd = r.HardEnd && !lane.IdleLinks.Any(link => link[0].Time == r.Points[^1].Time)
+        })).ToList();
         else points = lane.Source.Segments.Where(s => s.Valid && s.Start >= v.Start && s.End <= v.End).GroupBy(s => s.Group)
             .Select(g => (IReadOnlyList<TrendPoint>)g.SelectMany(s => new[] { new TrendPoint(s.Start, s.Rate), new TrendPoint(s.End, s.Rate) }).ToArray()).ToList();
         if(lane.Name=="Claude"&&v.MergesFable)points=FableDisplay.Omit(points,v.FableOnlySpans);
@@ -519,7 +542,8 @@ public sealed class RateChart : FrameworkElement
             var missing = lane.Name=="Fable"&&view.FableRateConflictAt(time)?"分项样本未对齐":observed?.Label ?? (gap?.Label=="断开" ? "未更新" : gap?.Label) ?? "未记录";
             if (missing == "已暂停") missing = "监听切换";
             var unmatched=!cumulative&&view.Smooth?lane.Trend.UnlocatedAt(time):null;
-            rows.Add(new(name, unmatched is not null?Loc.F($"+{unmatched.Delta:0.#}点") : value is { } reading ? cumulative?Number(reading):RatePresentation.Estimate(reading)+(unlocated?Loc.T(" 点/h"):"") : Loc.T(missing), color));
+            var idleLink=lane.IdleLinks.Any(link=>time>link[0].Time&&time<link[^1].Time);
+            rows.Add(new(name, idleLink ? Loc.T("空闲 · 仅连接") : unmatched is not null?Loc.F($"+{unmatched.Delta:0.#}点") : value is { } reading ? cumulative?Number(reading):RatePresentation.Estimate(reading)+(unlocated?Loc.T(" 点/h"):"") : Loc.T(missing), color));
         }
         // The window overlay can use space beyond the chart without covering the active plot
         // or intercepting the pointer. Fall back to the other side near the window edge.

@@ -49,6 +49,8 @@ The **Est. pts** column apportions observed weekly quota using locally calibrate
 
 The gear is available in full and compact modes. Settings includes language, provider connections, display units, polling, smoothing, chat cache reminders and local token tracking. Smoothing caps are **60, 90, 120 (default), and 150 minutes**. The estimator adapts below that cap, so choosing 150 does not force every curve to use a 150-minute window. This preference affects the rate curve, not recorded cumulative points or the observed one-hour average.
 
+**Link idle gaps** defaults to **10 minutes**, with Off, 5, 10 and 15-minute choices. Faint dashed links connect confirmed short pauses in the smoothed chart, without shading or counting idle usage. Hover shows “Idle · visual link.” Missing samples, resets and known model changes remain separate; chat statistics are unchanged.
+
 ## Features
 
 - Claude: five-hour, total weekly, and Fable weekly quota.

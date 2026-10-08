@@ -30,6 +30,8 @@ public sealed class WidgetSettings
     public bool CacheRemindersEnabled { get; set; } = true;
     public bool TokenTrackingEnabled { get; set; } = true;
     public int TrendMinutes { get; set; } = 120;
+    public static readonly int[] IdleLinkChoices = [0, 5, 10, 15];
+    public int IdleLinkMinutes { get; set; } = 10;
     public string? ClaudeConfigDir { get; set; }
     public string? ClaudeExePath { get; set; }
     public string FableModelName { get; set; } = "Fable";
@@ -113,6 +115,7 @@ public sealed class WidgetSettings
         if (ClaudeChartMode is not ("rate" or "cumulative")) ClaudeChartMode = ChartMode;
         if (CodexChartMode is not ("rate" or "cumulative")) CodexChartMode = ChartMode;
         if (TrendMinutes is not (60 or 90 or 120 or 150)) TrendMinutes = 120;
+        if (!IdleLinkChoices.Contains(IdleLinkMinutes)) IdleLinkMinutes = 10;
         if (!double.IsFinite(Width) || Width < MinWidth || Width > MaxWidth) Width = 300;
         if (!double.IsFinite(CompactWidth) || CompactWidth < MinWidth || CompactWidth > MaxWidth) CompactWidth = 240;
         static double? NormalizeHeight(double? height) => height is not {} h || !double.IsFinite(h) || h <= 0 ? null : Math.Clamp(h, MinHeight, MaxHeight);

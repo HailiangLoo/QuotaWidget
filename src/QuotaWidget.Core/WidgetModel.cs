@@ -24,6 +24,7 @@ public sealed class ChartView
     public required DateTimeOffset End { get; init; }
     public required bool Smooth { get; init; }
     public int TrendMinutes { get; init; } = 120;
+    public int IdleLinkMinutes { get; init; } = 10;
     public IReadOnlyList<DateTimeOffset> TrendBoundaries { get; init; } = [];
     public TrendActivity Activity { get; init; } = TrendActivity.Empty;
     TrendActivity? _episodes;
@@ -463,7 +464,7 @@ public sealed class WidgetModel
         }
         var chart = new ChartView
         {
-            Start = start, End = end, Smooth = s.Smoothing, TrendMinutes = s.TrendMinutes, Total = total, Fable = fable, Gaps = gaps,
+            Start = start, End = end, Smooth = s.Smoothing, TrendMinutes = s.TrendMinutes, IdleLinkMinutes = s.IdleLinkMinutes, Total = total, Fable = fable, Gaps = gaps,
             TotalVisible = s.TotalVisible, FableVisible = s.FableVisible, BlockedText = blocked,
         };
 
