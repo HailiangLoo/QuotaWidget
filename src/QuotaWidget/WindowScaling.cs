@@ -20,7 +20,18 @@ public partial class MainWindow
 
     bool CompactGeometry => _model.Settings.CompactMode && SettingsPanel.Visibility != Visibility.Visible;
     double LayoutWidth => CompactGeometry ? _model.Settings.CompactWidth : _model.Settings.Width;
-    double? LayoutHeight => CompactGeometry ? _model.Settings.CompactHeight : _model.Settings.Height;
+    // Compact height follows live content. A manual height is only a drag preview;
+    // old saved compact heights must not leave space after chat rows disappear.
+    double? LayoutHeight => CompactGeometry ? _resizeDragging ? _model.Settings.CompactHeight : null : _model.Settings.Height;
+
+    double CompactHeightLimit()
+    {
+        if (_opts.Snapshot is not null) return double.PositiveInfinity;
+        var hwnd = new WindowInteropHelper(this).Handle;
+        var area = hwnd == IntPtr.Zero ? System.Windows.Forms.Screen.PrimaryScreen!.WorkingArea
+            : System.Windows.Forms.Screen.FromHandle(hwnd).WorkingArea;
+        return Math.Max(WidgetSettings.MinHeight, (area.Height / VisualTreeHelper.GetDpi(this).DpiScaleY - 2 * ShadowMargin) / _model.Settings.UiScale);
+    }
 
     void InitializeScaling()
     {
@@ -35,6 +46,7 @@ public partial class MainWindow
     {
         var scale = _model.Settings.UiScale;
         Outer.Width = LayoutWidth;
+        Outer.MaxHeight = CompactGeometry && !_resizeDragging ? CompactHeightLimit() : double.PositiveInfinity;
         Outer.Height = LayoutHeight ?? double.NaN;
         // Preserve older font-scale preferences, but resizing never changes them.
         WidgetScale.ScaleX = WidgetScale.ScaleY = scale;
@@ -66,11 +78,11 @@ public partial class MainWindow
     void ResizeGrip_DragStarted(object sender, DragStartedEventArgs e)
     {
         CloseUsage();
-        _resizeDragging = true;
         _resizeEdges = (string)((Thumb)sender).Tag;
         _resizeCompact = CompactGeometry;
         _resizeWidth = LayoutWidth;
         _resizeHeight = LayoutHeight;
+        _resizeDragging = true;
         _resizePointerStart = ResizePointer();
         var dpi = VisualTreeHelper.GetDpi(this);
         _resizeBounds = NativePlacement.Bounds(new WindowInteropHelper(this).Handle) ??
@@ -133,6 +145,16 @@ public partial class MainWindow
             if (hwnd != IntPtr.Zero) NativePlacement.Move(hwnd, (int)Math.Round(_resizeBounds.X), (int)Math.Round(_resizeBounds.Y));
         }
         _resizeDragging = false;
+        if (_resizeCompact)
+        {
+            _model.Settings.CompactHeight = null;
+            ApplyWidgetScale();
+            UpdateLayout();
+            var hwnd = new WindowInteropHelper(this).Handle;
+            // Top-corner drags keep their opposite edge after snapping to content.
+            if (!e.Canceled && _resizeEdges.Contains('T') && NativePlacement.Bounds(hwnd) is {} bounds)
+                NativePlacement.Move(hwnd, (int)Math.Round(bounds.Left), (int)Math.Round(_resizeBounds.Bottom - bounds.Height));
+        }
         _model.SaveSettings();
         QueueScaleFit();
     }
@@ -158,8 +180,9 @@ public partial class MainWindow
             var scale = _model.Settings.UiScale;
             var maxWidth = Math.Max(WidgetSettings.MinWidth, (area.Width / dpi.DpiScaleX - 2 * ShadowMargin) / scale);
             var maxHeight = Math.Max(WidgetSettings.MinHeight, (area.Height / dpi.DpiScaleY - 2 * ShadowMargin) / scale);
+            if (CompactGeometry) { Outer.MaxHeight = maxHeight; UpdateLayout(); }
             var height = LayoutHeight;
-            if (Outer.ActualHeight > maxHeight + 1) height = maxHeight;
+            if (!CompactGeometry && Outer.ActualHeight > maxHeight + 1) height = maxHeight;
             if (LayoutWidth > maxWidth || height != LayoutHeight)
             {
                 SetLayoutSize(CompactGeometry, Math.Min(LayoutWidth, maxWidth), height);

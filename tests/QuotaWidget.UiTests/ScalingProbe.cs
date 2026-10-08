@@ -105,12 +105,36 @@ static class ScalingProbe
             model.Settings.Height=100;Invoke("ApplyWidgetScale");Layout(false);
             Check(C<ScrollViewer>("BodyViewport").ScrollableHeight>0,"short window clipped content without scrolling");
             Check(C<FrameworkElement>("TitleBar").ActualHeight>0,"short window lost title controls");
-            Click("CompactButton");Layout();Near(270,C<Grid>("Outer").Width,"compact lost separate width");Near(180,C<Grid>("Outer").Height,"compact lost separate height");
+            Click("CompactButton");Layout();Near(270,C<Grid>("Outer").Width,"compact lost separate width");
+            Check(double.IsNaN(C<Grid>("Outer").Height)&&window.SizeToContent==SizeToContent.Height,"compact reused saved manual height");
+            var compactHeight=Bounds().Height;
             window.OpenSettings();Layout();Near(370,C<Grid>("Outer").Width,"settings width");
             Check(C<ScrollViewer>("BodyViewport").ScrollableHeight>0,"short settings cannot scroll");
-            Click("SettingsButton");Layout();Near(270,C<Grid>("Outer").Width,"settings return width");Near(180,C<Grid>("Outer").Height,"settings return height");
+            Click("SettingsButton");Layout();Near(270,C<Grid>("Outer").Width,"settings return width");Near(compactHeight,Bounds().Height,"settings return content height");
             var corner=C<Thumb>("BottomRightGrip");corner.RaiseEvent(new MouseButtonEventArgs(Mouse.PrimaryDevice,0,MouseButton.Left){RoutedEvent=Control.MouseDoubleClickEvent});
             Near(270,model.Settings.CompactWidth,"double-click reset size");
+            // Refresh only chat rows, as the live metadata worker does. No full
+            // Render is allowed to mask a compact window that keeps obsolete height.
+            Set("_opts",AppOptions.Parse(["--snapshot","unused"]));
+            model.Settings.Height=420;model.Settings.CompactHeight=700;Layout();
+            double Rows(int count)
+            {
+                Set("_cacheEntries",Enumerable.Range(0,count).Select(i=>new ChatCacheEntry(ChatPlatform.Codex,"fit-"+i,"Task "+i,now,30,"fixture",true)).ToArray());
+                window.RenderCache();Layout(false);
+                Check(C<StackPanel>("CompactChatRows").Children.Count==count,"compact fixture row count differs");
+                return C<Grid>("Outer").ActualHeight;
+            }
+            var many=Rows(20);var two=Rows(2);var empty=Rows(0);var again=Rows(2);
+            Check(many>two+100&&two>empty&&Math.Abs(two-again)<1,"compact did not follow live row changes");
+            var outer=C<Grid>("Outer");var body=C<StackPanel>("BodyContent");
+            var bottom=body.TransformToAncestor(outer).Transform(new Point(0,body.ActualHeight)).Y;
+            Check(outer.ActualHeight-bottom<2,"compact leaves space below its content");
+            Rows(80);outer.MaxHeight=230;Layout(false);
+            Check(outer.ActualHeight<=231&&C<ScrollViewer>("BodyViewport").ScrollableHeight>0,"capped compact view cannot scroll");
+            Rows(2);Check(outer.ActualHeight<230,"compact stayed at screen cap after rows disappeared");
+            Click("CompactButton");Layout();Near(420,C<Grid>("Outer").Height,"compact auto-fit changed full-mode height");
+            Set("_opts",opts);
+            Console.WriteLine("Compact content fit: 20→2→0→2 live rows shrink/grow without full render; legacy height ignored; bottom follows content; long lists scroll at cap and shrink again; full height retained.");
             Console.WriteLine("Resize UI: all eight handles, full/compact, rate/cumulative, completion/cancel; physical HWND dimensions/opposite anchors, hit areas, no refresh during drag, history/inspector retention, limits, font size, scrolling and per-mode persistence passed.");
         }
         finally{window?.Close();Directory.Delete(root,true);}

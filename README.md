@@ -60,7 +60,7 @@ Polling, smoothing and idle-gap settings use sliders with labelled stops. Click 
 - Independent rate or cumulative views for each provider, with 1h, 5h, 12h, 24h, 3d, and all-history ranges.
 - Main-chat activity and cache reminders; identified subagents stay out of the management list, while their usage remains in statistics and is grouped under a parent when confirmed.
 - Always on top, system tray, compact mode, and layouts that adapt to narrow windows.
-- Resize from any corner or edge: corners adjust width and height independently, sides adjust one dimension. Text keeps its size and charts stay visible. Full and compact modes remember their own dimensions; resize handles have no visible icons.
+- Resize from any corner or edge: corners adjust width and height independently, sides adjust one dimension. Text keeps its size and charts stay visible. Full mode remembers its dimensions; compact mode remembers its width and fits its height to the last visible item, including after a resize or a chat-list update. Long compact lists scroll within the screen. Resize handles have no visible icons.
 - English and Simplified Chinese, with an instant language switch in Settings.
 
 ## Getting started
