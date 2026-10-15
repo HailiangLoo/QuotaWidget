@@ -66,6 +66,31 @@ static class ExpandedChatListProbe
             Check(Order().First()=="codex-warning","focused list reordered during interaction");
             Keyboard.Focus(C<System.Windows.Controls.Primitives.ButtonBase>("SettingsButton"));Tick(124);
             Check(Order().First()=="claude-hour","deferred order did not apply after interaction");
+            // Changing layouts must reuse the same order and minute budget,
+            // rather than restarting a second sort policy or cooldown.
+            var compactRows=C<StackPanel>("CompactChatRows");
+            string[] CompactOrder()=>compactRows.Children.Cast<UIElement>().Select(Name).ToArray();
+            void Mode(bool compact,int seconds)
+            {
+                model.Settings.CompactMode=compact;
+                typeof(MainWindow).GetMethod("ApplyCompactLayout",flags)!.Invoke(window,null);Tick(seconds);
+            }
+            var fullOrder=Order();Mode(true,130);
+            Check(CompactOrder().SequenceEqual(fullOrder),"compact changed the shared order");
+            data[0]=data[0] with{RequestAt=now.AddMinutes(-29.9)};Tick(150);
+            Check(CompactOrder().SequenceEqual(fullOrder),"switching to compact reset the minute budget");
+            body.Focusable=true;Keyboard.Focus(body);Layout(false);
+            Check(body.IsKeyboardFocusWithin,"compact focus fixture failed");Tick(185);
+            Check(CompactOrder().SequenceEqual(fullOrder),"focused compact list reordered during interaction");
+            Keyboard.Focus(C<System.Windows.Controls.Primitives.ButtonBase>("SettingsButton"));Tick(186);
+            Check(CompactOrder().First()=="codex-warning"&&CompactOrder().Last()=="running","compact did not use the same relative-age policy");
+            var firstCompact=compactRows.Children[0];Tick(187);
+            Check(ReferenceEquals(firstCompact,compactRows.Children[0]),"unchanged compact refresh rebuilt rows");
+            var compactOrder=CompactOrder();Mode(false,190);
+            Check(Order().SequenceEqual(compactOrder),"returning to expanded changed the shared order");
+            data[2]=data[2] with{RequestAt=now.AddMinutes(-59.99)};Tick(200);
+            Check(Order().SequenceEqual(compactOrder),"returning to expanded reset the minute budget");
+            Tick(247);Check(Order().First()=="claude-hour","shared cooldown did not expire across layouts");
             foreach(var count in new[]{8,20})foreach(var height in new[]{360d,600d,700d,1000d})foreach(var scale in new[]{1d,1.25d})
             {
                 model.Settings.Height=height;model.Settings.UiScale=scale;
@@ -99,7 +124,7 @@ static class ExpandedChatListProbe
             Check(finalBounds.Top>=-1&&finalBounds.Bottom<=viewport.ViewportHeight+1,"last archived chat is clipped");
             Check(body.ScrollableHeight<1,"archive expansion made the entire widget scroll");
             inspect?.Invoke(window,"archive-bottom");
-            Console.WriteLine("PASS: chats scroll locally; 8/20 rows × four heights × two scales stay reachable, meters/charts stay fixed, wheel stops locally, archive stays reachable; relative reminder ratios reorder at most once a minute and defer during interaction.");
+            Console.WriteLine("PASS: chats scroll locally; 8/20 rows × four heights × two scales stay reachable, meters/charts stay fixed, wheel stops locally, archive stays reachable; both layouts share relative ordering and minute cooldown, preserve them across switches, and defer during interaction.");
         }
         finally{window?.Close();Set("_window",null);Set("_cacheEntries",Array.Empty<ChatCacheEntry>());if(Directory.Exists(root))Directory.Delete(root,true);}
     }

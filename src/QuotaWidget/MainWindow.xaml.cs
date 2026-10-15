@@ -313,15 +313,13 @@ public partial class MainWindow : Window
     {
         CompactChats.Visibility=_model.Settings.CacheRemindersEnabled?Visibility.Visible:Visibility.Collapsed;
         if(!_model.Settings.CacheRemindersEnabled) return;
-        var active=_app.CacheEntries(now).Where(e=>!e.Compacted&&!e.Expired(now)&&!e.ActivityUncertain)
-            .OrderByDescending(e=>e.Urgency(now)==2?2:e.Running?1:0)
-            .ThenByDescending(e=>e.Running?0:e.AgeMinutes(now)/Math.Max(1,e.WindowMinutes)).ToArray();
+        var active=OrderedActiveChats(_app.CacheEntries(now),now);
         var signature=Theme.IsDark+"|"+_app.CacheWarning+"|"+string.Join(";",active.Select(e=>$"{e.Platform}:{e.Id}:{e.Title}:{e.Project}:{e.Running}:{Math.Floor(e.AgeMinutes(now))}:{e.WindowMinutes}"));
         if(signature==_compactChatSignature) return;
         _compactChatSignature=signature;
         CompactChatRows.Children.Clear();
         foreach(var entry in active) CompactChatRows.Children.Add(CacheRow(entry,now,dense:true));
-        CompactChatsEmpty.Visibility=active.Length==0?Visibility.Visible:Visibility.Collapsed;
+        CompactChatsEmpty.Visibility=active.Count==0?Visibility.Visible:Visibility.Collapsed;
         CompactChatsEmpty.Text=_app.CacheWarning is null?Loc.T("暂无计时 chat"):Loc.T("chat 记录暂不可用");
         CompactChatsEmpty.ToolTip=_app.CacheWarning is null?null:Loc.T("部分 chat 状态暂不可读");
         if(_opts.Snapshot is null&&IsVisible) Dispatcher.BeginInvoke(DispatcherPriority.Loaded,()=>NativePlacement.FitToWorkArea(new WindowInteropHelper(this).Handle));
@@ -380,6 +378,33 @@ public partial class MainWindow : Window
     readonly Dictionary<string, long> _chatOrder = new();
     long _chatSequence;
     DateTimeOffset _chatSortedAt;
+    static string ChatKey(ChatCacheEntry e) => e.Platform + ":" + e.Id;
+
+    List<ChatCacheEntry> OrderedActiveChats(IReadOnlyList<ChatCacheEntry> entries,DateTimeOffset now)
+    {
+        var keys = entries.Select(ChatKey).ToHashSet();
+        foreach (var key in _chatOrder.Keys.Where(k => !keys.Contains(k)).ToArray()) _chatOrder.Remove(key);
+        foreach (var entry in entries)
+            if (!_chatOrder.ContainsKey(ChatKey(entry))) _chatOrder[ChatKey(entry)] = _chatSequence++;
+        var active = entries.Where(e => !e.Compacted && !e.Expired(now) && !e.ActivityUncertain)
+            .OrderBy(e => _chatOrder[ChatKey(e)]).ToList();
+        // Normalize by each reminder window, not elapsed minutes. Re-rank at
+        // most once a minute; both layouts share the order and its cooldown.
+        // Compact scrolling belongs to BodyViewport, including its scrollbar.
+        var viewport = _model.Settings.CompactMode ? BodyViewport : ChatViewport;
+        if (_chatSortedAt == default || ((now - _chatSortedAt >= TimeSpan.FromMinutes(1) || now < _chatSortedAt) &&
+            !viewport.IsMouseOver && !viewport.IsKeyboardFocusWithin && Mouse.LeftButton != MouseButtonState.Pressed))
+        {
+            active = active.OrderByDescending(e => e.WorkPending ? -1 : e.AgeMinutes(now) / e.WindowMinutes).ToList();
+            _chatSequence = 0;
+            foreach (var entry in active) _chatOrder[ChatKey(entry)] = _chatSequence++;
+            foreach (var entry in entries.Where(e => e.Compacted || e.Expired(now) || e.ActivityUncertain))
+                _chatOrder[ChatKey(entry)] = _chatSequence++;
+            _chatSortedAt = active.Count == 0 ? default : now;
+        }
+        return active;
+    }
+
     public void RenderCache() => RenderCacheAt(DateTimeOffset.Now);
 
     void RenderCacheAt(DateTimeOffset now)
@@ -390,29 +415,11 @@ public partial class MainWindow : Window
         CachePanel.Visibility = _model.Settings.CacheRemindersEnabled ? Visibility.Visible : Visibility.Collapsed;
         if (!_model.Settings.CacheRemindersEnabled) return;
         var entries = _app.CacheEntries(now);
-        string Key(ChatCacheEntry e) => e.Platform + ":" + e.Id;
-        var keys = entries.Select(Key).ToHashSet();
-        foreach (var key in _chatOrder.Keys.Where(k => !keys.Contains(k)).ToArray()) _chatOrder.Remove(key);
-        foreach (var entry in entries)
-            if (!_chatOrder.ContainsKey(Key(entry))) _chatOrder[Key(entry)] = _chatSequence++;
-        var active = entries.Where(e => !e.Compacted && !e.Expired(now) && !e.ActivityUncertain)
-            .OrderBy(e => _chatOrder[Key(e)]).ToList();
-        // Normalize by each reminder window, not elapsed minutes. Re-rank at
-        // most once a minute and never under the pointer or keyboard focus.
-        if (_chatSortedAt == default || ((now - _chatSortedAt >= TimeSpan.FromMinutes(1) || now < _chatSortedAt) &&
-            !ChatViewport.IsMouseOver && !ChatViewport.IsKeyboardFocusWithin && Mouse.LeftButton != MouseButtonState.Pressed))
-        {
-            active = active.OrderByDescending(e => e.WorkPending ? -1 : e.AgeMinutes(now) / e.WindowMinutes).ToList();
-            _chatSequence = 0;
-            foreach (var entry in active) _chatOrder[Key(entry)] = _chatSequence++;
-            foreach (var entry in entries.Where(e => e.Compacted || e.Expired(now) || e.ActivityUncertain))
-                _chatOrder[Key(entry)] = _chatSequence++;
-            _chatSortedAt = active.Count == 0 ? default : now;
-        }
+        var active = OrderedActiveChats(entries,now);
         var expired = entries.Where(e => e.Compacted || e.Expired(now) || e.ActivityUncertain)
             .OrderByDescending(e => e.Compacted ? e.CompactedAt ?? e.RequestAt : e.ActivityAt ?? e.RequestAt).ToList();
         // Usually only the minute changes: avoid replacing controls every polling tick.
-        var signature = Theme.IsDark + "|" + _app.CacheWarning + "|" + string.Join(",",active.Select(Key)) + "|" + string.Join("|", entries.Select(e => $"{e.Platform}:{e.Id}:{e.Title}:{e.Project}:{Math.Floor(e.AgeMinutes(now))}:{Math.Floor((now - (e.CompactedAt ?? now)).TotalMinutes)}:{e.WindowMinutes}:{e.Urgency(now)}:{e.Running}:{e.ActivityUncertain}:{e.Compacted}:{e.CompactedAt}:{e.Basis}"));
+        var signature = Theme.IsDark + "|" + _app.CacheWarning + "|" + string.Join(",",active.Select(ChatKey)) + "|" + string.Join("|", entries.Select(e => $"{e.Platform}:{e.Id}:{e.Title}:{e.Project}:{Math.Floor(e.AgeMinutes(now))}:{Math.Floor((now - (e.CompactedAt ?? now)).TotalMinutes)}:{e.WindowMinutes}:{e.Urgency(now)}:{e.Running}:{e.ActivityUncertain}:{e.Compacted}:{e.CompactedAt}:{e.Basis}"));
         if (signature == _cacheSignature) return;
         _cacheSignature = signature;
         CachePanel.ToolTip = _app.CacheWarning is null?null:Loc.T("部分 chat 状态暂不可读");

@@ -59,7 +59,7 @@ Polling, smoothing and idle-gap settings use sliders with labelled stops. Click 
 - Codex: weekly quota, plus a five-hour gauge when the account's interface provides it.
 - Independent rate or cumulative views for each provider, with 1h, 5h, 12h, 24h, 3d, and all-history ranges.
 - Main-chat activity and cache reminders; identified subagents stay out of the management list, while their usage remains in statistics and is grouped under a parent when confirmed.
-- Expanded chat lists have their own scrollbar, keeping the meters and charts in place. Priority follows elapsed time as a fraction of each chat's reminder window; reordering happens at most once a minute and pauses while the list is in use.
+- Expanded chat lists have their own scrollbar, keeping the meters and charts in place. Both layouts share the same order: elapsed time as a fraction of each chat's reminder window, with running chats below idle ones. Reordering happens at most once a minute and pauses during interaction; switching layouts preserves the order and cooldown.
 - Always on top, system tray, compact mode, and layouts that adapt to narrow windows.
 - Resize from any corner or edge: corners adjust width and height independently, sides adjust one dimension. Text keeps its size and charts stay visible. Full mode remembers its dimensions; compact mode remembers its width and fits its height to the last visible item, including after a resize or a chat-list update. Long compact lists scroll within the screen. Resize handles have no visible icons.
 - English and Simplified Chinese, with an instant language switch in Settings.
