@@ -64,6 +64,15 @@ public partial class MainWindow
         // Resizing only changes geometry: keep the view, archive and pinned readout.
         var fit = LayoutHeight is not null && !CompactGeometry &&
             MainPanel.Visibility == Visibility.Visible && ChartPanel.Visibility == Visibility.Visible;
+        // Bound only the chat region. Reserve readable charts, then shrink the
+        // list down to two rows when necessary. Extra chats stay inside it.
+        var chatLimit = 180d;
+        if (fit && CachePanel.Visibility == Visibility.Visible && BodyViewport.ViewportHeight > 0)
+        {
+            var fixedHeight = BodyContent.DesiredSize.Height - Chart.DesiredSize.Height - ChatViewport.DesiredSize.Height;
+            chatLimit = Math.Clamp(Math.Floor(BodyViewport.ViewportHeight - fixedHeight - Chart.MinimumHeight), 60, 180);
+        }
+        ChatViewport.MaxHeight = chatLimit;
         Chart.FitHeight(fit && BodyViewport.ViewportHeight > 0
             ? BodyViewport.ViewportHeight - (BodyContent.DesiredSize.Height - Chart.DesiredSize.Height)
             : null);

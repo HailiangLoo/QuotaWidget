@@ -27,6 +27,8 @@ public sealed class RateChart : FrameworkElement
         public List<IReadOnlyList<TrendPoint>> IdleLinks { get; set; } = [];
     }
     int PanelCount => _lanes.Select(l => l.Panel).Distinct().Count();
+    const double MinimumLaneHeight = 70;
+    public double MinimumHeight => PanelCount == 0 ? 72 : Enumerable.Range(0,PanelCount).Sum(i => Collapsed(i) ? 26 : MinimumLaneHeight + TimeAxisHeight);
     double? _availableHeight;
     double LaneHeight
     {
@@ -34,7 +36,7 @@ public sealed class RateChart : FrameworkElement
         {
             var expanded=Enumerable.Range(0,PanelCount).Count(i=>!Collapsed(i));
             return _availableHeight is {} h && expanded>0
-                ? Math.Max(70,(h-(PanelCount-expanded)*26-expanded*TimeAxisHeight)/expanded)
+                ? Math.Max(MinimumLaneHeight,(h-(PanelCount-expanded)*26-expanded*TimeAxisHeight)/expanded)
                 : PanelCount<=1?148:102;
         }
     }

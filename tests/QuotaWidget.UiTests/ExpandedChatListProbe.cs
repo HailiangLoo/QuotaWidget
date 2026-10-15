@@ -2,6 +2,7 @@ using System.IO;
 using System.Reflection;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Threading;
 using QuotaWidget.App;
@@ -33,7 +34,7 @@ static class ExpandedChatListProbe
             window=new MainWindow(app,model,codex,opts){Left=-10000,Top=-10000,ShowActivated=false};Set("_window",window);
             window.Show();
             T C<T>(string name)=>(T)window.FindName(name);
-            var rows=C<StackPanel>("CacheRows");var viewport=C<ScrollViewer>("BodyViewport");
+            var rows=C<StackPanel>("CacheRows");var viewport=C<ScrollViewer>("ChatViewport");var body=C<ScrollViewer>("BodyViewport");
             void Layout(bool render=true)
             {
                 if(render)window.Render();window.UpdateLayout();
@@ -41,43 +42,64 @@ static class ExpandedChatListProbe
             }
             string Name(UIElement row)=>((StackPanel)((ToolTip)((FrameworkElement)row).ToolTip).Content).Children.OfType<TextBlock>().First().Text;
             string[] Order()=>rows.Children.Cast<UIElement>().Select(Name).ToArray();
-            Layout();
+            void Tick(int seconds)
+            {
+                Set("_cacheEntries",data.Select(e=>e with{RequestAt=e.RequestAt.AddSeconds(seconds)}).ToArray());
+                typeof(MainWindow).GetMethod("RenderCacheAt",flags)!.Invoke(window,[now.AddSeconds(seconds)]);Layout(false);
+            }
+            Layout();Tick(0);
             inspect?.Invoke(window,"priority");
             Check(Order().Take(4).SequenceEqual(new[]{"claude-warning","codex-warning","codex-warm","claude-hour"}),"urgency did not use each platform's reminder window");
-            // Within one reminder band, even a relative-age crossover must not
-            // move rows around. Running age must never create a cache warning.
+            // Relative-age crossovers update at most once a minute, including
+            // within a color band. Running age never creates a cache warning.
             data[0]=data[0] with{RequestAt=now.AddMinutes(-28)};
-            Set("_cacheEntries",data);window.RenderCache();Layout(false);
-            Check(Order().Take(4).SequenceEqual(new[]{"claude-warning","codex-warning","codex-warm","claude-hour"}),"same-band clocks reordered stable rows");
-            data[2]=data[2] with{RequestAt=now.AddMinutes(-42)};
-            Set("_cacheEntries",data);window.RenderCache();Layout(false);
-            Check(Order().Take(3).SequenceEqual(new[]{"claude-warning","codex-warning","claude-hour"}),"a new warning band did not promote an existing chat");
-            var first=rows.Children[0];window.RenderCache();
+            Tick(20);
+            Check(Order().Take(2).SequenceEqual(new[]{"claude-warning","codex-warning"}),"list reordered within a minute");
+            Tick(61);
+            Check(Order().Take(2).SequenceEqual(new[]{"codex-warning","claude-warning"}),"relative ratio crossover was ignored within an urgency band");
+            Check(Order().Last()=="running","running age became urgent");
+            var first=rows.Children[0];Tick(62);
             Check(ReferenceEquals(first,rows.Children[0]),"unchanged refresh rebuilt the list");
-            foreach(var count in new[]{8,20})foreach(var height in new[]{360d,700d,1000d})foreach(var scale in new[]{1d,1.25d})
+            viewport.Focusable=true;Keyboard.Focus(viewport);Layout(false);
+            Check(viewport.IsKeyboardFocusWithin,"focus fixture failed");
+            data[2]=data[2] with{RequestAt=now.AddMinutes(-59)};Tick(123);
+            Check(Order().First()=="codex-warning","focused list reordered during interaction");
+            Keyboard.Focus(C<System.Windows.Controls.Primitives.ButtonBase>("SettingsButton"));Tick(124);
+            Check(Order().First()=="claude-hour","deferred order did not apply after interaction");
+            foreach(var count in new[]{8,20})foreach(var height in new[]{360d,600d,700d,1000d})foreach(var scale in new[]{1d,1.25d})
             {
                 model.Settings.Height=height;model.Settings.UiScale=scale;
                 Set("_cacheEntries",Enumerable.Range(0,count).Select(i=>Entry("work-"+i,10,running:true)).ToArray());
                 Layout();
                 if(height==700&&scale==1){viewport.ScrollToTop();Layout(false);inspect?.Invoke(window,$"{count}-top");}
                 Check(rows.Children.Count==count&&Math.Abs(rows.ActualHeight-count*30)<1,"active rows were truncated");
-                var parent=VisualTreeHelper.GetParent(rows);
-                while(parent is not null&&parent!=viewport)
-                {Check(parent is not ScrollViewer,"hidden nested scroll viewport still clips the list");parent=VisualTreeHelper.GetParent(parent);}
-                Check(parent==viewport,"chat rows do not use the body viewport");
+                Check(viewport.ActualHeight<=181&&viewport.ActualHeight>=59,"chat viewport did not stay bounded");
+                if(height>=600)Check(body.ScrollableHeight<1&&body.ComputedVerticalScrollBarVisibility==Visibility.Collapsed,"extra chats made the entire widget scroll");
+                var chart=C<FrameworkElement>("Chart");var meter=C<FrameworkElement>("MeterGrid");
+                var chartPosition=chart.TransformToAncestor(window).Transform(new Point());
+                var meterPosition=meter.TransformToAncestor(window).Transform(new Point());
                 viewport.ScrollToBottom();Layout(false);
                 if(height==700&&scale==1)inspect?.Invoke(window,$"{count}-bottom");
                 var last=(FrameworkElement)rows.Children[^1];var bounds=last.TransformToAncestor(viewport).TransformBounds(new Rect(last.RenderSize));
                 Check(bounds.Top>=-1&&bounds.Bottom<=viewport.ViewportHeight+1,"last active chat cannot be fully reached by scrolling");
                 Check(viewport.ComputedVerticalScrollBarVisibility==(viewport.ScrollableHeight>0?Visibility.Visible:Visibility.Collapsed),"overflow has no visible scrollbar");
+                var offset=viewport.VerticalOffset;
+                window.RenderCache();Layout(false);
+                Check(Math.Abs(viewport.VerticalOffset-offset)<1,"refresh reset chat scroll position");
+                // Even at the local boundary, wheel input must not move the body.
+                var wheel=new MouseWheelEventArgs(Mouse.PrimaryDevice,0,-120){RoutedEvent=Mouse.MouseWheelEvent};viewport.RaiseEvent(wheel);Layout(false);
+                Check(wheel.Handled,"local scroll did not consume wheel input");
+                Check(chart.TransformToAncestor(window).Transform(new Point())==chartPosition&&meter.TransformToAncestor(window).Transform(new Point())==meterPosition,"scrolling chats moved meters/charts");
             }
             model.Settings.Height=700;model.Settings.UiScale=1;
-            Set("_cacheEntries",Enumerable.Range(0,20).Select(i=>Entry("archived-"+i,90)).ToArray());Layout();
+            Set("_cacheEntries",Enumerable.Range(0,20).Select(i=>Entry("archived-"+i,90)).Concat(Enumerable.Range(0,8).Select(i=>Entry("live-"+i,10,running:true))).ToArray());Layout();
             C<Expander>("ExpiredChats").IsExpanded=true;Layout(false);viewport.ScrollToBottom();Layout(false);
             var archived=C<StackPanel>("ExpiredRows");var final=(FrameworkElement)archived.Children[^1];
             var finalBounds=final.TransformToAncestor(viewport).TransformBounds(new Rect(final.RenderSize));
             Check(finalBounds.Top>=-1&&finalBounds.Bottom<=viewport.ViewportHeight+1,"last archived chat is clipped");
-            Console.WriteLine("PASS: expanded chats use one visible scroll viewport; 8/20 rows at 360/700/1000 heights and two scales remain reachable; archived rows too; platform-relative reminder bands reorder only at state changes, same-band order stays stable.");
+            Check(body.ScrollableHeight<1,"archive expansion made the entire widget scroll");
+            inspect?.Invoke(window,"archive-bottom");
+            Console.WriteLine("PASS: chats scroll locally; 8/20 rows × four heights × two scales stay reachable, meters/charts stay fixed, wheel stops locally, archive stays reachable; relative reminder ratios reorder at most once a minute and defer during interaction.");
         }
         finally{window?.Close();Set("_window",null);Set("_cacheEntries",Array.Empty<ChatCacheEntry>());if(Directory.Exists(root))Directory.Delete(root,true);}
     }

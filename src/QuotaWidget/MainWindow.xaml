@@ -269,10 +269,11 @@
             </StackPanel>
           </Border>
           <Border x:Name="CachePanel" BorderBrush="{DynamicResource Line}" BorderThickness="0,1,0,0" Margin="0,8,0,0" Padding="0,8,0,0">
+            <ScrollViewer x:Name="ChatViewport" MaxHeight="180" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" PanningMode="VerticalOnly">
             <StackPanel>
               <TextBlock x:Name="CacheEmpty" local:Translate.Text="暂无近期可识别的本地 chat" Foreground="{DynamicResource Muted}" FontSize="11" Margin="0,7,0,3" />
-              <!-- One scrolling surface: rows can use the available height and
-                   overflow remains reachable through the visible BodyViewport. -->
+              <!-- Active and archived chats scroll together inside this region;
+                   adding chats must not scroll the meters or charts away. -->
               <StackPanel x:Name="CacheRows" Margin="0,3,0,0" />
               <Expander x:Name="ExpiredChats" Foreground="{DynamicResource Muted}" FontSize="10" Visibility="Collapsed" Margin="0,3,0,0">
                 <Expander.Template>
@@ -298,6 +299,7 @@
                 <StackPanel x:Name="ExpiredRows" />
               </Expander>
             </StackPanel>
+            </ScrollViewer>
           </Border>
         </StackPanel>
 

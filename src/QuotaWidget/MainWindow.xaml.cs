@@ -379,28 +379,40 @@ public partial class MainWindow : Window
     string? _cacheSignature;
     readonly Dictionary<string, long> _chatOrder = new();
     long _chatSequence;
-    public void RenderCache()
+    DateTimeOffset _chatSortedAt;
+    public void RenderCache() => RenderCacheAt(DateTimeOffset.Now);
+
+    void RenderCacheAt(DateTimeOffset now)
     {
-        RenderSessionStart(DateTimeOffset.Now);
-        if (_model.Settings.CompactMode) { CachePanel.Visibility = Visibility.Collapsed; RenderCompactChats(DateTimeOffset.Now); return; }
+        RenderSessionStart(now);
+        if (_model.Settings.CompactMode) { CachePanel.Visibility = Visibility.Collapsed; RenderCompactChats(now); return; }
         if (HistoryPanel.Visibility == Visibility.Visible) { RenderHistory(); return; }
         CachePanel.Visibility = _model.Settings.CacheRemindersEnabled ? Visibility.Visible : Visibility.Collapsed;
         if (!_model.Settings.CacheRemindersEnabled) return;
-        var now = DateTimeOffset.Now;
         var entries = _app.CacheEntries(now);
         string Key(ChatCacheEntry e) => e.Platform + ":" + e.Id;
         var keys = entries.Select(Key).ToHashSet();
         foreach (var key in _chatOrder.Keys.Where(k => !keys.Contains(k)).ToArray()) _chatOrder.Remove(key);
-        foreach (var entry in entries.OrderByDescending(e => e.AgeMinutes(now) / e.WindowMinutes))
+        foreach (var entry in entries)
             if (!_chatOrder.ContainsKey(Key(entry))) _chatOrder[Key(entry)] = _chatSequence++;
-        // Compare each chat against its own reminder window. Only crossing an
-        // existing urgency band changes rank; minute ticks keep same-band order.
         var active = entries.Where(e => !e.Compacted && !e.Expired(now) && !e.ActivityUncertain)
-            .OrderByDescending(e=>e.Urgency(now)).ThenBy(e => _chatOrder[Key(e)]).ToList();
+            .OrderBy(e => _chatOrder[Key(e)]).ToList();
+        // Normalize by each reminder window, not elapsed minutes. Re-rank at
+        // most once a minute and never under the pointer or keyboard focus.
+        if (_chatSortedAt == default || ((now - _chatSortedAt >= TimeSpan.FromMinutes(1) || now < _chatSortedAt) &&
+            !ChatViewport.IsMouseOver && !ChatViewport.IsKeyboardFocusWithin && Mouse.LeftButton != MouseButtonState.Pressed))
+        {
+            active = active.OrderByDescending(e => e.WorkPending ? -1 : e.AgeMinutes(now) / e.WindowMinutes).ToList();
+            _chatSequence = 0;
+            foreach (var entry in active) _chatOrder[Key(entry)] = _chatSequence++;
+            foreach (var entry in entries.Where(e => e.Compacted || e.Expired(now) || e.ActivityUncertain))
+                _chatOrder[Key(entry)] = _chatSequence++;
+            _chatSortedAt = active.Count == 0 ? default : now;
+        }
         var expired = entries.Where(e => e.Compacted || e.Expired(now) || e.ActivityUncertain)
             .OrderByDescending(e => e.Compacted ? e.CompactedAt ?? e.RequestAt : e.ActivityAt ?? e.RequestAt).ToList();
         // Usually only the minute changes: avoid replacing controls every polling tick.
-        var signature = Theme.IsDark + "|" + _app.CacheWarning + "|" + string.Join("|", entries.Select(e => $"{e.Platform}:{e.Id}:{e.Title}:{e.Project}:{Math.Floor(e.AgeMinutes(now))}:{Math.Floor((now - (e.CompactedAt ?? now)).TotalMinutes)}:{e.WindowMinutes}:{e.Urgency(now)}:{e.Running}:{e.ActivityUncertain}:{e.Compacted}:{e.CompactedAt}:{e.Basis}"));
+        var signature = Theme.IsDark + "|" + _app.CacheWarning + "|" + string.Join(",",active.Select(Key)) + "|" + string.Join("|", entries.Select(e => $"{e.Platform}:{e.Id}:{e.Title}:{e.Project}:{Math.Floor(e.AgeMinutes(now))}:{Math.Floor((now - (e.CompactedAt ?? now)).TotalMinutes)}:{e.WindowMinutes}:{e.Urgency(now)}:{e.Running}:{e.ActivityUncertain}:{e.Compacted}:{e.CompactedAt}:{e.Basis}"));
         if (signature == _cacheSignature) return;
         _cacheSignature = signature;
         CachePanel.ToolTip = _app.CacheWarning is null?null:Loc.T("部分 chat 状态暂不可读");
