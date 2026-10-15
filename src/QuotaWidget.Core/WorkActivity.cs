@@ -3,7 +3,8 @@ using System.Text.Json;
 namespace QuotaWidget.Core;
 
 public sealed record WorkEvent(string Stream, DateTimeOffset At, string Kind, string? Id, string? Model);
-public sealed record WorkSpan(DateTimeOffset Start, DateTimeOffset End, bool KnownStart, bool KnownEnd, string? Model);
+public sealed record WorkSpan(DateTimeOffset Start, DateTimeOffset End, bool KnownStart, bool KnownEnd, string? Model,
+    bool UncertainEnd = false);
 public sealed record TrendActivity(IReadOnlyList<WorkSpan> Claude, IReadOnlyList<WorkSpan> Fable, IReadOnlyList<WorkSpan> Codex,
     bool ClaudeReady=true,bool CodexReady=true)
 {
@@ -24,6 +25,8 @@ public static class WorkActivity
     // A turn completion is not necessarily the end of a provider usage episode.
     // Keep this short handoff window fixed: it is unrelated to polling or viewport size.
     public static readonly TimeSpan HandoffWindow=TimeSpan.FromSeconds(10);
+    // Same evidence horizon as the chat timer. Silence is uncertainty, not completion.
+    public static readonly TimeSpan UnconfirmedAfter=TimeSpan.FromMinutes(30);
     static JsonElement O(JsonElement e,string k)=>e.ValueKind==JsonValueKind.Object&&e.TryGetProperty(k,out var v)?v:default;
     static string? S(JsonElement e,string k)=>O(e,k) is {ValueKind:JsonValueKind.String} v&&v.GetString() is {Length:>0 and <=256} value?value:null;
     public static bool Read(string json, TokenCursor cursor, TokenStore store, DateTimeOffset since, DateTimeOffset now)
@@ -44,6 +47,7 @@ public static class WorkActivity
                     _=>false
                 };
             }
+            if(ClaudeStopped(r))return Put("end",S(r,"requestId")??S(O(r,"message"),"id")??S(r,"uuid"));
             if(type=="user"&&!ChatCacheState.TranscriptOnly(r))return Put("input",S(r,"uuid"));
             if(type=="assistant")
             {
@@ -58,21 +62,29 @@ public static class WorkActivity
         catch(JsonException){return false;}
     }
 
+    // A terminal CLI error is lifecycle evidence, not a model response. Retrying
+    // system/api_error records and synthetic transcript messages are not stops.
+    internal static bool ClaudeStopped(JsonElement r)=>S(r,"type")=="assistant"&&
+        S(O(r,"message"),"model")=="<synthetic>"&&O(r,"isApiErrorMessage").ValueKind==JsonValueKind.True&&
+        S(O(r,"message"),"stop_reason") is "end_turn" or "stop_sequence";
+
     public static IReadOnlyList<WorkSpan> Build(IEnumerable<WorkEvent> events, DateTimeOffset now)
     {
         var spans=new List<WorkSpan>();
         foreach(var stream in events.Where(e=>e.At<=now).GroupBy(e=>e.Stream))
         {
-            DateTimeOffset? start=null;bool known=false;string? turn=null,model=null,request=null;
+            DateTimeOffset? start=null;bool known=false,claude=false;string? turn=null,model=null,request=null;
+            var lastEvidence=DateTimeOffset.MinValue;
             var ended=new HashSet<string>();
             var finished=new HashSet<string>();
-            void Close(DateTimeOffset at,bool knownEnd)
+            void Close(DateTimeOffset at,bool knownEnd,bool uncertainEnd=false)
             {
-                if(start is { } a&&at>a)spans.Add(new(a,at,known,knownEnd,model));
+                if(start is { } a&&(at>a||uncertainEnd&&at==a))spans.Add(new(a,at,known,knownEnd,model,uncertainEnd));
                 start=null;model=null;turn=null;request=null;known=false;
             }
             foreach(var e in stream.OrderBy(e=>e.At).ThenBy(e=>e.Kind is "start" or "input"?0:e.Kind=="activity"?1:2))
             {
+                claude|=e.Kind is "input" or "activity";
                 if(e.Kind=="start")
                 {
                     if(e.Id is not null&&ended.Contains(e.Id))continue;
@@ -89,7 +101,7 @@ public static class WorkActivity
                 }
                 else if(e.Kind=="end")
                 {
-                    if(e.Id is not null)ended.Add(e.Id);
+                    if(e.Id is not null&&!ended.Add(e.Id))continue;
                     if(turn is not null&&e.Id is not null&&turn!=e.Id)continue;
                     Close(e.At,true);known=false;
                 }
@@ -99,8 +111,15 @@ public static class WorkActivity
                     if(request is not null&&request!=e.Id)continue;
                     Close(e.At,true);
                 }
+                lastEvidence=e.At;
             }
-            Close(now,false); // No completion: an open interval, never a made-up stop time.
+            // Claude emits activity throughout responses. A truncated/deleted log
+            // must not keep its last turn active forever or veto a later model.
+            // Keep the last evidence endpoint soft; the silence after it is unknown.
+            // Codex lifecycle-only events have no heartbeat: a long start/end pair
+            // must not be timed out just because generation is still in progress.
+            var uncertain=claude&&now-lastEvidence>=UnconfirmedAfter;
+            Close(uncertain?lastEvidence:now,false,uncertain);
         }
         return spans;
     }
@@ -150,7 +169,7 @@ public static class WorkActivity
         foreach(var s in Merge(g.Where(s=>s.Start<end).Select(s=>s.End>end?s with{End=end,KnownEnd=false}:s),HandoffWindow))
         {
             var a=s.KnownStart&&s.Start>start?s.Start:start;
-            var b=s.KnownEnd&&s.End<end?s.End:end;
+            var b=(s.KnownEnd||s.UncertainEnd)&&s.End<end?s.End:end;
             if(b<=a||a>=end||b<=start)continue;
             events.Add((a,g.Key,1));events.Add((b,g.Key,-1));
         }
@@ -185,12 +204,13 @@ public static class WorkActivity
     public static IReadOnlyList<WorkSpan> Merge(IEnumerable<WorkSpan> spans, TimeSpan cadence)
     {
         var result=new List<WorkSpan>();
-        foreach(var span in spans.Where(s=>s.End>s.Start).OrderBy(s=>s.Start))
+        foreach(var span in spans.Where(s=>s.End>s.Start||s.UncertainEnd&&s.End==s.Start).OrderBy(s=>s.Start))
         {
-            if(result.Count==0||span.Start-result[^1].End>cadence){result.Add(span);continue;}
+            if(result.Count==0||span.Start-result[^1].End>cadence||result[^1].UncertainEnd&&span.Start>result[^1].End){result.Add(span);continue;}
             var last=result[^1];
-            if(span.End>last.End)result[^1]=last with{End=span.End,KnownEnd=span.KnownEnd};
-            else if(span.End==last.End&&!span.KnownEnd)result[^1]=last with{KnownEnd=false};
+            if(span.End>last.End)result[^1]=last with{End=span.End,KnownEnd=span.KnownEnd,UncertainEnd=span.UncertainEnd};
+            else if(span.End==last.End&&!span.KnownEnd)result[^1]=last with{KnownEnd=false,
+                UncertainEnd=span.UncertainEnd&&(last.KnownEnd||last.UncertainEnd)};
             if(span.Start==last.Start&&!span.KnownStart)result[^1]=result[^1] with{KnownStart=false};
         }
         return result;
@@ -201,7 +221,7 @@ public static class WorkActivity
     public static SeriesData Constrain(SeriesData source,IReadOnlyList<WorkSpan> activity,DateTimeOffset start,DateTimeOffset end)
     {
         if(activity.Count==0)return source;
-        var support=Merge(activity.Select(a=>a with{Start=a.KnownStart?a.Start:start,End=a.KnownEnd?a.End:end}),TimeSpan.Zero);
+        var support=Merge(activity.Select(a=>a with{Start=a.KnownStart?a.Start:start,End=a.KnownEnd||a.UncertainEnd?a.End:end}),TimeSpan.Zero);
         var result=new List<RateSegment>();
         foreach(var s in source.Segments)
         {

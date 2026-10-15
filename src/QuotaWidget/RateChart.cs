@@ -334,8 +334,9 @@ public sealed class RateChart : FrameworkElement
                 {
                     if (cumulative) continue;
                     var area = Geometry(pts, Y(i, 0));
-                    var fill = new LinearGradientBrush(((SolidColorBrush)color).Color, Colors.Transparent, new Point(0, 0), new Point(0, 1));
-                    dc.PushOpacity(drawn.Length>1 ? (Theme.IsDark ? 0.14 : 0.11) : (Theme.IsDark ? 0.30 : 0.24));
+                    var tint=((SolidColorBrush)color).Color;
+                    var fill = new LinearGradientBrush(tint, Color.FromArgb(85,tint.R,tint.G,tint.B), new Point(0, 0), new Point(0, 1));
+                    dc.PushOpacity(drawn.Length>1 ? (Theme.IsDark ? 0.26 : 0.20) : (Theme.IsDark ? 0.46 : 0.32));
                     dc.DrawGeometry(fill, null, area);
                     dc.Pop();
                     continue;
@@ -539,7 +540,7 @@ public sealed class RateChart : FrameworkElement
             var observed = lane.Source.SegmentAt(time);
             var gap = (lane.Name=="Codex" ? view.CodexGaps : view.ClaudeGaps).LastOrDefault(g=>time>=g.Start && time<g.End);
             var name=lane.Name=="Fable"&&view.FableToClaudeFactor is null?Loc.T("Fable 自身"):lane.Name;
-            var missing = lane.Name=="Fable"&&view.FableRateConflictAt(time)?"分项样本未对齐":observed?.Label ?? (gap?.Label=="断开" ? "未更新" : gap?.Label) ?? "未记录";
+            var missing = lane.Name=="Fable"&&view.FableRateConflictAt(time)?"分项样本未对齐":observed?.Label ?? (gap?.Label=="断开" ? "未更新" : gap?.Label) ?? (observed is {Valid:true}&&view.Smooth&&!cumulative?"状态未确认":"未记录");
             if (missing == "已暂停") missing = "监听切换";
             var unmatched=!cumulative&&view.Smooth?lane.Trend.UnlocatedAt(time):null;
             var idleLink=lane.IdleLinks.Any(link=>time>link[0].Time&&time<link[^1].Time);

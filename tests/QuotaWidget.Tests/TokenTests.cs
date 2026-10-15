@@ -21,6 +21,21 @@ static class TokenTests
         TokenCursor Cursor()=>new() {Platform="Codex",Chat="chat",Turn="t1"};
         void Read(string line,TokenCursor cursor,TokenStore store)=>TokenParser.Read(line,cursor,store,now.AddDays(-1),now);
         TokenSummary Sum(TokenStore s)=>s.Sum(now.AddDays(-1),now);
+        Test("Claude synthetic placeholders are not requests and old entries are removed on reopen",()=>Temp(root=>
+        {
+            var path=Path.Combine(root,"tokens.sqlite");
+            using(var db=new TokenStore(path))
+            {
+                db.Put(new("Claude","real","chat","claude-opus",now,2,30,4));
+                db.Put(new("Claude","old-error","chat","<synthetic>",now,0,0,0));
+                var row=JsonSerializer.Serialize(new{type="assistant",timestamp=now,requestId="new-error",message=new{model="<synthetic>",usage=new{input_tokens=0,cache_read_input_tokens=0,cache_creation_input_tokens=0,output_tokens=0}}});
+                Check(!TokenParser.Read(row,new(){Platform="Claude",Chat="chat"},db,now.AddDays(-1),now),"placeholder imported as request");
+            }
+            for(var i=0;i<2;i++)using(var db=new TokenStore(path))
+            {
+                var sum=Sum(db);Check(sum.Requests==1&&sum.Input==2&&sum.Cached==30&&sum.Output==4,"repair lost real counters or retained fake request");
+            }
+        }));
         Test("coverage facts survive read-only reopen and render in the reader's language",()=>Temp(root=>
         {
             var path=Path.Combine(root,"tokens.sqlite");

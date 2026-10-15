@@ -104,6 +104,7 @@ static class ActivityPublicationTests
             Check(restored.WorkActivitySpans(now,"Codex").Count==1,"disabled provider lost its published history");
             restored.Poll(now,claude:true,codex:true);
             Check(restored.WorkActivitySpans(now,"Codex").Single().Start==now.AddHours(-2),"re-enabled provider starts at mode switch");
+            Check(restored.WorkActivitySpans(now.AddDays(9),"Codex").Count==0,"quiet in-memory generation outlived database horizon");
         });
         Test("pending provider does not draw fallback curves or affect ready provider",root=>
         {

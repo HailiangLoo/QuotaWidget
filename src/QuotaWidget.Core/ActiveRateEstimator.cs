@@ -13,6 +13,9 @@ public static class ActiveRateEstimator
         double maxWindowMinutes=120,double quantum=1,IReadOnlyList<DateTimeOffset>? fallbackEdges=null,IReadOnlyList<DateTimeOffset>? contextEdges=null)
     {
         var contexts=(contextEdges??[]).Where(t=>t<asOf).Distinct().Order().ToArray();
+        // An abandoned stream leaves uncertainty after its last evidence, even if
+        // another chat has a normal completion. Do not label that silence zero.
+        var uncertainFrom=(activity??[]).Where(a=>a.UncertainEnd).Select(a=>(DateTimeOffset?)a.End).Min();
         activity=WorkActivity.Episodes(activity??[],asOf,contexts);
         // Only the estimation copy may span a counter reset. The caller's original
         // source still owns cumulative points, coverage, reset labels and recent-hour facts.
@@ -46,7 +49,7 @@ public static class ActiveRateEstimator
             {
                 // Unknown edges use the OBSERVATION segment, never the selected view.
                 var support=activity.Where(a=>a.End>origin&&a.Start<end).Select(a=>a with
-                {Start=a.KnownStart&&a.Start>origin?a.Start:origin,End=a.KnownEnd&&a.End<end?a.End:end,
+                {Start=a.KnownStart&&a.Start>origin?a.Start:origin,End=(a.KnownEnd||a.UncertainEnd)&&a.End<end?a.End:end,
                  KnownStart=a.KnownStart&&a.Start>=origin,KnownEnd=a.KnownEnd&&a.End<=end});
                 foreach(var a in WorkActivity.Merge(support,TimeSpan.Zero))
                 {
@@ -56,7 +59,7 @@ public static class ActiveRateEstimator
             }
             if(spans.Count==0)
             {
-                if(activity.Count==0){Fallback();return;}
+                if(activity.Count==0&&uncertainFrom is null){Fallback();return;}
                 result.Unlocated.AddRange(run.Where(s=>s.Delta>0));
                 Zero(origin,end);run.Clear();return;
             }
@@ -191,7 +194,11 @@ public static class ActiveRateEstimator
                 var estimate=RateTrend.Build(new(){Key=source.Key,Segments=bins},origin,end,maxWindowMinutes,supported);
                 result.Runs.AddRange(estimate.Runs.Select(r=>r with{LimitedSupport=limited}));run.Clear();
             }
-            void Zero(DateTimeOffset a,DateTimeOffset b)=>result.Runs.Add(new([new(a,0),new(b,0)],0,0));
+            void Zero(DateTimeOffset a,DateTimeOffset b)
+            {
+                if(uncertainFrom is {} unknown&&unknown<b)b=unknown;
+                if(b>a)result.Runs.Add(new([new(a,0),new(b,0)],0,0));
+            }
         }
     }
     // The first counter jump may start part-way through one quantum. Use up to the

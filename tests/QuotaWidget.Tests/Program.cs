@@ -317,18 +317,18 @@ Test("history: append, dedupe, conflict, restart, torn line", () =>
     var store = new HistoryStore(paths, demoMode: false);
     var a = Rec(0, 40, 10);
     var b = Rec(5, 40, 10); // same values, new observation time: must be kept
-    Eq(AppendResult.Added, store.Append(a));
-    Eq(AppendResult.Duplicate, store.Append(a));
-    Eq(AppendResult.Added, store.Append(b));
+    Eq(AppendResult.Added, store.Append(a, T0));
+    Eq(AppendResult.Duplicate, store.Append(a, T0));
+    Eq(AppendResult.Added, store.Append(b, T0));
     var conflict = a with { Snapshot = a.Snapshot with { Limits = a.Snapshot.Limits with { AllWeek = UsageParser.Limit(99, R1) } } };
-    Eq(AppendResult.Conflict, store.Append(conflict));
+    Eq(AppendResult.Conflict, store.Append(conflict, T0));
     var demo = a with { SourceId = "demo-only", Snapshot = a.Snapshot with { Id = "d1" } };
-    Eq(AppendResult.Rejected, store.Append(demo));
+    Eq(AppendResult.Rejected, store.Append(demo, T0));
 
     // simulate a crash mid-line, then keep appending
     var file = Directory.GetFiles(store.ProfileDir("claude-oauth-usage", "p1"), "*.jsonl").Single();
     File.AppendAllText(file, "{\"v\":1,\"sourceId\":\"claude-oau");
-    Eq(AppendResult.Added, new HistoryStore(paths, false).Append(Rec(10, 40.5, 10.2)));
+    Eq(AppendResult.Added, new HistoryStore(paths, false).Append(Rec(10, 40.5, 10.2), T0));
 
     var reloaded = new HistoryStore(paths, false).Load("claude-oauth-usage", "p1", T0.AddDays(-1));
     Eq(3, reloaded.Count, "records after restart");
@@ -341,8 +341,8 @@ Test("history: accounts/plans are stored apart", () =>
 {
     var root = TempDir();
     var store = new HistoryStore(new DataPaths(root), false);
-    store.Append(Rec(0, 40, 10));
-    store.Append(Rec(5, 41, 10) with { ProfileKey = "p2" });
+    store.Append(Rec(0, 40, 10), T0);
+    store.Append(Rec(5, 41, 10) with { ProfileKey = "p2" }, T0);
     Eq(1, store.Load("claude-oauth-usage", "p1", T0.AddDays(-1)).Count);
     Eq(1, store.Load("claude-oauth-usage", "p2", T0.AddDays(-1)).Count);
     Directory.Delete(root, true);

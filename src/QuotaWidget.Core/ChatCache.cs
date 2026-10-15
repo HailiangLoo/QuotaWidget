@@ -36,7 +36,7 @@ public sealed class ChatCacheState(ChatPlatform platform, string id)
     string? _turnId, _claudeFinishedRequest;
     readonly HashSet<string> _endedTurns = new(StringComparer.Ordinal);
     readonly Queue<string> _endedTurnOrder = new();
-    DateTimeOffset? _pendingAt;
+    DateTimeOffset? _pendingAt, _confirmedRequestAt;
     bool _awaitingUsage;
     string? _latestRequestId;
     int _ttl = platform == ChatPlatform.Codex ? 30 : 5;
@@ -59,7 +59,7 @@ public sealed class ChatCacheState(ChatPlatform platform, string id)
         if (Excluded || request is not { } at || at > now.AddMinutes(1) || _activity > now.AddMinutes(1) || now - (_activity > at ? _activity : at) > TimeSpan.FromHours(6)) return null;
         // Silence is not an end event. A very old unmatched start becomes unconfirmed,
         // never an idle/expired claim. Long thinking and tool waits survive the old 2m cutoff.
-        var uncertain = _running && now - _activity >= TimeSpan.FromMinutes(30);
+        var uncertain = _running && now - _activity >= Core.WorkActivity.UnconfirmedAfter;
         return new(Platform, Id, Title ?? $"{Platform} · {Id[..Math.Min(8, Id.Length)]}", at, _ttl,
             _awaitingUsage ? "新请求已开始，缓存用量待确认；此处先按请求时间计时。\n" + _basis : _basis,
             !compacted && _running && !uncertain, AwaitingUsage: !compacted && _awaitingUsage, ActivityUncertain: !compacted && uncertain,
@@ -82,6 +82,7 @@ public sealed class ChatCacheState(ChatPlatform platform, string id)
         var pending = preservePending && _pendingAt is { } p && p <= at && at - p < TimeSpan.FromHours(2) ? _pendingAt : null;
         ResetAt = at;
         if (LastObserved <= at) RequestAt = null;
+        _confirmedRequestAt=null;
         Boundary = default;
         _pendingAt = pending;
         _awaitingUsage = pending is not null;
@@ -162,11 +163,25 @@ public sealed class ChatCacheState(ChatPlatform platform, string id)
             }
             else
             {
+                if(Core.WorkActivity.ClaudeStopped(r))
+                {
+                    var errorId=S(r,"requestId")??S(O(r,"message"),"id")??S(r,"uuid");
+                    if(errorId is not null&&_endedTurns.Contains(errorId))return;
+                    if(at>=_activity&&at>=ResetAt)
+                    {
+                        FinishWork(at,errorId);_pendingAt=null;_awaitingUsage=false;
+                        // A rejected request did not refresh the server cache. Restore
+                        // the preceding observed request rather than the failed input.
+                        RequestAt=_confirmedRequestAt;Boundary=RequestAt??default;
+                    }
+                    return;
+                }
                 if (type == "system" && S(r, "subtype") == "compact_boundary")
                 { Compact(at, preservePending: S(O(r, "compactMetadata"), "trigger") != "manual"); _ttl = 5; return; }
                 if (type == "user" && !TranscriptOnly(r)) Input(at);
                 if (type != "assistant") return;
                 var message = O(r, "message");
+                if(S(message,"model")=="<synthetic>")return;
                 var changedModel = Model(S(message, "model"), at);
                 var usage = O(message, "usage");
                 var requestId = S(r, "requestId") ?? S(message, "id");
@@ -291,6 +306,7 @@ public sealed class ChatCacheState(ChatPlatform platform, string id)
         _latestRequestId = requestId;
         _awaitingUsage = Platform == ChatPlatform.Claude && !ApplyCacheEvidence(usage);
         RequestAt = start;
+        _confirmedRequestAt=start;
         _pendingAt = _awaitingUsage ? start : null;
         return true;
     }

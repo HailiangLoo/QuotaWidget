@@ -69,9 +69,9 @@ public static class FableDisplay
             // at a different height after the redundant total line is removed.
             // Contrary model evidence below still vetoes sharing inside that handoff.
             known=Merge(WorkActivity.Merge(work.Where(s=>IsFable(s.Model)&&s.KnownStart&&s.Start<end),WorkActivity.HandoffWindow)
-                .Select(s=>new ChartSpan(s.Start,s.KnownEnd&&s.End<end?s.End:end)));
+                .Select(s=>new ChartSpan(s.Start,(s.KnownEnd||s.UncertainEnd)&&s.End<end?s.End:end)));
             blocked=Merge(work.Where(s=>!IsFable(s.Model)&&s.Start<end)
-                .Select(s=>new ChartSpan(s.KnownStart?s.Start:start,s.KnownEnd&&s.End<end?s.End:end))
+                .Select(s=>new ChartSpan(s.KnownStart?s.Start:start,(s.KnownEnd||s.UncertainEnd)&&s.End<end?s.End:end))
                 // Conflicted or contrary request metadata remains a veto even when
                 // lifecycle model labels appear complete. Do not extend its time range.
                 .Concat(activity.Where(s=>!IsFable(s.Model)).Select(s=>new ChartSpan(s.Start,s.End>s.Start?s.End:s.Start.AddTicks(1)))));

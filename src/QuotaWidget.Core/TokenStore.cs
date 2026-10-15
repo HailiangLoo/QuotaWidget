@@ -35,6 +35,9 @@ public sealed class TokenStore : IDisposable
             "CREATE INDEX IF NOT EXISTS work_events_time ON work_events(platform,t);");
         _hasParents=_db.Query("SELECT 1 FROM sqlite_master WHERE type='table' AND name='chat_parents'").Count>0;
         _hasWorkEvents=_db.Query("SELECT 1 FROM sqlite_master WHERE type='table' AND name='work_events'").Count>0;
+        // Older importers counted CLI-generated error placeholders as requests.
+        // Clean the durable index too, including logs no longer available to replay.
+        if(!readOnly)_db.Run("DELETE FROM requests WHERE platform='Claude' AND model='<synthetic>'");
         if(!readOnly && Meta("write-schema")!="2")
         {
             // Earlier development probes did not distinguish missing cache-write counts.

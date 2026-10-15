@@ -64,6 +64,7 @@ public static class TokenParser
             if (c.Platform == "Claude" && type == "assistant")
             {
                 var message = O(r, "message"); var u = O(message, "usage");
+                if(S(message,"model")=="<synthetic>")return false;
                 var key = S(r, "requestId") ?? S(message, "id");
                 c.Chat = S(r, "sessionId") ?? c.Chat;
                 if (key is null) return false;
@@ -116,6 +117,7 @@ public static class TokenParser
 public sealed class TokenIndex : IDisposable
 {
     const int MaxLineBytes=1024*1024;
+    static int ActivityVersion(string platform)=>platform=="Claude"?2:1;
     readonly object _gate = new();
     readonly TokenStore _store;
     readonly string _codexHome, _claudeHome;
@@ -146,7 +148,7 @@ public sealed class TokenIndex : IDisposable
         { since = now.AddDays(-1); _store.SetMeta("since", since.ToString("O")); }
         Since = since; _sources = new(StringComparer.OrdinalIgnoreCase);
         foreach(var group in _store.Sources().Values.GroupBy(s=>s.Platform))
-            if(group.All(s=>s.ActivityVersion>=1&&s.Offset>=s.Length))
+            if(group.All(s=>s.ActivityVersion>=ActivityVersion(s.Platform)&&s.Offset>=s.Length))
                 _publishedWork[group.Key]=_store.WorkActivityEvents(now,group.Key);
     }
     public static TokenIndex Local(string root, DateTimeOffset now) => new(root,
@@ -168,7 +170,10 @@ public sealed class TokenIndex : IDisposable
     {
         lock(_gate)
         {
-            return WorkActivity.Build(_publishedWork.GetValueOrDefault(platform)??[],end);
+            // A quiet provider may not publish a new generation for days. Apply
+            // the same rolling horizon as the database, even without new events.
+            return WorkActivity.Build((_publishedWork.GetValueOrDefault(platform)??[])
+                .Where(e=>e.At>=end.Add(-WidgetModel.Lookback)),end);
         }
     }
     public bool WorkActivityReady(string platform) { lock(_gate) return _publishedWork.ContainsKey(platform); }
@@ -273,9 +278,9 @@ public sealed class TokenIndex : IDisposable
                 var name=Path.GetFileNameWithoutExtension(f.Path);
                 var match=Regex.Match(name,@"[a-fA-F0-9]{8}-(?:[a-fA-F0-9]{4}-){3}[a-fA-F0-9]{12}$");
                 _sources[f.Path]=_store.Source(f.Path) ?? new() { Platform=f.Platform, Chat=match.Success?match.Value:name, Length=new FileInfo(f.Path).Length };
-                if(_sources[f.Path].ActivityVersion<1)
+                if(_sources[f.Path].ActivityVersion<ActivityVersion(f.Platform))
                     _sources[f.Path]=new(){Platform=f.Platform,Chat=match.Success?match.Value:name,Length=new FileInfo(f.Path).Length};
-                _sources[f.Path].ActivityVersion=1;
+                _sources[f.Path].ActivityVersion=ActivityVersion(f.Platform);
                 _sources[f.Path].ActivityStream=f.Platform=="Codex"?match.Value:name;
             }
             return f.Path;
@@ -299,7 +304,7 @@ public sealed class TokenIndex : IDisposable
             // backfill batches. Native IDs dedupe this tail against the full-file scan.
             if(!c.TailSeeded && f.Length-c.Offset>MaxLineBytes)
             {
-                c.Recent=new() {Platform=c.Platform,Chat=c.Chat,Model=c.Model,ActivityStream=c.ActivityStream,ActivityVersion=1,Offset=f.Length-MaxLineBytes,Skipping=true,NativeOnly=true};
+                c.Recent=new() {Platform=c.Platform,Chat=c.Chat,Model=c.Model,ActivityStream=c.ActivityStream,ActivityVersion=ActivityVersion(c.Platform),Offset=f.Length-MaxLineBytes,Skipping=true,NativeOnly=true};
                 c.TailSeeded=true;
             }
             if(c.Recent is { } tail)

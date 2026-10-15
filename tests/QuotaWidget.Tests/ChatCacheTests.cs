@@ -20,6 +20,21 @@ static class ChatCacheTests
     public static void Register(List<(string Name, Func<Task> Body)> tests)
     {
         void Test(string name, Action body) => tests.Add((name, () => { body(); return Task.CompletedTask; }));
+        Test("cache: terminal Claude rejection restores the last real cache clock and never changes model or TTL",()=>
+        {
+            string Error(double min,string id="error")=>JsonSerializer.Serialize(new{type="assistant",timestamp=T.AddMinutes(min),requestId=id,isApiErrorMessage=true,message=new{model="<synthetic>",stop_reason="stop_sequence"}});
+            string Input(double min)=>JsonSerializer.Serialize(new{type="user",timestamp=T.AddMinutes(min),message=new{content="next"}});
+            var state=new ChatCacheState(ChatPlatform.Claude,"chat");state.Read(Claude(0,"real",hour:10));
+            state.Read(Input(5));state.Read(Error(6));
+            var v=state.View(T.AddMinutes(7));
+            Check(v is {WorkPending:false,AwaitingUsage:false,WindowMinutes:60}&&v.RequestAt==T,"error renewed/erased cache or kept work running");
+            state.Read(Input(8));state.Read(Error(9));
+            Check(state.View(T.AddMinutes(10)) is {Running:true},"duplicate terminal record stopped newer input");
+            state.Read(Claude(11,"next",stop:"tool_use"));state.Read(Error(6,"late"));
+            Check(state.View(T.AddMinutes(12)) is {Running:true,WindowMinutes:60},"late error stopped or reset new work");
+            var rejected=new ChatCacheState(ChatPlatform.Claude,"empty");rejected.Read(Input(0));rejected.Read(Error(1));
+            Check(rejected.View(T.AddMinutes(2)) is null,"rejected first request claimed a server cache");
+        });
         Test("cache: request start, duplicate outputs, title changes, completion do not renew", () =>
         {
             var s = new ChatCacheState(ChatPlatform.Codex, "abc");

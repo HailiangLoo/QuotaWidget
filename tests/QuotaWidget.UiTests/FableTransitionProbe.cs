@@ -25,6 +25,9 @@ static class FableTransitionProbe
             void Event(string stream,int minutes,string kind,string id,string? name=null)=>store.PutWorkEvent("Claude",new(stream,now.AddMinutes(minutes),kind,id,name));
             Event("opus",-120,"input","u1");Event("opus",-119,"activity","r1","claude-opus-5-5");Event("opus",-30,"finish","r1","claude-opus-5-5");
             Event("fable",-35,"input","u2");Event("fable",-34,"activity","r2","claude-fable-5-1");
+            // Keep lifecycle evidence aligned with the recent request below: this
+            // fixture represents continuing Fable work, not an abandoned response.
+            Event("fable",-20,"activity","r2","claude-fable-5-1");
             store.Put(new("Claude","r1","opus","claude-opus-5-5",now.AddMinutes(-40),10,20,30));
             store.Put(new("Claude","r2","fable","claude-fable-5-1",now.AddMinutes(-20),10,20,30));
             for(var i=0;i<=24;i++)

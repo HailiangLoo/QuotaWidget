@@ -10,6 +10,58 @@ static class WorkActivityTests
         void Test(string name,Action action)=>tests.Add(("work activity: "+name,()=>{action();return Task.CompletedTask;}));
         WorkEvent E(double m,string kind,string? id="turn",string? model=null,string stream="one")=>new(stream,t.AddMinutes(m),kind,id,model);
         double Area(RateTrend r)=>r.Runs.Select(ChartPath.HardEdges).Sum(p=>p.Zip(p.Skip(1),(a,b)=>(a.Rate+b.Rate)/2*(b.Time-a.Time).TotalHours).Sum());
+        Test("terminal Claude errors close work but retry notices and synthetic transcript rows do not",()=>
+        {
+            var path=Path.Combine(Path.GetTempPath(),"qw-terminal-"+Guid.NewGuid()+".sqlite");
+            try
+            {
+                using var db=new TokenStore(path);var cursor=new TokenCursor{Platform="Claude",Chat="chat"};
+                void Read(object row)=>WorkActivity.Read(JsonSerializer.Serialize(row),cursor,db,t.AddDays(-1),t.AddHours(2));
+                Read(new{type="user",timestamp=t,uuid="input"});
+                Read(new{type="assistant",timestamp=t.AddMinutes(5),requestId="r",message=new{model="claude-opus",stop_reason="tool_use"}});
+                Read(new{type="system",subtype="api_error",timestamp=t.AddMinutes(6)});
+                Read(new{type="assistant",timestamp=t.AddMinutes(7),message=new{model="<synthetic>",stop_reason="stop_sequence"}});
+                Check(!db.WorkActivitySpans(t.AddMinutes(8),"Claude").Single().KnownEnd,"retry/transcript falsely ended work");
+                var error=new{type="assistant",timestamp=t.AddMinutes(9),requestId="error",isApiErrorMessage=true,message=new{model="<synthetic>",stop_reason="stop_sequence"}};
+                Read(error);Read(error);
+                var span=db.WorkActivitySpans(t.AddHours(2),"Claude").Single();
+                Check(span.KnownEnd&&span.End==t.AddMinutes(9)&&span.Model=="claude-opus","terminal error lost lifecycle/model");
+                Read(new{type="user",timestamp=t.AddMinutes(10),uuid="next"});
+                Read(error with{timestamp=t.AddMinutes(11)});
+                Check(!db.WorkActivitySpans(t.AddMinutes(12),"Claude").Last().KnownEnd,"duplicate old error closed next turn");
+                Check(db.WorkActivitySpans(t.AddMinutes(42),"Claude").Last().End==t.AddMinutes(10),"duplicate old error refreshed evidence of new work");
+            }
+            finally{File.Delete(path);File.Delete(path+"-wal");File.Delete(path+"-shm");}
+        });
+        Test("stale Claude evidence stops prediction without inventing completion or erasing quota",()=>
+        {
+            var events=new[]{E(0,"input"),E(10,"activity","r","claude-opus")};
+            var live=WorkActivity.Build(events,t.AddMinutes(39)).Single();
+            Check(live.End==t.AddMinutes(39)&&!live.UncertainEnd,"fresh slow response was cut off");
+            var stale=WorkActivity.Build(events,t.AddHours(2)).Single();
+            Check(stale.End==t.AddMinutes(10)&&!stale.KnownEnd&&stale.UncertainEnd,"silence became a completion");
+            var data=new SeriesData{Key=SeriesKey.Total,Segments=Enumerable.Range(0,24).Select(i=>new RateSegment{Start=t.AddMinutes(i*5),End=t.AddMinutes((i+1)*5),Delta=i is 0 or 16?1:0}).ToList()};
+            var trend=ActiveRateEstimator.Build(data,t.AddHours(2),[stale]);
+            Check(trend.Runs.All(r=>r.Points[^1].Time<=stale.End&&!r.HardEnd),"unconfirmed tail was extended or made a hard stop");
+            Check(trend.ValueAt(t.AddMinutes(50)) is null&&trend.Unlocated.Sum(s=>s.Delta)==1&&Math.Abs(trend.Delta-2)<1e-7,"unknown became idle or later account usage disappeared");
+            var resumed=WorkActivity.Build(events.Append(E(90,"activity","next","claude-opus")),t.AddMinutes(91)).Single();
+            Check(!resumed.UncertainEnd&&resumed.Start==t&&resumed.End==t.AddMinutes(91),"new evidence cannot restore a long turn");
+            var ended=WorkActivity.Build(events.Append(E(95,"finish","r","claude-opus")),t.AddHours(2)).Single();
+            Check(ended.KnownEnd&&ended.End==t.AddMinutes(95),"late real completion replaced by the uncertainty horizon");
+            var codex=WorkActivity.Build([E(0,"start")],t.AddHours(2)).Single();
+            Check(!codex.UncertainEnd&&codex.End==t.AddHours(2),"lifecycle-only Codex turn timed out");
+        });
+        Test("an unanswered input cannot enable wall-clock fallback and stale models cannot veto later work",()=>
+        {
+            var stale=WorkActivity.Build([E(0,"input")],t.AddHours(2)).Single();
+            var data=new SeriesData{Key=SeriesKey.Total,Segments=[new(){Start=t,End=t.AddHours(2),Delta=2}]};
+            var trend=ActiveRateEstimator.Build(data,t.AddHours(2),[stale]);
+            Check(trend.Runs.Count==0&&trend.Unlocated.Sum(s=>s.Delta)==2,"single stale input created hours of activity");
+            var old=new WorkSpan(t,t.AddMinutes(10),true,false,"claude-opus",true);
+            var next=new WorkSpan(t.AddMinutes(60),t.AddMinutes(90),true,true,"fable");
+            Check(WorkActivity.ModelChanges([old,next],t,t.AddHours(2)).SequenceEqual(new[]{next.Start}),"stale model vetoes new exclusive model");
+            Check(WorkActivity.Merge([old,next],TimeSpan.FromHours(2)).Count==2,"handoff merged unknown silence");
+        });
         Test("native turn handoffs form one episode without rewriting the exact turn spans",()=>
         {
             var raw=WorkActivity.Build([E(0,"start","a"),E(20,"end","a"),
@@ -93,13 +145,16 @@ static class WorkActivityTests
                 var dbRoot=Path.Combine(root,"db");Directory.CreateDirectory(dbRoot);
                 var path=Path.Combine(logs,"chat.jsonl");
                 var rows=new[]{JsonSerializer.Serialize(new{type="user",timestamp=t,uuid="u",message=new{content="start"}}),
-                    JsonSerializer.Serialize(new{type="assistant",timestamp=t.AddMinutes(10),sessionId="chat",requestId="r",message=new{model="claude-fable-5-1",stop_reason="end_turn",usage=new{input_tokens=2,cache_read_input_tokens=30,cache_creation_input_tokens=3,output_tokens=4}}})};
+                    JsonSerializer.Serialize(new{type="assistant",timestamp=t.AddMinutes(10),sessionId="chat",requestId="r",message=new{model="claude-fable-5-1",stop_reason="tool_use",usage=new{input_tokens=2,cache_read_input_tokens=30,cache_creation_input_tokens=3,output_tokens=4}}}),
+                    JsonSerializer.Serialize(new{type="assistant",timestamp=t.AddMinutes(12),requestId="error",isApiErrorMessage=true,message=new{model="<synthetic>",stop_reason="stop_sequence",usage=new{input_tokens=0,cache_read_input_tokens=0,cache_creation_input_tokens=0,output_tokens=0}}})};
                 File.WriteAllLines(path,rows);
                 using(var old=new TokenStore(Path.Combine(dbRoot,"tokens.sqlite")))
                 {
                     old.SetMeta("since",t.AddHours(-1).ToString("O"));
-                    var cursor=new TokenCursor{Platform="Claude",Chat="chat",Offset=new FileInfo(path).Length};
+                    var cursor=new TokenCursor{Platform="Claude",Chat="chat",ActivityVersion=1,Offset=new FileInfo(path).Length};
                     TokenParser.Read(rows[1],cursor,old,t.AddHours(-1),t.AddHours(1));old.SaveSource(path,cursor);
+                    WorkActivity.Read(rows[0],cursor,old,t.AddHours(-1),t.AddHours(1));
+                    WorkActivity.Read(rows[1],cursor,old,t.AddHours(-1),t.AddHours(1));
                 }
                 for(var pass=0;pass<2;pass++)
                 using(var index=new TokenIndex(dbRoot,Path.Combine(root,"codex"),Path.Combine(root,"claude"),t.AddHours(1)))
@@ -107,7 +162,7 @@ static class WorkActivityTests
                     index.Poll(t.AddHours(1));var sum=index.Sum(t.AddHours(-1),t.AddHours(1),"Claude");
                     Check(sum.Requests==1&&sum.Input==5&&sum.Cached==30&&sum.Output==4,"migration changed token totals");
                     var span=index.WorkActivitySpans(t.AddHours(1),"Claude").Single();
-                    Check(span.KnownStart&&span.KnownEnd&&span.Start==t&&span.End==t.AddMinutes(10),"backfill or restart lost work boundaries");
+                    Check(span.KnownStart&&span.KnownEnd&&span.Start==t&&span.End==t.AddMinutes(12),"backfill or restart lost terminal error");
                 }
             }
             finally{if(Directory.Exists(root))Directory.Delete(root,true);}

@@ -26,6 +26,8 @@ Chat timers show time since a local model request, not confirmed server cache li
 
 ## How smoothing works
 
+Terminal Claude CLI error messages (such as an exhausted quota) stop the recorded work at their timestamp. They are not model requests, token usage or cache refreshes; retry notices do not stop work. Old indexes replay the relevant metadata on upgrade. If a Claude log has no end event and no new activity for 30 minutes, its open estimate stops at the last activity evidence, without inventing a completion or a zero rate afterward. This matches the chat timer's unconfirmed state. New activity can restore support for the same turn. Codex's start/end-only lifecycle has no activity heartbeat, so this timeout is not applied to its long-running turns.
+
 1. Keep providers and quota windows separate. Preserve missing readings, real gaps, account changes, and resets in the accounting data.
 2. Use local task start/end events as evidence of work. Remove confirmed idle time from the estimation clock so small integer jumps can be spread across adjacent work fragments instead of being charged entirely to one short fragment.
 3. Spread each counter increment between its surrounding observations on that active clock. Allow a short reporting delay after a completed task: only its first following sample, bounded by a polling interval capped at ten minutes, plus a one-minute grace period.
