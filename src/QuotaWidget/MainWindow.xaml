@@ -271,9 +271,9 @@
           <Border x:Name="CachePanel" BorderBrush="{DynamicResource Line}" BorderThickness="0,1,0,0" Margin="0,8,0,0" Padding="0,8,0,0">
             <StackPanel>
               <TextBlock x:Name="CacheEmpty" local:Translate.Text="暂无近期可识别的本地 chat" Foreground="{DynamicResource Muted}" FontSize="11" Margin="0,7,0,3" />
-              <ScrollViewer MaxHeight="140" VerticalScrollBarVisibility="Hidden" HorizontalScrollBarVisibility="Disabled" Margin="0,3,0,0" PanningMode="VerticalOnly">
-                <StackPanel x:Name="CacheRows" />
-              </ScrollViewer>
+              <!-- One scrolling surface: rows can use the available height and
+                   overflow remains reachable through the visible BodyViewport. -->
+              <StackPanel x:Name="CacheRows" Margin="0,3,0,0" />
               <Expander x:Name="ExpiredChats" Foreground="{DynamicResource Muted}" FontSize="10" Visibility="Collapsed" Margin="0,3,0,0">
                 <Expander.Template>
                   <ControlTemplate TargetType="Expander">
@@ -295,9 +295,7 @@
                     </ControlTemplate.Triggers>
                   </ControlTemplate>
                 </Expander.Template>
-                <ScrollViewer MaxHeight="112" VerticalScrollBarVisibility="Hidden" HorizontalScrollBarVisibility="Disabled" PanningMode="VerticalOnly">
-                  <StackPanel x:Name="ExpiredRows" />
-                </ScrollViewer>
+                <StackPanel x:Name="ExpiredRows" />
               </Expander>
             </StackPanel>
           </Border>

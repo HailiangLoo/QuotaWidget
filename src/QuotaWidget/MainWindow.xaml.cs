@@ -393,11 +393,14 @@ public partial class MainWindow : Window
         foreach (var key in _chatOrder.Keys.Where(k => !keys.Contains(k)).ToArray()) _chatOrder.Remove(key);
         foreach (var entry in entries.OrderByDescending(e => e.AgeMinutes(now) / e.WindowMinutes))
             if (!_chatOrder.ContainsKey(Key(entry))) _chatOrder[Key(entry)] = _chatSequence++;
-        var active = entries.Where(e => !e.Compacted && !e.Expired(now) && !e.ActivityUncertain).OrderBy(e => _chatOrder[Key(e)]).ToList();
+        // Compare each chat against its own reminder window. Only crossing an
+        // existing urgency band changes rank; minute ticks keep same-band order.
+        var active = entries.Where(e => !e.Compacted && !e.Expired(now) && !e.ActivityUncertain)
+            .OrderByDescending(e=>e.Urgency(now)).ThenBy(e => _chatOrder[Key(e)]).ToList();
         var expired = entries.Where(e => e.Compacted || e.Expired(now) || e.ActivityUncertain)
             .OrderByDescending(e => e.Compacted ? e.CompactedAt ?? e.RequestAt : e.ActivityAt ?? e.RequestAt).ToList();
         // Usually only the minute changes: avoid replacing controls every polling tick.
-        var signature = Theme.IsDark + "|" + _app.CacheWarning + "|" + string.Join("|", entries.Select(e => $"{e.Platform}:{e.Id}:{e.Title}:{e.Project}:{Math.Floor(e.AgeMinutes(now))}:{Math.Floor((now - (e.CompactedAt ?? now)).TotalMinutes)}:{e.WindowMinutes}:{e.Running}:{e.ActivityUncertain}:{e.Compacted}:{e.CompactedAt}:{e.Basis}"));
+        var signature = Theme.IsDark + "|" + _app.CacheWarning + "|" + string.Join("|", entries.Select(e => $"{e.Platform}:{e.Id}:{e.Title}:{e.Project}:{Math.Floor(e.AgeMinutes(now))}:{Math.Floor((now - (e.CompactedAt ?? now)).TotalMinutes)}:{e.WindowMinutes}:{e.Urgency(now)}:{e.Running}:{e.ActivityUncertain}:{e.Compacted}:{e.CompactedAt}:{e.Basis}"));
         if (signature == _cacheSignature) return;
         _cacheSignature = signature;
         CachePanel.ToolTip = _app.CacheWarning is null?null:Loc.T("部分 chat 状态暂不可读");
