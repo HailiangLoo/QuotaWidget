@@ -120,12 +120,12 @@ static class ChartInspectProbe
         Check(axis.Any(p=>p.Time==edge),"axis omits the exact session start in favor of an arbitrary tick");
         var boundedLane=((IEnumerable)typeof(RateChart).GetField("_lanes",Private)!.GetValue(chart)!).Cast<object>().Single();
         var boundedPaths=(List<IReadOnlyList<TrendPoint>>)typeof(RateChart).GetMethod("Points",BindingFlags.Static|BindingFlags.NonPublic)!.Invoke(null,[boundedLane,boundedView])!;
-        Check(boundedPaths[0][0].Time==edge && boundedPaths[0][1].Time==edge && boundedPaths[0][0].Rate==0 && boundedPaths[0][1].Rate>0,"painted curve rounds the start");
+        Check(boundedPaths[0][0].Time==edge && boundedPaths[0][1].Time>edge && boundedPaths[0][0].Rate>0,"painted curve rounds the start or draws a fictitious zero-rate edge");
         chart.PinInspect(edge.AddSeconds(-1),true);Verify(true,["Codex"]);
         Check(Field<IEnumerable>(Card()!,"Rows").Cast<object>().All(r=>Field<string>(r,"Value")=="0.0"),"hover invents pre-session consumption");
         chart.PinInspect(edge,true);Verify(true,["Codex"]);
-        Check(Field<IEnumerable>(Card()!,"Rows").Cast<object>().All(r=>Field<string>(r,"Value")!="0.0"),"hover and vertical start disagree");
-        Console.WriteLine("Session edges: exact axis tick, vertical rendered start, no pre-session smoothing and consistent edge hover passed.");
+        Check(Field<IEnumerable>(Card()!,"Rows").Cast<object>().All(r=>Field<string>(r,"Value")!="0.0"),"hover and exact start disagree");
+        Console.WriteLine("Session edges: exact axis tick/start, no artificial vertical stroke or pre-session smoothing, and consistent edge hover passed.");
         var workStart=now.AddMinutes(-80);var workEnd=now.AddMinutes(-25);
         SeriesData WorkSource(double delta)=>new(){Key=SeriesKey.Total,Segments=Enumerable.Range(0,24).Select(i=>
             new RateSegment{Start=now.AddMinutes(-120+i*5),End=now.AddMinutes(-115+i*5),Delta=i==16?delta:0}).ToList()};
@@ -137,7 +137,7 @@ static class ChartInspectProbe
             var name=Field<string>(lane,"Name");
             var workPaths=(List<IReadOnlyList<TrendPoint>>)typeof(RateChart).GetMethod("Points",BindingFlags.Static|BindingFlags.NonPublic)!.Invoke(null,[lane,activityView])!;
             if(name=="Codex")Check(workPaths[^1][^1].Rate>0,"Claude completion cut Codex off");
-            else Check(workPaths[0][0].Time==workStart&&workPaths[^1][^1].Time==workEnd&&workPaths[^1][^1].Rate==0&&workPaths[^1][^2].Time==workEnd,"provider/model start or finish has a smooth shoulder");
+            else Check(workPaths[0][0].Time==workStart&&workPaths[^1][^1].Time==workEnd&&workPaths[^1][^1].Rate>0&&workPaths[^1][^2].Time<workEnd,"provider/model boundary moved or became a vertical zero-rate stroke");
         }
         chart.PinInspect(workEnd.AddSeconds(1),false);Verify(false,["Claude","Fable"]);
         Check(Field<IEnumerable>(Card()!,"Rows").Cast<object>().All(r=>Field<string>(r,"Value")=="0.0"),"completed Claude/Fable still consume on hover");
@@ -161,8 +161,9 @@ static class ChartInspectProbe
             Set(joined);
             var lane=((IEnumerable)typeof(RateChart).GetField("_lanes",Private)!.GetValue(chart)!).Cast<object>().Single();
             var pathsAtHandoff=(List<IReadOnlyList<TrendPoint>>)typeof(RateChart).GetMethod("Points",BindingFlags.Static|BindingFlags.NonPublic)!.Invoke(null,[lane,joined])!;
-            var hasZero=pathsAtHandoff.SelectMany(p=>p).Any(p=>p.Time==handoff&&p.Rate==0);
-            Check(hasZero==(seconds>10),"turn marker leaked into the rendered episode boundary");
+            var center=handoff.AddSeconds(seconds/2);
+            var crosses=pathsAtHandoff.Any(p=>p[0].Time<center&&p[^1].Time>center);
+            Check(crosses==(seconds<=10),"short handoff split or confirmed idle filled by the rendered curve");
             chart.PinInspect(handoff.AddSeconds(seconds/2),true);Verify(true,["Codex"]);
             var value=Field<IEnumerable>(Card()!,"Rows").Cast<object>().Select(r=>Field<string>(r,"Value")).Single();
             Check((value=="0.0")== (seconds>10),"hover and rendered continuity disagree");

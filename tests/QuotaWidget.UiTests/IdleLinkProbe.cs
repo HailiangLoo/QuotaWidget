@@ -51,6 +51,6 @@ static class IdleLinkProbe
                 Check(!points.SelectMany(p=>p.Zip(p.Skip(1))).Any(p=>p.First.Time==p.Second.Time&&(p.First.Time==t.AddMinutes(30)||p.First.Time==t.AddMinutes(40))),"inner vertical edges retained");
             }
         }
-        Console.WriteLine("PASS: short idle links paint dashed/unfilled, remove only inner vertical edges, retain idle hover and obey threshold/smoothing/cumulative modes.");
+        Console.WriteLine("PASS: short idle links paint dashed/unfilled, retain idle hover and obey threshold/smoothing/cumulative modes without vertical edge strokes.");
     }
 }

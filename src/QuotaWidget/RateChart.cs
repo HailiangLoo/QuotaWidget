@@ -510,11 +510,11 @@ public sealed class RateChart : FrameworkElement
         List<IReadOnlyList<TrendPoint>> points;
         if (v.IsCumulative(lane.Name=="Codex"))
             points = lane.Cumulative.Segments.GroupBy(s => s.Group).Select(g => (IReadOnlyList<TrendPoint>)g.SelectMany(s => new[] { new TrendPoint(s.Start, s.From), new TrendPoint(s.End, s.To) }).ToArray()).ToList();
-        else if (v.Smooth) points = lane.Trend.Runs.Select(r => ChartPath.HardEdges(r with
-        {
-            HardStart = r.HardStart && !lane.IdleLinks.Any(link => link[^1].Time == r.Points[0].Time),
-            HardEnd = r.HardEnd && !lane.IdleLinks.Any(link => link[0].Time == r.Points[^1].Time)
-        })).ToList();
+        // A lifecycle edge ends a run; it is not a measured plunge/rise to zero.
+        // Geometry closes the area separately. Keep those closing sides out of the
+        // stroke and peak detector, especially after a component conflict clips a
+        // run down to a few seconds (which otherwise becomes a full-height spike).
+        else if (v.Smooth) points = lane.Trend.Runs.Select(r => r.Points).ToList();
         else points = lane.Source.Segments.Where(s => s.Valid && s.Start >= v.Start && s.End <= v.End).GroupBy(s => s.Group)
             .Select(g => (IReadOnlyList<TrendPoint>)g.SelectMany(s => new[] { new TrendPoint(s.Start, s.Rate), new TrendPoint(s.End, s.Rate) }).ToArray()).ToList();
         if(lane.Name=="Claude"&&v.MergesFable)points=FableDisplay.Omit(points,v.FableOnlySpans);

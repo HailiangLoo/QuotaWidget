@@ -3,6 +3,7 @@ using System.IO;
 using System.Reflection;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Media;
 using QuotaWidget.App;
 using QuotaWidget.Core;
 
@@ -54,8 +55,46 @@ static class FableTransitionProbe
                 Check(!paths.Any(p=>p.Any(v=>v.Time>now.AddMinutes(-30)&&v.Rate>0)),"painted total line continued into pure Fable work");
             }
             window.Close();
+            VerifyBoundaryRendering();
             Console.WriteLine("PASS: raw model lifecycle survives provider union; actual Render and rapid provider switches merge only post-Opus Fable work, retaining concurrent work and removing the stale painted total stroke.");
         }
         finally{Set("_snapshotTokens",null);Set("_trendActivity",null);Set("_modelActivity",null);Directory.Delete(root,true);}
+    }
+
+    static void VerifyBoundaryRendering()
+    {
+        var t=DateTimeOffset.Parse("2026-10-01T12:00:00+08:00");
+        const BindingFlags flags=BindingFlags.Instance|BindingFlags.NonPublic;
+        void Check(bool ok,string why){if(!ok)throw new Exception("Fragment rendering: "+why);}
+        var total=new RateTrend();var fable=new RateTrend();
+        // A nearly level estimate is not a peak just because work starts/stops.
+        TrendRun Run(double a,double b,double value)=>new([new(t.AddMinutes(a),value),new(t.AddMinutes((a+b)/2),value*.995),new(t.AddMinutes(b),value)],value*(b-a)/60,30,true,true);
+        total.Runs.Add(Run(0,10,9));total.Runs.Add(Run(10,30,2));
+        fable.Runs.Add(Run(0,10,7));fable.Runs.Add(Run(29,31,7));
+        var source=new SeriesData{Key=SeriesKey.Total,Segments=[new(){Start=t,End=t.AddMinutes(40),Delta=3}]};
+        var view=new ChartView{Start=t,End=t.AddMinutes(40),Smooth=true,Total=source,Fable=source,Codex=source,Gaps=[],FableToClaudeFactor=.5,
+            FableOnlySpans=[new(t,t.AddMinutes(5)),new(t.AddMinutes(30),t.AddMinutes(31))]};
+        typeof(ChartView).GetField("_totalTrend",flags)!.SetValue(view,total);
+        typeof(ChartView).GetField("_fableTrend",flags)!.SetValue(view,fable);
+        typeof(ChartView).GetField("_codexTrend",flags)!.SetValue(view,fable);
+        Check(view.FableRateConflictAt(t.AddMinutes(29.5))&&!view.FableRateConflictAt(t.AddMinutes(30.5)),"fixture must clip a mixed-model fragment but retain its exclusive tail");
+        foreach(var width in new[]{140d,300d,600d})
+        {
+            var chart=new RateChart{Width=width,View=view};chart.Measure(new Size(width,500));chart.Arrange(new Rect(0,0,width,chart.DesiredSize.Height));chart.UpdateLayout();
+            var lanes=((IEnumerable)typeof(RateChart).GetField("_lanes",flags)!.GetValue(chart)!).Cast<object>();
+            foreach(var lane in lanes)
+            {
+                var name=(string)lane.GetType().GetProperty("Name")!.GetValue(lane)!;
+                var paths=(List<IReadOnlyList<TrendPoint>>)typeof(RateChart).GetMethod("Points",BindingFlags.Static|BindingFlags.NonPublic)!.Invoke(null,[lane,view])!;
+                Check(paths.SelectMany(p=>p.Zip(p.Skip(1))).All(p=>p.First.Time!=p.Second.Time||p.First.Rate==p.Second.Rate),name+" painted area closure as a rate spike");
+                Check(PeakLabels.Find(paths).Count==0,name+" labelled a lifecycle edge as a peak");
+                if(name=="Fable")Check(paths.Any(p=>p[0].Time==t.AddMinutes(30)&&p[^1].Time==t.AddMinutes(31)),"clipping discarded the supported short tail");
+                if(name=="Claude")Check(paths[0][0].Time==t.AddMinutes(5),"exclusive Fable retained a redundant Claude stroke");
+            }
+            IEnumerable<GeometryDrawing> Shapes(Drawing d)=>d is GeometryDrawing shape?[shape]:d is DrawingGroup group?group.Children.SelectMany(Shapes):[];
+            var shapes=Shapes(VisualTreeHelper.GetDrawing(chart)).ToArray();
+            Check(shapes.Any(s=>s.Brush is LinearGradientBrush&&s.Pen is null&&s.Geometry.Bounds.Height>20),"removing edge strokes lost the area fill");
+        }
+        Console.WriteLine("PASS: Claude/Fable/Codex strokes and peaks exclude area-closing edges; clipped short Fable tails, exclusive sharing and area fills survive at three widths.");
     }
 }
