@@ -43,7 +43,6 @@
   " — · 无记录": " — · no records",
   " 图表": " chart",
   " 点": " pts",
-  " 点/h": " pts/h",
   " 用量": " usage",
   " 用量 · 已固定": " usage · pinned",
   " 自身": " own",
@@ -452,5 +451,16 @@
   "登录 Windows 后显示挂件。开启后请保留程序所在位置。": "Show the widget when you sign in to Windows. Keep the EXE in its current location.",
   "演示中不修改开机启动。": "Startup changes are disabled in previews.",
   "无法读取开机启动设置。": "Unable to read Windows startup settings.",
-  "未能更改开机启动，请检查程序路径和 Windows 权限。": "Could not change startup. Check the EXE path and Windows permissions."
+  "未能更改开机启动，请检查程序路径和 Windows 权限。": "Could not change startup. Check the EXE path and Windows permissions.",
+  "账号或套餐变化": "Account or plan changed",
+  "余额未提供": "Balance unavailable",
+  "余额增加": "Balance increased",
+  "Credits 均速": "Credits avg.",
+  "Credits 余额 · 净消耗（余额减少）": "Credits balance · net use (balance decrease)",
+  "截至 {0:M/d HH:mm}": "As of {0:M/d HH:mm}",
+  "所选范围有效采样 {0:0.#} 分钟": "Valid samples in range: {0:0.#} minutes",
+  "右轴 cr/h 为采样区间均速，cr 为累计净减少。不折算周额度；充值、缺失与停采处断开，过期及同时充值可能影响净额。": "Right axis: cr/h is the sampled interval average; cr is cumulative net decrease. No weekly-quota conversion. Increases, missing data and recording gaps break the line. Expiry and concurrent top-ups can affect the net amount.",
+  "Credits 使用右轴原单位；速率是相邻余额采样的平均净减少，累计只计完整有效区间。余额增加、缺失或停采处断开；过期、退款或同时充值可能影响净额，不代表逐任务账单。": "Credits use their own units on the right axis: rates are average balance decreases between samples; totals include complete valid intervals only. Increases, missing balances and recording gaps break the line. Expiry, refunds and concurrent grants can affect net changes; this is not a per-task bill.",
+  "* 记录不全，只累计已观测区间。": "* Partial coverage; only observed intervals are totaled.",
+  "* 余额是上次读数，尚未更新。": "* Last reported balance; awaiting an update."
 }

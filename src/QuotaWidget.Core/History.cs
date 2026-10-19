@@ -237,7 +237,7 @@ public sealed class HistoryStore
     public static string ToCsv(IEnumerable<HistoryRecord> records)
     {
         var sb = new StringBuilder();
-        sb.AppendLine("observedAt,attemptedAt,status,pollSec,sourceId,profileKey,fiveHourUsed,fiveHourResetsAt,allWeekUsed,allWeekResetsAt,fableWeekUsed,fableWeekResetsAt,snapshotId");
+        sb.AppendLine("observedAt,attemptedAt,status,pollSec,sourceId,profileKey,fiveHourUsed,fiveHourResetsAt,allWeekUsed,allWeekResetsAt,fableWeekUsed,fableWeekResetsAt,snapshotId,creditsBalance,creditsUnlimited");
         static string N(QuotaLimit? l) => l is null ? "" : l.UsedPercent.ToString(CultureInfo.InvariantCulture);
         static string R(QuotaLimit? l) => l?.ResetsAt is { } t ? SnapshotJson.FormatTimestamp(t) : "";
         foreach (var r in records)
@@ -250,7 +250,9 @@ public sealed class HistoryStore
               .Append(N(l.FiveHour)).Append(',').Append(R(l.FiveHour)).Append(',')
               .Append(N(l.AllWeek)).Append(',').Append(R(l.AllWeek)).Append(',')
               .Append(N(l.FableWeek)).Append(',').Append(R(l.FableWeek)).Append(',')
-              .Append(r.Snapshot.Id).AppendLine();
+              .Append(r.Snapshot.Id).Append(',')
+              .Append(r.Snapshot.Credits?.Balance?.ToString(CultureInfo.InvariantCulture)).Append(',')
+              .Append(r.Snapshot.Credits is {} credits ? credits.Unlimited?"true":"false" : "").AppendLine();
         }
         return sb.ToString();
     }

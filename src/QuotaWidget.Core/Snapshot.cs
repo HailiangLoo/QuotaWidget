@@ -30,7 +30,9 @@ public sealed record QuotaLimit(double UsedPercent, DateTimeOffset? ResetsAt, st
 
 public sealed record QuotaLimits(QuotaLimit? FiveHour, QuotaLimit? AllWeek, QuotaLimit? FableWeek);
 
-public sealed record QuotaSnapshot(string Id, DateTimeOffset ObservedAt, QuotaLimits Limits);
+public sealed record CreditBalance(bool HasCredits, bool Unlimited, decimal? Balance);
+
+public sealed record QuotaSnapshot(string Id, DateTimeOffset ObservedAt, QuotaLimits Limits, CreditBalance? Credits = null);
 
 /// <summary>The latest.json exchange file (schema v1).</summary>
 public sealed record LatestEnvelope(
@@ -52,7 +54,8 @@ public static class SnapshotJson
 
     static readonly HashSet<string> RootProps = ["schemaVersion", "sourceId", "profileKey", "planLabel", "attemptedAt", "status", "effectivePollIntervalSeconds", "retryAfterSeconds", "errorCode", "snapshot"];
     static readonly HashSet<string> RootRequired = ["schemaVersion", "sourceId", "profileKey", "attemptedAt", "status", "effectivePollIntervalSeconds", "snapshot"];
-    static readonly HashSet<string> SnapshotProps = ["id", "observedAt", "limits"];
+    static readonly HashSet<string> SnapshotProps = ["id", "observedAt", "limits", "credits"];
+    static readonly HashSet<string> SnapshotRequired = ["id", "observedAt", "limits"];
     static readonly HashSet<string> LimitsProps = ["fiveHour", "allWeek", "fableWeek"];
     static readonly HashSet<string> LimitProps = ["usedPercent", "resetsAt", "windowId", "windowMode"];
 
@@ -111,8 +114,8 @@ public static class SnapshotJson
                     (snapshot.Limits.FiveHour is null || snapshot.Limits.AllWeek is null || snapshot.Limits.FableWeek is null))
                     errors.Add("status ok requires all three limits; use partial");
                 if (snapshot is not null && status == Statuses.Partial &&
-                    snapshot.Limits.FiveHour is null && snapshot.Limits.AllWeek is null && snapshot.Limits.FableWeek is null)
-                    errors.Add("status partial requires at least one limit");
+                    snapshot.Limits.FiveHour is null && snapshot.Limits.AllWeek is null && snapshot.Limits.FableWeek is null && snapshot.Credits is null)
+                    errors.Add("status partial requires at least one limit or credits");
             }
 
             if (errors.Count > 0) return null;
@@ -124,7 +127,7 @@ public static class SnapshotJson
     public static QuotaSnapshot? ParseSnapshot(JsonElement el, string path, List<string> errors)
     {
         var before = errors.Count;
-        CheckProps(el, SnapshotProps, SnapshotProps, path, errors);
+        CheckProps(el, SnapshotProps, SnapshotRequired, path, errors);
         var id = ReadString(el, "id", path, 1, 150, false, errors);
         var observedAt = ReadTimestamp(el, "observedAt", path, false, errors);
         QuotaLimits? limits = null;
@@ -140,8 +143,20 @@ public static class SnapshotJson
                     ParseLimit(limEl, "fableWeek", path + "limits.", errors));
             }
         }
+        CreditBalance? credits = null;
+        if (el.TryGetProperty("credits", out var creditElement) && creditElement.ValueKind != JsonValueKind.Null)
+        {
+            credits = CreditsUsage.Parse(creditElement);
+            if (credits is null) errors.Add(path + "credits must contain valid flags and a nonnegative balance or null");
+            else
+            {
+                CheckProps(creditElement,["hasCredits","unlimited","balance"],["hasCredits","unlimited","balance"],path+"credits.",errors);
+                if (creditElement.TryGetProperty("balance",out var amount) && amount.ValueKind is not (JsonValueKind.Null or JsonValueKind.Number))
+                    errors.Add(path+"credits.balance must be numeric or null");
+            }
+        }
         if (errors.Count > before || id is null || observedAt is null || limits is null) return null;
-        return new QuotaSnapshot(id, observedAt.Value, limits);
+        return new QuotaSnapshot(id, observedAt.Value, limits, credits);
     }
 
     static QuotaLimit? ParseLimit(JsonElement parent, string name, string path, List<string> errors)
@@ -249,6 +264,15 @@ public static class SnapshotJson
         WriteLimit(w, "allWeek", s.Limits.AllWeek);
         WriteLimit(w, "fableWeek", s.Limits.FableWeek);
         w.WriteEndObject();
+        if (s.Credits is { } credits)
+        {
+            w.WritePropertyName("credits");
+            w.WriteStartObject();
+            w.WriteBoolean("hasCredits", credits.HasCredits);
+            w.WriteBoolean("unlimited", credits.Unlimited);
+            if (credits.Balance is { } balance) w.WriteNumber("balance", balance); else w.WriteNull("balance");
+            w.WriteEndObject();
+        }
         w.WriteEndObject();
     }
 
@@ -270,7 +294,7 @@ public static class SnapshotJson
         using var ms = new MemoryStream();
         static QuotaLimit? U(QuotaLimit? l) => l is null ? null : l with { ResetsAt = l.ResetsAt?.ToUniversalTime() };
         var normalized = new QuotaSnapshot(s.Id, s.ObservedAt.ToUniversalTime(),
-            new QuotaLimits(U(s.Limits.FiveHour), U(s.Limits.AllWeek), U(s.Limits.FableWeek)));
+            new QuotaLimits(U(s.Limits.FiveHour), U(s.Limits.AllWeek), U(s.Limits.FableWeek)), s.Credits);
         using (var w = new Utf8JsonWriter(ms, SnapshotJson.Plain)) WriteSnapshot(w, normalized);
         return Encoding.UTF8.GetString(ms.ToArray());
     }

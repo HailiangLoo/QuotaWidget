@@ -20,6 +20,11 @@ public sealed class RateChart : FrameworkElement
     DateTimeOffset _displayStart;
     const double _left = 1;
     List<Lane> _lanes = [];
+    List<IReadOnlyList<TrendPoint>> _creditPoints = [];
+    CumulativeSeries? _creditCumulative;
+    bool HasCreditCurve => _view?.CodexVisible == true && _creditPoints.Any(run=>run.Any(p=>p.Rate>0));
+    public bool CreditsVisible => HasCreditCurve;
+    ChartScale CreditScale = ChartScale.Create(1);
     readonly Dictionary<int,IReadOnlyList<AxisTick>> _axisTicks=[];
     sealed record Lane(string Name, string Color, SeriesData Source, RateTrend Trend, CumulativeSeries Cumulative, int Panel)
     {
@@ -87,6 +92,8 @@ public sealed class RateChart : FrameworkElement
             _view = value;
             _axisTicks.Clear();
             _lanes = [];
+            _creditPoints = [];
+            _creditCumulative = null;
             if (value is { } v)
             {
                 void Add(string name, string color, SeriesData source, RateTrend trend, CumulativeSeries? cumulative, int panel)
@@ -102,9 +109,21 @@ public sealed class RateChart : FrameworkElement
                 if (v.TotalVisible) Add("Claude", "Claude", v.Total, v.TotalTrend, v.TotalCumulative, 0);
                 if (v.FableDrawable) Add("Fable", "Fable", v.Fable, v.DisplayFableTrend, v.FableCumulative, 0);
                 if (v.CodexVisible && v.Codex is { } codex) Add("Codex", "Violet", codex, v.CodexTrend!, v.CodexCumulative, _lanes.Count > 0 ? 1 : 0);
+                if (v.CodexVisible && v.Credits is { } credits)
+                {
+                    _creditCumulative = CumulativeSeries.Build(credits,v.Start,v.End);
+                    // Credit balance changes have no request-level billing timestamps.
+                    // Show sampled interval means, without quota smoothing or local-chat attribution.
+                    _creditPoints = v.CodexCumulativeMode
+                        ? _creditCumulative.Segments.GroupBy(s=>s.Group).Select(g=>(IReadOnlyList<TrendPoint>)g.SelectMany(s=>new[]{new TrendPoint(s.Start,s.From),new TrendPoint(s.End,s.To)}).ToArray()).ToList()
+                        : credits.Segments.Where(s=>s.Valid&&s.Start>=v.Start&&s.End<=v.End).GroupBy(s=>s.Group)
+                            .Select(g=>(IReadOnlyList<TrendPoint>)g.SelectMany(s=>new[]{new TrendPoint(s.Start,s.Rate),new TrendPoint(s.End,s.Rate)}).ToArray()).ToList();
+                    CreditScale = ChartScale.Create(_creditPoints.SelectMany(r=>r).Select(p=>p.Rate).DefaultIfEmpty(0).Max()*1.12);
+                }
                 // Show actual coverage when recording only began recently.
                 // Never compress internal gaps or extend into the unobserved tail.
-                var first = _lanes.SelectMany(l => l.Trend.Runs).Select(r => (DateTimeOffset?)r.Points[0].Time).Min();
+                var first = _lanes.SelectMany(l => l.Trend.Runs).Select(r => (DateTimeOffset?)r.Points[0].Time)
+                    .Concat(_creditPoints.Select(r=>(DateTimeOffset?)r[0].Time)).Min();
                 _displayStart = first is { } f && f > v.Start ? f : v.Start;
                 if (_displayStart >= v.End) _displayStart = v.Start;
             }
@@ -264,6 +283,9 @@ public sealed class RateChart : FrameworkElement
     }
 
     IReadOnlyList<(double Value,FormattedText Text,Rect Bounds)> YAxisLabels(int panel,ChartScale scale)
+        => AxisLabels(panel,scale,false);
+
+    IReadOnlyList<(double Value,FormattedText Text,Rect Bounds)> AxisLabels(int panel,ChartScale scale,bool credits)
     {
         var top=PlotTop(panel);var bottom=PlotBottom(panel);
         // Keep the data scale fixed while resizing. Try fewer evenly spaced labels,
@@ -275,11 +297,12 @@ public sealed class RateChart : FrameworkElement
             for(var i=0;i<=intervals;i++)
             {
                 var value=i==intervals?scale.Top:i*ticks.Step;
-                var text=Text(ticks.Label(value),Theme.Brush("Axis"),11.5);
+                var unit=credits&&i==intervals ? (_view!.CodexCumulativeMode?" cr":" cr/h") : "";
+                var text=Text(ticks.Label(value)+unit,Theme.Brush(credits?"Credits":"Axis"),credits?10:11.5);
                 text.SetFontWeight(FontWeights.SemiBold);
                 var y=bottom-value/scale.Top*(bottom-top);
                 y=i==0?y-text.Height-1:i==intervals?y+1:y-text.Height/2;
-                labels.Add((value,text,new Rect(_left,y,text.Width+7,text.Height)));
+                labels.Add((value,text,new Rect(credits?PlotRight-text.Width-7:_left,y,text.Width+7,text.Height)));
             }
             if(labels.All(l=>l.Bounds.Top>=top&&l.Bounds.Bottom<=bottom)&&
                 labels.Zip(labels.Skip(1),(below,above)=>below.Bounds.Top-above.Bounds.Bottom>=3).All(fits=>fits))
@@ -317,6 +340,8 @@ public sealed class RateChart : FrameworkElement
             Label(dc,header.Right,Theme.Brush(_lanes[indices[^1]].Color),PlotRight-23,PanelTop(i)+3,header.FontSize,TextAlignment.Right);
             if (Collapsed(i)) continue;
             var axisLabels=YAxisLabels(i,scale);
+            var creditPanel=HasCreditCurve&&_lanes[indices[0]].Name=="Codex";
+            var creditLabels=creditPanel?AxisLabels(i,CreditScale,true):[];
             foreach(var tick in axisLabels)
             {
                 var y = Y(i, tick.Value);
@@ -356,19 +381,25 @@ public sealed class RateChart : FrameworkElement
                 dc.DrawGeometry(null, pen, Geometry(link.Select(p => new Point(X(p.Time), Y(i, p.Rate))).ToArray()));
                 dc.Pop();
             }
+            if(creditPanel)
+            {
+                var creditPen = new Pen(Theme.Brush("Credits"),1.5) { DashStyle=new DashStyle([4,2],0), LineJoin=PenLineJoin.Round };
+                foreach(var run in _creditPoints)
+                    dc.DrawGeometry(null,creditPen,Geometry(run.Select(p=>new Point(X(p.Time),CreditY(i,p.Rate))).ToArray()));
+            }
             dc.Pop();
             DrawBoundaries(dc, i, indices, v, labelObstacles);
             // Put ticks inside the plot: the data reaches both edges of the narrow widget.
             // A small background keeps the labels legible if a curve crosses them.
-            foreach(var tick in axisLabels)
+            foreach(var tick in axisLabels.Concat(creditLabels))
             {
                 labelObstacles.Add(tick.Bounds);
                 dc.PushOpacity(0.88);
                 dc.DrawRectangle(Theme.Brush("Bg"), null,tick.Bounds);
                 dc.Pop();
-                dc.DrawText(tick.Text,new Point(_left+3,tick.Bounds.Top));
+                dc.DrawText(tick.Text,new Point(tick.Bounds.Left+3,tick.Bounds.Top));
             }
-            if (indices.All(j => !_lanes[j].Source.Segments.Any(s => s.Valid && s.Start >= v.Start && s.End <= v.End)))
+            if (!creditPanel&&indices.All(j => !_lanes[j].Source.Segments.Any(s => s.Valid && s.Start >= v.Start && s.End <= v.End)))
                 Label(dc, Loc.T("等待连续采样"), muted, (_left + PlotRight) / 2, PlotTop(i) + 18, 11, TextAlignment.Center);
             else if (!cumulative) DrawPeaks(dc, i, indices, allPoints, Y, labelObstacles);
             DrawTimeAxis(dc,i);
@@ -380,11 +411,17 @@ public sealed class RateChart : FrameworkElement
             foreach (var lane in _lanes.Where(l => l.Panel == panel&&!(l.Name=="Claude"&&v.FableOnlyAt(inspect.Time))))
                 if (InspectValue(lane, v, inspect.Time) is { } value && value > 0)
                     dc.DrawEllipse(Theme.Brush(lane.Color), null, new Point(X(inspect.Time), Y(panel, value)), 2.7, 2.7);
+            if(inspect.Codex&&HasCreditCurve&&CreditValue(inspect.Time) is { } creditValue)
+                dc.DrawEllipse(Theme.Brush("Credits"),null,new Point(X(inspect.Time),CreditY(panel,creditValue)),2.5,2.5);
         }
         if (IsKeyboardFocused) dc.DrawRoundedRectangle(null, new Pen(Theme.Brush("Blue"), 1), new Rect(1, 1, ActualWidth - 2, Height - 2), 4, 4);
     }
 
     public double KernelMinutes => _lanes.SelectMany(l => l.Trend.Runs).Select(r => r.KernelMinutes).DefaultIfEmpty(60).Max();
+
+    double CreditY(int panel,double value) => PlotBottom(panel)-value/CreditScale.Top*(PlotBottom(panel)-PlotTop(panel));
+    double? CreditValue(DateTimeOffset time) => _view is { } v && v.Credits?.SegmentAt(time) is { Valid:true } segment && segment.Start>=v.Start && segment.End<=v.End
+        ? v.CodexCumulativeMode ? _creditCumulative?.ValueAt(time) : segment.Rate : null;
 
     void DrawBoundaries(DrawingContext dc, int panel, int[] indices, ChartView view, List<Rect> obstacles)
     {
@@ -547,6 +584,12 @@ public sealed class RateChart : FrameworkElement
             var unmatched=!cumulative&&view.Smooth?lane.Trend.UnlocatedAt(time):null;
             var idleLink=lane.IdleLinks.Any(link=>time>link[0].Time&&time<link[^1].Time);
             rows.Add(new(name, idleLink ? Loc.T("空闲 · 仅连接") : unmatched is not null?Loc.F($"+{unmatched.Delta:0.#}点") : value is { } reading ? cumulative?Number(reading):RatePresentation.Estimate(reading)+(unlocated?Loc.T(" 点/h"):"") : Loc.T(missing), color));
+        }
+        if(inspect.Codex&&HasCreditCurve)
+        {
+            var reading=CreditValue(time);
+            var missing=view.Credits?.SegmentAt(time)?.Label??"未记录";
+            rows.Add(new(cumulative?"Credits":Loc.T("Credits 均速"),reading is {} n?Number(n)+(cumulative?" cr":" cr/h"):Loc.T(missing),Theme.Brush("Credits")));
         }
         // The window overlay can use space beyond the chart without covering the active plot
         // or intercepting the pointer. Fall back to the other side near the window edge.

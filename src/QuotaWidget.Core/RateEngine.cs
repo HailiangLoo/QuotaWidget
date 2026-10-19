@@ -1,6 +1,6 @@
 namespace QuotaWidget.Core;
 
-public enum SeriesKey { Total, Fable }
+public enum SeriesKey { Total, Fable, Credits }
 
 public enum SegmentIssue { None, Missing, UnknownWindow, Reset, Decrease, Gap }
 
@@ -76,7 +76,7 @@ public static class RateEngine
     const double Eps = 1e-9;
 
     public static QuotaLimit? Select(HistoryRecord r, SeriesKey key) =>
-        key == SeriesKey.Total ? r.Snapshot.Limits.AllWeek : r.Snapshot.Limits.FableWeek;
+        key == SeriesKey.Total ? r.Snapshot.Limits.AllWeek : key == SeriesKey.Fable ? r.Snapshot.Limits.FableWeek : null;
 
     /// <summary>
     /// Same quota window: equal explicit ids when the source provides them; otherwise reset

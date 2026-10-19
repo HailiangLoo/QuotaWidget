@@ -72,12 +72,13 @@ public sealed class CodexUsageSource(string workDir) : ICodexUsageSource
         // Slot order is not a contract: match the actual duration, never the plan name.
         var week=ReadWindow(10080,"weekly",out var weekError);
         var five=ReadWindow(300,"five_hour",out var fiveError);
-        if(week is null&&five is null)return Failure(at,weekError??fiveError??"no_supported_window");
+        var credits = bucket.TryGetProperty("credits", out var creditValue) ? CreditsUsage.Parse(creditValue) : null;
+        if(week is null&&five is null&&credits is null)return Failure(at,weekError??fiveError??"no_supported_window");
         var plan = bucket.TryGetProperty("planType", out var planValue) && planValue.ValueKind == JsonValueKind.String ? planValue.GetString() : "unknown";
         // No email/account ID is persisted. Account + plan changes get separate histories.
         var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(identity.GetString() + "|" + plan))).ToLowerInvariant()[..24];
         return new(1, SourceId, "codex-" + hash, "Codex " + plan, at, Statuses.Partial, 300, null, weekError??fiveError,
-            new QuotaSnapshot("cx-" + at.ToUnixTimeMilliseconds(), at, new QuotaLimits(five, week, null)));
+            new QuotaSnapshot("cx-" + at.ToUnixTimeMilliseconds(), at, new QuotaLimits(five, week, null), credits));
     }
 
     public async Task<LatestEnvelope> FetchAsync(CancellationToken ct)
@@ -123,7 +124,7 @@ public sealed class CodexUsageSource(string workDir) : ICodexUsageSource
             if (!account.TryGetProperty("account", out var a) || a.ValueKind != JsonValueKind.Object || !a.TryGetProperty("type", out var type) || type.GetString() != "chatgpt")
                 return Failure(DateTimeOffset.Now, "not_logged_in", Statuses.AuthRequired);
             // Verified in the bundled 0.159.2 protocol: omit the separate reset-credit detail
-            // lookup. The widget consumes no reset credits and reads quota windows only.
+            // lookup. Paid credits come from the same quota bucket, not earned resets.
             var limits = await Request(3, "account/rateLimits/read", new { excludeResetCreditDetails = true });
             LastCreditDetailsPresent = limits.TryGetProperty("rateLimitResetCredits", out var credits) && credits.ValueKind == JsonValueKind.Object &&
                 credits.TryGetProperty("credits", out var details) && details.ValueKind == JsonValueKind.Array;

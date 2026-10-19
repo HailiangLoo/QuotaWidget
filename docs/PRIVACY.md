@@ -7,7 +7,7 @@ QuotaWidget has no project-operated server, telemetry, or log-upload endpoint. O
 | Source | Purpose | Stored locally |
 | --- | --- | --- |
 | Official Claude CLI | Quota queries and official sign-in | Quota readings and a separate CLI configuration; the official CLI manages credentials |
-| Official Codex app-server | Read-only quota queries for the current account | Quota readings and hashed account/plan identifiers, not the raw account ID returned by the service |
+| Official Codex app-server | Read-only quota and credit-balance queries for the current account | Quota readings, credit balance/availability flags and hashed account/plan identifiers, not the raw account ID returned by the service |
 | Local Claude/Codex logs | Tokens, work start/end times, chat metadata, and cache reminders | Usage counters, models, timestamps, chat IDs/titles, project names, and parent relationships |
 | Local app/session metadata | Running state and display names | Necessary session state; no browser cookies or password-store access |
 | Installed Windows app information | Local provider icons and official CLI discovery | Compatibility cache; the installed-app list is not uploaded |

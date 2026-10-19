@@ -18,6 +18,14 @@ The recent-hour rate ends at the latest reading, then picks a continuous earlier
 
 The cumulative stroke connects known sampling endpoints. It does not reveal the exact moment an increment occurred inside an interval.
 
+## Credits
+
+The existing official `account/rateLimits/read` query can return a decimal credit balance in the Codex bucket. It is separate from earned rate-limit resets; the widget never redeems a reset or purchases credits. [Protocol](https://learn.chatgpt.com/docs/app-server); [pricing](https://learn.chatgpt.com/docs/pricing).
+
+The pale violet dashed line uses its own right axis. Rate is the balance decrease divided by the elapsed time between adjacent valid samples (`cr/h`); cumulative mode sums complete valid intervals (`cr`). It does not use quota smoothing, local task attribution or a conversion to weekly quota. The shared time axis is unchanged. The balance row shows net use in the selected range, or the last hour in compact mode.
+
+Increased balances, missing/unlimited balances, source/plan changes, recording interruptions and long gaps break the series. Subscription resets do not reset credits. Unknown is not zero; a finite reported zero is retained. `*` indicates incomplete range coverage or an old balance. Historical quota-only records cannot reconstruct earlier credit use. Expiry can lower a balance, while refunds or grants can offset spending even within one sampling interval: this is **observed net balance decrease, not an exact bill or per-chat cost**. The official usage page remains authoritative.
+
 ## Chat reminders and compaction
 
 The management list shows main chats, with explicitly identified subagents excluded from both current and collapsed rows. Codex's paginated/resumed rollouts are grouped by `session_meta.id` (or `session_id`), not the extra storage ID in the filename. A fork's history reference is not subagent ownership. These display decisions do not remove token records or change confirmed subagent usage attribution.

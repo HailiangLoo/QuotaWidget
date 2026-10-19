@@ -40,6 +40,9 @@ public sealed class ChartView
     public bool TotalVisible { get; init; } = true;
     public bool FableVisible { get; init; } = true;
     public SeriesData? Codex { get; init; }
+    public SeriesData? Credits { get; init; }
+    public CreditBalance? CreditsBalance { get; init; }
+    public DateTimeOffset? CreditsObservedAt { get; init; }
     public bool CodexVisible { get; init; } = true;
     public bool ClaudeCumulativeMode { get; init; }
     public bool CodexCumulativeMode { get; init; }
@@ -159,8 +162,8 @@ public sealed class WidgetModel
 
     // Derived series are rebuilt only when records or events change, not on every clock tick.
     int _dataVersion, _cachedVersion = -1;
-    SeriesData? _total, _fable;
-    SeriesData? _archiveTotal, _archiveFable;
+    SeriesData? _total, _fable, _credits;
+    SeriesData? _archiveTotal, _archiveFable, _archiveCredits;
     int _archiveVersion = -1;
     public bool ArchiveLoaded => _archiveTotal is not null;
     CumulativeAverage? _cumTotal, _cumFable;
@@ -189,7 +192,7 @@ public sealed class WidgetModel
 
     public void ReleaseArchive()
     {
-        _archiveTotal = _archiveFable = null;
+        _archiveTotal = _archiveFable = _archiveCredits = null;
         _archiveVersion = -1;
     }
 
@@ -207,6 +210,7 @@ public sealed class WidgetModel
             var events = RateEngine.RelevantEvents(EventLog.Merge(Events.Load(DateTimeOffset.UnixEpoch), EventList), SourceId, ProfileKey);
             _archiveTotal = RateEngine.Build(records, SeriesKey.Total, events);
             _archiveFable = RateEngine.Build(records, SeriesKey.Fable, events);
+            _archiveCredits = CreditsUsage.Build(records, events);
             _archiveVersion = _dataVersion;
         }
         return (_archiveTotal, _archiveFable);
@@ -219,6 +223,7 @@ public sealed class WidgetModel
             var events = RateEngine.RelevantEvents(EventList, SourceId, ProfileKey);
             _total = RateEngine.Build(Records, SeriesKey.Total, events);
             _fable = RateEngine.Build(Records, SeriesKey.Fable, events);
+            _credits = CreditsUsage.Build(Records, events);
             _cumTotal = RateEngine.Cumulative(Records, SeriesKey.Total, _total);
             _cumFable = RateEngine.Cumulative(Records, SeriesKey.Fable, _fable);
             _cachedVersion = _dataVersion;
@@ -466,6 +471,8 @@ public sealed class WidgetModel
         {
             Start = start, End = end, Smooth = s.Smoothing, TrendMinutes = s.TrendMinutes, IdleLinkMinutes = s.IdleLinkMinutes, Total = total, Fable = fable, Gaps = gaps,
             TotalVisible = s.TotalVisible, FableVisible = s.FableVisible, BlockedText = blocked,
+            Credits = range == ChartRanges.All ? _archiveCredits : _credits,
+            CreditsBalance = last?.Snapshot.Credits, CreditsObservedAt = last?.T,
         };
 
         // Summary row: complete valid intervals inside the chart window, gaps not filled.

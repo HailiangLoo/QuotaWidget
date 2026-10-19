@@ -1102,6 +1102,7 @@ Test("atomic: concurrent reader never sees a torn latest.json", () =>
 ChatCacheTests.Register(tests);
 ChatCompactionTests.Register(tests);
 CodexTests.Register(tests);
+CreditsTests.Register(tests);
 CumulativeTests.Register(tests);
 TrendTests.Register(tests);
 RangeTests.Register(tests);

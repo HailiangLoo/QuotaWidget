@@ -185,6 +185,7 @@ static class CodexTests
                 reset = result.Snapshot?.Limits.AllWeek?.ResetsAt,
                 elapsedMs = watch.ElapsedMilliseconds,
                 source.LastCreditDetailsPresent,
+                credits = result.Snapshot?.Credits,
                 observedAt = result.Snapshot?.ObservedAt }));
             if (result.Snapshot is null) throw new Exception("Live quota unavailable");
         }

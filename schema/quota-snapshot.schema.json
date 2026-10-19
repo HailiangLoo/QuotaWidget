@@ -105,6 +105,16 @@
                   "$ref": "#/$defs/nullableLimit"
                 }
               }
+            },
+            "credits": {
+              "oneOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "$ref": "#/$defs/credits"
+                }
+              ]
             }
           }
         }
@@ -179,33 +189,47 @@
       "then": {
         "properties": {
           "snapshot": {
-            "properties": {
-              "limits": {
-                "anyOf": [
-                  {
-                    "properties": {
-                      "fiveHour": {
-                        "type": "object"
+            "anyOf": [
+              {
+                "properties": {
+                  "limits": {
+                    "anyOf": [
+                      {
+                        "properties": {
+                          "fiveHour": {
+                            "type": "object"
+                          }
+                        }
+                      },
+                      {
+                        "properties": {
+                          "allWeek": {
+                            "type": "object"
+                          }
+                        }
+                      },
+                      {
+                        "properties": {
+                          "fableWeek": {
+                            "type": "object"
+                          }
+                        }
                       }
-                    }
-                  },
-                  {
-                    "properties": {
-                      "allWeek": {
-                        "type": "object"
-                      }
-                    }
-                  },
-                  {
-                    "properties": {
-                      "fableWeek": {
-                        "type": "object"
-                      }
-                    }
+                    ]
                   }
-                ]
+                }
+              },
+              {
+                "required": [
+                  "credits"
+                ],
+                "properties": {
+                  "credits": {
+                    "type": "object"
+                  }
+                }
               }
-            }
+            ]
           }
         }
       }
@@ -266,6 +290,30 @@
             "rolling",
             "unknown"
           ]
+        }
+      }
+    },
+    "credits": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "hasCredits",
+        "unlimited",
+        "balance"
+      ],
+      "properties": {
+        "hasCredits": {
+          "type": "boolean"
+        },
+        "unlimited": {
+          "type": "boolean"
+        },
+        "balance": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0
         }
       }
     }

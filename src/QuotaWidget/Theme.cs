@@ -43,6 +43,7 @@ public static class Theme
         Set("Red", "#be3b36", "#f18076");
         Set("OrangeRed", "#c36530", "#eca074");
         Set("Violet", "#8051bd", "#bc9df0");
+        Set("Credits", "#68577d", "#d8c9ed");
         // Time units have their own quiet palette, independent of provider and quota severity.
         Set("ResetDay", "#78638c", "#b9a7cc");
         Set("ResetHour", "#496e82", "#a2c0d0");

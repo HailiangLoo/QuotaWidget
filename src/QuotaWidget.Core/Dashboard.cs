@@ -16,7 +16,9 @@ public static class Dashboard
         var fable = fableFactor is { } factor ? QuotaUnits.Scale(c.Fable, factor) : c.Fable;
         var x = codex.Chart.Total;
         var first = (settings.Monitors(ChatPlatform.Claude)?c.Total.Segments.Concat(c.Fable.Segments):[])
-            .Concat(settings.Monitors(ChatPlatform.Codex)?x.Segments:[]).Select(s => (DateTimeOffset?)s.Start).Min();
+            .Concat(settings.Monitors(ChatPlatform.Codex)?x.Segments:[])
+            .Concat(settings.Monitors(ChatPlatform.Codex)?codex.Chart.Credits?.Segments.Where(s=>s.Valid)??[]:[])
+            .Select(s => (DateTimeOffset?)s.Start).Min();
         var start = range == ChartRanges.All ? first ?? end.AddHours(-1) : end.AddMinutes(-range);
         var gaps = first is { } firstAt && firstAt > start ? new List<GapRegion> { new(start, firstAt, "尚未记录") } : [];
         bool Has(SeriesData s) => s.Segments.Any(p => p.Valid && p.End > start && p.Start < end);
@@ -28,6 +30,7 @@ public static class Dashboard
             TrendBoundaries = trendBoundaries ?? [],
             Activity = activity ?? TrendActivity.Empty,
             Total = c.Total, Fable = fable, Codex = x, Gaps = gaps, FableToClaudeFactor = fableFactor,
+            Credits = codex.Chart.Credits, CreditsBalance = codex.Chart.CreditsBalance, CreditsObservedAt = codex.Chart.CreditsObservedAt,
             ClaudeCollapsed = settings.ClaudeChartCollapsed, CodexCollapsed = settings.CodexChartCollapsed,
             ClaudeGaps = c.Gaps, CodexGaps = codex.Chart.Gaps,
             ClaudeCumulativeMode = claudeCumulative, CodexCumulativeMode = codexCumulative,
@@ -48,6 +51,7 @@ public static class Dashboard
             ? Loc.T("Fable 点数折合为 Claude 周额度（×0.5），已含在 Claude 中；顶部 Fable 圆环按自身额度。")
             : Loc.T("此套餐的 Fable 换算比例未确认，仍按 Fable 自身周额度计，不与 Claude 对齐或相加。"));
         details.Add(Loc.T("Codex 按自己的周额度计，不能与 Claude 相加。"));
+        details.Add(Loc.T("Credits 使用右轴原单位；速率是相邻余额采样的平均净减少，累计只计完整有效区间。余额增加、缺失或停采处断开；过期、退款或同时充值可能影响净额，不代表逐任务账单。"));
         details.Add(Loc.T("未匹配本机任务的增长仍计入累计；悬停相应采样区间可查看点数，不推成速率，也不摊进空闲时间。"));
         details.Add(Loc.T("仅 Fable 时共用一个速率读数；混用时若分项估计超过 Claude 总速率，该段显示分项样本未对齐，不改写原始累计。"));
         details.Add(Loc.T("Claude/Fable 共用动态刻度；Codex 按自己的峰值独立缩放。上下图的高度/面积不能直接比较，需读各自刻度与累计。"));

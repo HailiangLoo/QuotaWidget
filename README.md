@@ -57,6 +57,7 @@ Polling, smoothing and idle-gap settings use sliders with labelled stops. Click 
 
 - Claude: five-hour, total weekly, and Fable weekly quota.
 - Codex: weekly quota, plus a five-hour gauge when the account's interface provides it.
+- **Credits:** remaining balance and recorded net use. A pale violet dashed line uses the Codex chart's right axis: `cr/h` in rate mode, `cr` in cumulative mode. No conversion to subscription quota. Recording begins with this version; `*` marks incomplete coverage or a stale balance. See [limitations](docs/ALGORITHM.md#credits).
 - Independent rate or cumulative views for each provider, with 1h, 5h, 12h, 24h, 3d, and all-history ranges.
 - Main-chat activity and cache reminders; identified subagents stay out of the management list, while their usage remains in statistics and is grouped under a parent when confirmed.
 - Expanded chat lists have their own scrollbar, keeping the meters and charts in place. Both layouts share the same order: elapsed time as a fraction of each chat's reminder window, with running chats below idle ones. Reordering happens at most once a minute and pauses during interaction; switching layouts preserves the order and cooldown.
