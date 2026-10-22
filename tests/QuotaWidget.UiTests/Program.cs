@@ -45,7 +45,7 @@ static class Probe
             string Title(UIElement row)=>( ((StackPanel)((ToolTip)((FrameworkElement)row).ToolTip).Content).Children[0] as TextBlock)!.Text;
             var rows=Control<StackPanel>("CompactChatRows");
             Check(rows.Children.Count==4,"compact active list truncated");
-            Check(rows.Children.Cast<UIElement>().Select(Title).SequenceEqual(new[]{"urgent-x","urgent-c","idle","running"}),"relative priority or archived filtering wrong");
+            Check(rows.Children.Cast<UIElement>().Select(Title).SequenceEqual(new[]{"urgent-x","urgent-c","idle","running"}),"idle-duration order or archived filtering wrong");
             Check(rows.Children.Cast<Grid>().Where(row=>Title(row)!="urgent-c").All(row=>ReferenceEquals(((Border)row.Children[0]).Background,Theme.Brush("Green"))),"Codex timers still use age-based colors");
             Check(Control<TextBlock>("CompactClaudeRateValue").Text=="—"&&Control<TextBlock>("CompactCodexRateValue").Text=="—","empty data became zero rate");
             Check(Control<TextBlock>("CompactClaudePoints").Text=="近1h · —","missing amount became zero");

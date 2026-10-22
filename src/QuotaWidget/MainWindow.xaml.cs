@@ -414,14 +414,14 @@ public partial class MainWindow : Window
             if (!_chatOrder.ContainsKey(ChatKey(entry))) _chatOrder[ChatKey(entry)] = _chatSequence++;
         var active = entries.Where(e => !e.Compacted && !e.Expired(now) && !e.ActivityUncertain)
             .OrderBy(e => _chatOrder[ChatKey(e)]).ToList();
-        // Normalize by each reminder window, not elapsed minutes. Re-rank at
-        // most once a minute; both layouts share the order and its cooldown.
+        // Longest idle timer first, with running chats last. Re-rank at most once
+        // a minute; both layouts share stable ties, order and cooldown.
         // Compact scrolling belongs to BodyViewport, including its scrollbar.
         var viewport = _model.Settings.CompactMode ? BodyViewport : ChatViewport;
         if (_chatSortedAt == default || ((now - _chatSortedAt >= TimeSpan.FromMinutes(1) || now < _chatSortedAt) &&
             !viewport.IsMouseOver && !viewport.IsKeyboardFocusWithin && Mouse.LeftButton != MouseButtonState.Pressed))
         {
-            active = active.OrderByDescending(e => e.WorkPending ? -1 : e.AgeMinutes(now) / e.DisplayWindowMinutes).ToList();
+            active = active.OrderByDescending(e => e.WorkPending ? -1 : e.AgeMinutes(now)).ToList();
             _chatSequence = 0;
             foreach (var entry in active) _chatOrder[ChatKey(entry)] = _chatSequence++;
             foreach (var entry in entries.Where(e => e.Compacted || e.Expired(now) || e.ActivityUncertain))
