@@ -42,6 +42,7 @@ public partial class MainWindow : Window
         Loc.Configure(opts.Language ?? model.Settings.Language);
         Translate.RefreshResources();
         InitializeComponent();
+        RangeTabs.Selected += SelectRange;
         InitializeScaling();
         WindowDrag.Attach(this,Frame,moved:PersistPlacement);
         InitializeConnections();
@@ -167,6 +168,8 @@ public partial class MainWindow : Window
         var watchClaude=s.Monitors(ChatPlatform.Claude);var watchCodex=s.Monitors(ChatPlatform.Codex);
         var available = AvailableRanges();
         var range = ChartRanges.Select(s.RangeMinutes, available);
+        if (range != ChartRanges.All && range <= WidgetModel.Lookback.TotalMinutes)
+        { _model.ReleaseArchive(); _codex.ReleaseArchive(); }
         var v = _model.BuildView(now, watchClaude?range:60);
         _codex.Settings.RangeMinutes = s.RangeMinutes;
         _codex.Settings.Smoothing = s.Smoothing;
@@ -217,13 +220,7 @@ public partial class MainWindow : Window
         CodexRateMode.IsChecked = s.ChartModeFor(ChatPlatform.Codex) == "rate";
         CodexCumulativeMode.IsChecked = s.ChartModeFor(ChatPlatform.Codex) == "cumulative";
         FableLegendText.Text = dashboard.Chart.FableToClaudeFactor is not null ? v.FableLegend : v.FableLegend + Loc.T(" 自身");
-        foreach (var tab in RangeTabs.Children.OfType<ToggleButton>())
-        {
-            var minutes = int.Parse((string)tab.Tag, CultureInfo.InvariantCulture);
-            tab.Visibility = available.Contains(minutes) ? Visibility.Visible : Visibility.Collapsed;
-            tab.IsChecked = minutes == range;
-        }
-        RangeTabs.Columns = available.Length;
+        RangeTabs.Configure(available, range);
 
         Chart.View = dashboard.Chart;
         CreditsLegend.Visibility = Chart.CreditsVisible ? Visibility.Visible : Visibility.Collapsed;
@@ -424,7 +421,7 @@ public partial class MainWindow : Window
         if (_chatSortedAt == default || ((now - _chatSortedAt >= TimeSpan.FromMinutes(1) || now < _chatSortedAt) &&
             !viewport.IsMouseOver && !viewport.IsKeyboardFocusWithin && Mouse.LeftButton != MouseButtonState.Pressed))
         {
-            active = active.OrderByDescending(e => e.WorkPending ? -1 : e.AgeMinutes(now) / e.WindowMinutes).ToList();
+            active = active.OrderByDescending(e => e.WorkPending ? -1 : e.AgeMinutes(now) / e.DisplayWindowMinutes).ToList();
             _chatSequence = 0;
             foreach (var entry in active) _chatOrder[ChatKey(entry)] = _chatSequence++;
             foreach (var entry in entries.Where(e => e.Compacted || e.Expired(now) || e.ActivityUncertain))
@@ -465,7 +462,7 @@ public partial class MainWindow : Window
     {
         var age = e.AgeMinutes(now);
         var urgency = e.Urgency(now);
-        var fraction = Math.Clamp(age / e.WindowMinutes, 0, 1);
+        var fraction = Math.Clamp(age / e.DisplayWindowMinutes, 0, 1);
         const double warningAt = 2.0 / 3;
         var from = ((SolidColorBrush)Theme.Brush(fraction < warningAt ? "Green" : "OrangeRed")).Color;
         var to = ((SolidColorBrush)Theme.Brush(fraction < warningAt ? "OrangeRed" : "Red")).Color;
@@ -474,6 +471,7 @@ public partial class MainWindow : Window
         Brush color = e.Expired(now) ? Theme.Brush("Muted") : new SolidColorBrush(Color.FromRgb(Mix(from.R, to.R), Mix(from.G, to.G), Mix(from.B, to.B)));
         if (e.WorkPending) color = Theme.Brush(e.Running ? "Green" : "Muted");
         if (e.Compacted || historical) color = Theme.Brush("Muted");
+        if (e.Platform == ChatPlatform.Codex) color = Theme.Brush("Green");
         var row = new Grid { Height = dense?22:30, Background = Brushes.Transparent, ToolTip = new ToolTip { Content = ChatTip(e, now, historical) } };
         // Refresh on hover; token polling must not replace every row and close an open card.
         row.ToolTipOpening += (_, _) => ((ToolTip)row.ToolTip).Content = ChatTip(e, DateTimeOffset.Now, historical);
@@ -950,10 +948,9 @@ public partial class MainWindow : Window
         SaveAndRender();
     }
 
-    void Range_Click(object sender, RoutedEventArgs e)
+    void SelectRange(int range)
     {
-        if (sender is not ToggleButton b) return;
-        _model.Settings.RangeMinutes = int.Parse((string)b.Tag, CultureInfo.InvariantCulture);
+        _model.Settings.RangeMinutes = range;
         Chart.ClearInspect();
         SaveAndRender();
     }

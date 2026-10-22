@@ -29,6 +29,10 @@ Increased balances, missing/unlimited balances, source/plan changes, recording i
 
 ## Chat reminders and compaction
 
+Codex timers stay green. Two hours is an idle-list folding threshold, not a cache lifetime; running tasks are not archived by age. Older saved 30-minute thresholds no longer control Codex display. Claude retains its 5-minute/1-hour reminders. Folded rows keep the existing 24-hour retention, without deleting history.
+
+The shared menu after 3d offers 1w, 1m (rolling 30 days), and all. Week views use the live eight-day window; month views load the required archive plus one prior quota cycle for reset anchors; all reads the current account's complete archive without expanding the live dedupe index. Short usage-card lookups retain the active archive; switching the main chart to a short range or compact mode releases it. Week/month axes shortlist label candidates by screen position before measuring text. Curves, totals and hover values are not downsampled.
+
 The management list shows main chats, with explicitly identified subagents excluded from both current and collapsed rows. Codex's paginated/resumed rollouts are grouped by `session_meta.id` (or `session_id`), not the extra storage ID in the filename. A fork's history reference is not subagent ownership. These display decisions do not remove token records or change confirmed subagent usage attribution.
 
 Chat timers show time since a local model request, not confirmed server cache lifetime. Compaction ends the old reminder; a real continuation starts or preserves the new request's timer. Codex's compact record can contain several megabytes of replacement history, so the bounded log reader also recognizes its small `ContextCompaction` completion event. Duplicate completion records represent one boundary. A cumulative token summary with zero new input does not start a request. Missing log evidence remains unknown.

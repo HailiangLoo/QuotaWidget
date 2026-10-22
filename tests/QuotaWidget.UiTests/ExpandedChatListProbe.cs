@@ -28,8 +28,8 @@ static class ExpandedChatListProbe
             Set("_opts",opts);Set("_model",model);Set("_codex",codex);Set("_paths",paths);Set("_tokens",null);Set("_snapshotTokens",null);
             Set("_chatHistory",new ChatSessionHistory(root));Set("_currentChatSession",null);Set("_chatLifecycle",ChatLifecycleSnapshot.Empty);
             ChatCacheEntry Entry(string id,double age,int ttl=30,bool running=false)=>new(ChatPlatform.Codex,id,id,now.AddMinutes(-age),ttl,"fixture",running);
-            var data=new[]{Entry("codex-warning",22),Entry("claude-warning",4,5) with{Platform=ChatPlatform.Claude},
-                Entry("claude-hour",25,60) with{Platform=ChatPlatform.Claude},Entry("codex-warm",15),Entry("codex-young",4),Entry("running",100,running:true)};
+            var data=new[]{Entry("codex-warning",88),Entry("claude-warning",4,5) with{Platform=ChatPlatform.Claude},
+                Entry("claude-hour",25,60) with{Platform=ChatPlatform.Claude},Entry("codex-warm",60),Entry("codex-young",4),Entry("running",100,running:true)};
             Set("_cacheEntries",data);
             window=new MainWindow(app,model,codex,opts){Left=-10000,Top=-10000,ShowActivated=false};Set("_window",window);
             window.Show();
@@ -52,7 +52,7 @@ static class ExpandedChatListProbe
             Check(Order().Take(4).SequenceEqual(new[]{"claude-warning","codex-warning","codex-warm","claude-hour"}),"urgency did not use each platform's reminder window");
             // Relative-age crossovers update at most once a minute, including
             // within a color band. Running age never creates a cache warning.
-            data[0]=data[0] with{RequestAt=now.AddMinutes(-28)};
+            data[0]=data[0] with{RequestAt=now.AddMinutes(-112)};
             Tick(20);
             Check(Order().Take(2).SequenceEqual(new[]{"claude-warning","codex-warning"}),"list reordered within a minute");
             Tick(61);
@@ -77,7 +77,7 @@ static class ExpandedChatListProbe
             }
             var fullOrder=Order();Mode(true,130);
             Check(CompactOrder().SequenceEqual(fullOrder),"compact changed the shared order");
-            data[0]=data[0] with{RequestAt=now.AddMinutes(-29.9)};Tick(150);
+            data[0]=data[0] with{RequestAt=now.AddMinutes(-119.6)};Tick(150);
             Check(CompactOrder().SequenceEqual(fullOrder),"switching to compact reset the minute budget");
             body.Focusable=true;Keyboard.Focus(body);Layout(false);
             Check(body.IsKeyboardFocusWithin,"compact focus fixture failed");Tick(185);
@@ -117,13 +117,17 @@ static class ExpandedChatListProbe
                 Check(chart.TransformToAncestor(window).Transform(new Point())==chartPosition&&meter.TransformToAncestor(window).Transform(new Point())==meterPosition,"scrolling chats moved meters/charts");
             }
             model.Settings.Height=700;model.Settings.UiScale=1;
-            Set("_cacheEntries",Enumerable.Range(0,20).Select(i=>Entry("archived-"+i,90)).Concat(Enumerable.Range(0,8).Select(i=>Entry("live-"+i,10,running:true))).ToArray());Layout();
+            Set("_cacheEntries",Enumerable.Range(0,20).Select(i=>Entry("archived-"+i,180)).Concat(Enumerable.Range(0,8).Select(i=>Entry("live-"+i,10,running:true))).ToArray());Layout();
             C<Expander>("ExpiredChats").IsExpanded=true;Layout(false);viewport.ScrollToBottom();Layout(false);
             var archived=C<StackPanel>("ExpiredRows");var final=(FrameworkElement)archived.Children[^1];
             var finalBounds=final.TransformToAncestor(viewport).TransformBounds(new Rect(final.RenderSize));
             Check(finalBounds.Top>=-1&&finalBounds.Bottom<=viewport.ViewportHeight+1,"last archived chat is clipped");
             Check(body.ScrollableHeight<1,"archive expansion made the entire widget scroll");
             inspect?.Invoke(window,"archive-bottom");
+            data=new[]{Entry("recent",119.9),Entry("folded",120.1),Entry("long-running",180,running:true)};Tick(0);
+            Check(Order().Contains("recent")&&Order().Contains("long-running")&&!Order().Contains("folded"),"Codex 2h boundary or running retention wrong");
+            Check(archived.Children.Cast<UIElement>().Select(Name).SequenceEqual(new[]{"folded"}),"Codex older than 2h did not fold");
+            Mode(true,0);Check(CompactOrder().Contains("recent")&&!CompactOrder().Contains("folded"),"compact differs at Codex 2h boundary");
             Console.WriteLine("PASS: chats scroll locally; 8/20 rows × four heights × two scales stay reachable, meters/charts stay fixed, wheel stops locally, archive stays reachable; both layouts share relative ordering and minute cooldown, preserve them across switches, and defer during interaction.");
         }
         finally{window?.Close();Set("_window",null);Set("_cacheEntries",Array.Empty<ChatCacheEntry>());if(Directory.Exists(root))Directory.Delete(root,true);}

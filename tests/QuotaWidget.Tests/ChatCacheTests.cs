@@ -84,8 +84,10 @@ static class ChatCacheTests
         Test("cache: thresholds and six-hour retention", () =>
         {
             var e = new ChatCacheEntry(ChatPlatform.Codex, "a", "a", T, 30, "", false);
-            Check(e.Urgency(T.AddMinutes(9)) == 0 && e.Urgency(T.AddMinutes(10)) == 1 && e.Urgency(T.AddMinutes(20)) == 2 && e.Urgency(T.AddMinutes(30)) == 3, "Codex colors");
-            e = e with { WindowMinutes = 60 }; Check(e.Urgency(T.AddMinutes(40)) == 2 && !e.Expired(T.AddMinutes(59)), "Claude colors");
+            Check(new[]{9,30,60,119,120,180}.All(m=>e.Urgency(T.AddMinutes(m))==0), "Codex still uses cache urgency colors");
+            Check(!e.Expired(T.AddMinutes(119.99))&&e.Expired(T.AddMinutes(120)),"old saved Codex threshold did not become 2h");
+            Check(!(e with{Running=true}).Expired(T.AddMinutes(180)),"running Codex chat archived by age");
+            e = e with { Platform=ChatPlatform.Claude, WindowMinutes = 60 }; Check(e.Urgency(T.AddMinutes(40)) == 2 && !e.Expired(T.AddMinutes(59)), "Claude colors");
             var s = new ChatCacheState(ChatPlatform.Codex, "a"); s.Read(Usage(0, "r")); Check(s.View(T.AddHours(7)) is null, "old retention");
         });
         Test("cache: paginated rollouts keep one canonical main chat and hide obsolete rows", () =>
@@ -209,7 +211,7 @@ static class ChatCacheTests
             var active=s.View(T.AddMinutes(42))!;
             Check(active.Running && !active.ActivityUncertain && !active.Expired(T.AddMinutes(42)) && active.AgeMinutes(T.AddMinutes(42))==42,"activity renewed cache or failed to restore running");
             s.Read(Line(43,"event_msg",new{type="turn_aborted",turn_id="turn-a"}));
-            Check(s.View(T.AddMinutes(44))!.Expired(T.AddMinutes(44)),"abort pretended cache still fresh");
+            Check(!s.View(T.AddMinutes(44))!.Expired(T.AddMinutes(44))&&s.View(T.AddMinutes(120))!.Expired(T.AddMinutes(120)),"idle Codex did not use the 2h display threshold");
         });
         Test("cache: late completion for an old turn cannot stop a new Codex turn", () =>
         {

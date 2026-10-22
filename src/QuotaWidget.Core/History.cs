@@ -74,14 +74,15 @@ public sealed class HistoryStore
                 var rec = ParseLine(line);
                 if (rec is null) { SkippedLines++; continue; }
                 if (rec.SourceId != sourceId || rec.ProfileKey != profileKey) { SkippedLines++; continue; }
-                var canon = SnapshotJson.Canonical(rec.Snapshot);
                 if (rec.T < since || until is { } limit && rec.T > limit) continue;
-                if (_index.TryGetValue(rec.Key, out var existing) && existing.Canon != canon)
+                var indexed = _index.TryGetValue(rec.Key, out var existing);
+                var canon = index || indexed ? SnapshotJson.Canonical(rec.Snapshot) : null;
+                if (indexed && existing.Canon != canon)
                 {
                     SkippedLines++; // same id, different payload: keep the first one seen
                     continue;
                 }
-                if (index) _index[rec.Key] = (canon, rec.T);
+                if (index) _index[rec.Key] = (canon!, rec.T);
                 if (seen.Add(rec.Key)) list.Add(rec);
             }
         }

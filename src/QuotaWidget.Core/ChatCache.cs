@@ -10,9 +10,12 @@ public sealed record ChatCacheEntry(ChatPlatform Platform, string Id, string Tit
     DateTimeOffset? CompactedAt = null, bool Compacted = false, DateTimeOffset? ActivityAt = null)
 {
     public double AgeMinutes(DateTimeOffset now) => Math.Max(0, (now - RequestAt).TotalMinutes);
+    // Codex uses a display-retention window, including entries saved by older versions.
+    [System.Text.Json.Serialization.JsonIgnore]
+    public int DisplayWindowMinutes => Platform == ChatPlatform.Codex ? 120 : WindowMinutes;
     public bool WorkPending => !Compacted && (Running || ActivityUncertain);
-    public bool Expired(DateTimeOffset now) => !WorkPending && AgeMinutes(now) >= WindowMinutes;
-    public int Urgency(DateTimeOffset now) => WorkPending ? 0 : Expired(now) ? 3 : AgeMinutes(now) / WindowMinutes >= 2.0 / 3 ? 2 : AgeMinutes(now) / WindowMinutes >= 1.0 / 3 ? 1 : 0;
+    public bool Expired(DateTimeOffset now) => !WorkPending && AgeMinutes(now) >= DisplayWindowMinutes;
+    public int Urgency(DateTimeOffset now) => WorkPending || Platform == ChatPlatform.Codex ? 0 : Expired(now) ? 3 : AgeMinutes(now) / WindowMinutes >= 2.0 / 3 ? 2 : AgeMinutes(now) / WindowMinutes >= 1.0 / 3 ? 1 : 0;
 }
 
 /// <summary>Metadata only. No body, token, prompt or raw JSON is retained in these states.</summary>
@@ -39,8 +42,8 @@ public sealed class ChatCacheState(ChatPlatform platform, string id)
     DateTimeOffset? _pendingAt, _confirmedRequestAt;
     bool _awaitingUsage;
     string? _latestRequestId;
-    int _ttl = platform == ChatPlatform.Codex ? 30 : 5;
-    string _basis = platform == ChatPlatform.Codex ? "Codex 30m 提醒阈值；本地请求时间估计" : "未确认 1h；按 5m 保守提醒";
+    int _ttl = platform == ChatPlatform.Codex ? 120 : 5;
+    string _basis = platform == ChatPlatform.Codex ? "Codex 请求计时；空闲满 2h 后收起，不表示缓存过期" : "未确认 1h；按 5m 保守提醒";
     string? _model;
     long _fallbackTotal = -1;
     readonly HashSet<string> _seen = new(StringComparer.Ordinal);
@@ -240,7 +243,7 @@ public sealed class ChatCacheState(ChatPlatform platform, string id)
     {
         if (model is null || at < LastObserved) return false;
         var changed = _model is not null && model != _model;
-        if (changed) { Gap(at, preservePending: true); _ttl = Platform == ChatPlatform.Codex ? 30 : 5; }
+        if (changed) { Gap(at, preservePending: true); _ttl = Platform == ChatPlatform.Codex ? 120 : 5; }
         _model = model;
         return changed;
     }

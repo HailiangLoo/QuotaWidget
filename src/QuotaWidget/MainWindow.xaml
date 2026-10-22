@@ -208,14 +208,7 @@
 
           <Border x:Name="ChartPanel" BorderBrush="{DynamicResource Line}" BorderThickness="0,1,0,0" Margin="0,0,0,0" Padding="0,6,0,0">
             <StackPanel>
-                <UniformGrid x:Name="RangeTabs" Columns="6" Margin="-1,0,-1,2">
-                  <ToggleButton Style="{StaticResource TabButton}" Tag="60" Content="1h" Click="Range_Click" />
-                  <ToggleButton Style="{StaticResource TabButton}" Tag="300" Content="5h" Click="Range_Click" />
-                  <ToggleButton Style="{StaticResource TabButton}" Tag="720" Content="12h" Click="Range_Click" />
-                  <ToggleButton Style="{StaticResource TabButton}" Tag="1440" Content="24h" Click="Range_Click" />
-                  <ToggleButton Style="{StaticResource TabButton}" Tag="4320" Content="3d" Click="Range_Click" />
-                  <ToggleButton Style="{StaticResource TabButton}" Tag="0" Content="all" Click="Range_Click" local:Translate.ToolTip="当前账号 · 全部记录" />
-                </UniformGrid>
+                <local:RangePicker x:Name="RangeTabs" Margin="-1,0,-1,2" />
               <Grid Margin="-5,0,-5,0">
                 <local:RateChart x:Name="Chart" />
                 <Canvas>

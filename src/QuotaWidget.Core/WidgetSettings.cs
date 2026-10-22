@@ -10,7 +10,7 @@ namespace QuotaWidget.Core;
 public sealed class WidgetSettings
 {
     public static readonly int[] PollChoices = [300, 600, 1800, 3600];
-    public static readonly int[] RangeChoices = [60, 300, 720, 1440, 4320, ChartRanges.All];
+    public static readonly int[] RangeChoices = [60, 300, 720, 1440, 4320, ChartRanges.Week, ChartRanges.Month, ChartRanges.All];
 
     public int SettingsVersion { get; set; } = 1;
     public int PollIntervalSeconds { get; set; } = 300;

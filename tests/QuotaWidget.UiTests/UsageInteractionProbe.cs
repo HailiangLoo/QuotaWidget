@@ -14,7 +14,14 @@ static class UsageInteractionProbe
             [new("model-a","chat-a",new(100,200,300,0,2,0)),new("model-b","chat-a",new(400,500,600,0,3,0))]),
             new Dictionary<string,ChatCacheEntry>(),m,()=>{},()=>{},"fixture",selectRange:r=>scope=r);
         var card=Make(60);
-        Check(card.RangeTabs.Children.Cast<ToggleButton>().Select(b=>b.Content.ToString()).SequenceEqual(new[]{"1h","5h","12h","24h","3d","all"}),"wrong range choices");
+        Check(card.RangeTabs.Children.Cast<ToggleButton>().Select(b=>b.Content.ToString()).SequenceEqual(new[]{"1h","5h","12h","24h","3d","··· ⌄"}),"wrong range choices");
+        Check(card.RangeTabs.More.ContextMenu.Items.Cast<MenuItem>().Select(i=>(int)i.Tag).SequenceEqual(new[]{ChartRanges.Week,ChartRanges.Month,ChartRanges.All}),"missing long-range menu choices");
+        foreach(MenuItem item in card.RangeTabs.More.ContextMenu.Items)
+        {item.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));Check(scope==(int)item.Tag,"long-range menu did not dispatch");}
+        var selected=Make(ChartRanges.Month);
+        Check(selected.RangeTabs.More.IsChecked==true&&selected.RangeTabs.More.Content.ToString()=="1m ⌄"&&selected.RangeTabs.More.ToolTip.ToString()==Loc.T("近30天"),"long-range selection or 30-day meaning hidden");
+        selected.RangeTabs.Configure(ChartRanges.Available(),0);
+        Check(selected.RangeTabs.More.ContextMenu.Items.Cast<MenuItem>().Count(i=>i.IsEnabled)==1,"empty history enables unsupported long ranges");
         ((ToggleButton)card.RangeTabs.Children[4]).RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
         Check(scope==4320,"hover range did not dispatch");
         var window=new UsageDetailWindow(ChatPlatform.Claude,card,m=>{scope=m;return Make(m);});

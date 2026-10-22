@@ -1089,9 +1089,11 @@ Test("atomic: concurrent reader never sees a torn latest.json", () =>
         }
     });
     reader.Start();
-    for (var i = 0; i < 300; i++) AtomicFile.WriteAllText(path, big.Replace("\"usedPercent\": 40", $"\"usedPercent\": {i % 100}"));
-    Volatile.Write(ref stop, true);
-    reader.Join();
+    try
+    {
+        for (var i = 0; i < 300; i++) AtomicFile.WriteAllText(path, big.Replace("\"usedPercent\": 40", $"\"usedPercent\": {i % 100}"));
+    }
+    finally { Volatile.Write(ref stop, true); reader.Join(); }
     Eq(0, bad, "torn reads");
     True(reads > 0, "reader ran");
     Directory.Delete(root, true);

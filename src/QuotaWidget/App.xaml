@@ -65,6 +65,34 @@
       <Setter Property="Padding" Value="0" />
     </Style>
 
+    <Style x:Key="RangeMenu" TargetType="ContextMenu">
+      <Setter Property="Template"><Setter.Value>
+        <ControlTemplate TargetType="ContextMenu">
+          <Border Background="{DynamicResource Bg}" BorderBrush="{DynamicResource Line}" BorderThickness="1" CornerRadius="6" Padding="3">
+            <ItemsPresenter />
+          </Border>
+        </ControlTemplate>
+      </Setter.Value></Setter>
+    </Style>
+    <Style x:Key="RangeMenuItem" TargetType="MenuItem">
+      <Setter Property="Foreground" Value="{DynamicResource Ink}" />
+      <Setter Property="Template"><Setter.Value>
+        <ControlTemplate TargetType="MenuItem">
+          <Border x:Name="Row" Background="Transparent" CornerRadius="4" Padding="10,5">
+            <Grid MinWidth="65">
+              <Grid.ColumnDefinitions><ColumnDefinition /><ColumnDefinition Width="20" /></Grid.ColumnDefinitions>
+              <ContentPresenter ContentSource="Header" RecognizesAccessKey="True" />
+              <TextBlock x:Name="Check" Grid.Column="1" Text="✓" HorizontalAlignment="Right" Visibility="Hidden" />
+            </Grid>
+          </Border>
+          <ControlTemplate.Triggers>
+            <Trigger Property="IsHighlighted" Value="True"><Setter TargetName="Row" Property="Background" Value="{DynamicResource Raised}" /></Trigger>
+            <Trigger Property="IsChecked" Value="True"><Setter TargetName="Check" Property="Visibility" Value="Visible" /></Trigger>
+            <Trigger Property="IsEnabled" Value="False"><Setter TargetName="Row" Property="Opacity" Value="0.4" /></Trigger>
+          </ControlTemplate.Triggers>
+        </ControlTemplate>
+      </Setter.Value></Setter>
+    </Style>
     <Style x:Key="TabButton" TargetType="ToggleButton" BasedOn="{StaticResource FlatButton}">
       <Setter Property="Foreground" Value="{DynamicResource Muted}" />
       <Setter Property="FontSize" Value="11" />

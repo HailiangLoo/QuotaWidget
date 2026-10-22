@@ -165,6 +165,7 @@ public sealed class WidgetModel
     SeriesData? _total, _fable, _credits;
     SeriesData? _archiveTotal, _archiveFable, _archiveCredits;
     int _archiveVersion = -1;
+    int _archiveRange = -1;
     public bool ArchiveLoaded => _archiveTotal is not null;
     CumulativeAverage? _cumTotal, _cumFable;
 
@@ -196,22 +197,25 @@ public sealed class WidgetModel
         _archiveVersion = -1;
     }
 
-    (SeriesData Total, SeriesData Fable) Archive(DateTimeOffset now)
+    (SeriesData Total, SeriesData Fable) Archive(DateTimeOffset now, int range)
     {
-        if (_archiveVersion != _dataVersion || _archiveTotal is null || _archiveFable is null)
+        if (_archiveVersion != _dataVersion || _archiveRange != range || _archiveTotal is null || _archiveFable is null)
         {
             // A temporary read-only load. Never expand the live 8-day dedupe index.
+            // Keep one prior cycle for reset-jitter anchors when loading a bounded range.
+            var from = range == ChartRanges.All ? DateTimeOffset.UnixEpoch : now.AddMinutes(-range) - Lookback;
             var records = SourceId is not null && ProfileKey is not null
-                ? Store.Load(SourceId, ProfileKey, DateTimeOffset.UnixEpoch, index: false) : [];
+                ? Store.Load(SourceId, ProfileKey, from, index: false) : [];
             var keys = records.Select(r => r.Key).ToHashSet();
             records.AddRange(Records.Where(r => keys.Add(r.Key)));
             records.RemoveAll(r => r.T > now);
             records.Sort((a, b) => a.T.CompareTo(b.T));
-            var events = RateEngine.RelevantEvents(EventLog.Merge(Events.Load(DateTimeOffset.UnixEpoch), EventList), SourceId, ProfileKey);
+            var events = RateEngine.RelevantEvents(EventLog.Merge(Events.Load(from), EventList), SourceId, ProfileKey);
             _archiveTotal = RateEngine.Build(records, SeriesKey.Total, events);
             _archiveFable = RateEngine.Build(records, SeriesKey.Fable, events);
             _archiveCredits = CreditsUsage.Build(records, events);
             _archiveVersion = _dataVersion;
+            _archiveRange = range;
         }
         return (_archiveTotal, _archiveFable);
     }
@@ -373,7 +377,7 @@ public sealed class WidgetModel
 
     // ---------- view ----------
 
-    public static string RangeLabel(int minutes) => minutes == ChartRanges.All ? "all" : minutes == 4320 ? "3d" : minutes < 60 ? minutes + "m" : minutes / 60 + "h";
+    public static string RangeLabel(int minutes) => minutes switch { ChartRanges.All => "all", ChartRanges.Week => "1w", ChartRanges.Month => "1m", 4320 => "3d", <60 => minutes + "m", _ => minutes / 60 + "h" };
 
     static string Pct(double v)
     {
@@ -447,8 +451,8 @@ public sealed class WidgetModel
         var fableName = s.FableModelName;
         var (total, fable, cumT, cumF) = Derived();
         var range = rangeMinutes ?? s.RangeMinutes;
-        if (range == ChartRanges.All) (total, fable) = Archive(now);
-        else ReleaseArchive();
+        var archived = range == ChartRanges.All || range > Lookback.TotalMinutes;
+        if (archived) (total, fable) = Archive(now, range);
         var stale = IsStale(now);
 
         // Chart window
@@ -462,7 +466,8 @@ public sealed class WidgetModel
             blocked = Records.Count == 1 ? Loc.T("等待下一次采样") : Loc.T("暂无可计算的连续记录");
         if (last is not null)
         {
-            if (Records[0].T > start) gaps.Add(new GapRegion(start, Records[0].T, "未记录"));
+            var first = archived ? Bounds?.First ?? Records[0].T : Records[0].T;
+            if (first > start) gaps.Add(new GapRegion(start, first, "未记录"));
             foreach (var seg in total.Segments)
                 if (!seg.Valid && seg.End > start && seg.Start < end) gaps.Add(new GapRegion(seg.Start, seg.End, seg.Label ?? "缺口"));
             if (stale) gaps.Add(new GapRegion(last.T, now, "断开"));
@@ -471,7 +476,7 @@ public sealed class WidgetModel
         {
             Start = start, End = end, Smooth = s.Smoothing, TrendMinutes = s.TrendMinutes, IdleLinkMinutes = s.IdleLinkMinutes, Total = total, Fable = fable, Gaps = gaps,
             TotalVisible = s.TotalVisible, FableVisible = s.FableVisible, BlockedText = blocked,
-            Credits = range == ChartRanges.All ? _archiveCredits : _credits,
+            Credits = archived ? _archiveCredits : _credits,
             CreditsBalance = last?.Snapshot.Credits, CreditsObservedAt = last?.T,
         };
 

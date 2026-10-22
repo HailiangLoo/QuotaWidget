@@ -18,7 +18,7 @@ public sealed class PlatformUsageCard : Border
     public StackPanel ModelRows {get;}=new();
     public StackPanel ChatRows {get;}=new();
     public ScrollViewer TableScroll {get;}
-    public UniformGrid RangeTabs {get;}=new(){Columns=6,Margin=new Thickness(0,9,0,1)};
+    public RangePicker RangeTabs {get;}=new(){Margin=new Thickness(0,9,0,1)};
     readonly string _accent;
     Action _refresh,_close;
     Action<int>? _selectRange;
@@ -77,13 +77,8 @@ public sealed class PlatformUsageCard : Border
         var reload=new Button{Content=Loc.T("刷新"),FontSize=10,Style=ResourceStyle("FlatButton"),Padding=new Thickness(5,3,5,3),Margin=new Thickness(0,0,5,0),ToolTip=Loc.T("刷新本地记录")};reload.Click+=(_,_)=>_refresh();DockPanel.SetDock(reload,Dock.Right);header.Children.Add(reload);
         _mode=Text(Loc.T("点击卡片固定"),10,"Muted");_mode.Margin=new Thickness(0,0,9,0);DockPanel.SetDock(_mode,Dock.Right);header.Children.Add(_mode);
         var title=Text(platform+Loc.T(" 用量"),16,_accent);title.FontWeight=FontWeights.SemiBold;header.Children.Add(title);body.Children.Add(header);
-        foreach(var range in WidgetSettings.RangeChoices)
-        {
-            var tab=new ToggleButton{Content=range==0?"all":WidgetModel.RangeLabel(range),Tag=range,
-                IsChecked=range==minutes,Style=ResourceStyle("TabButton"),Height=24,ToolTip=ChartRanges.Label(range)};
-            tab.Click+=(_,_)=>{tab.IsChecked=range==Minutes;if(range!=Minutes)_selectRange?.Invoke(range);};
-            RangeTabs.Children.Add(tab);
-        }
+        RangeTabs.Configure(WidgetSettings.RangeChoices, minutes);
+        RangeTabs.Selected += range => _selectRange?.Invoke(range);
         body.Children.Add(RangeTabs);
         var period=Text(Loc.F($"{data.Start.ToLocalTime():M/d HH:mm} – {data.End.ToLocalTime():M/d HH:mm:ss} · {data.Total.Requests:N0} 请求"),10,"Muted");period.Margin=new Thickness(0,5,0,0);body.Children.Add(period);
         if(!string.IsNullOrEmpty(rateNote)){var rate=Text(rateNote,10,"Muted");rate.Margin=new Thickness(0,4,0,0);body.Children.Add(rate);}

@@ -32,7 +32,7 @@ static class Probe
             Set("_opts",opts);Set("_model",model);Set("_codex",codex);Set("_paths",model.Paths);Set("_chatHistory",new ChatSessionHistory(root));
             var now=DateTimeOffset.Now;
             ChatCacheEntry Entry(string id,int minutes,int ttl=30,bool running=false)=>new(ChatPlatform.Codex,id,id,now.AddMinutes(-minutes),ttl,"fixture",running);
-            Set("_cacheEntries",new[]{Entry("urgent-x",26),Entry("urgent-c",51,60) with{Platform=ChatPlatform.Claude},Entry("running",80,running:true),Entry("idle",10),Entry("expired",80),Entry("compacted",1) with{Compacted=true,CompactedAt=now},Entry("unknown",1) with{ActivityUncertain=true}});
+            Set("_cacheEntries",new[]{Entry("urgent-x",104),Entry("urgent-c",51,60) with{Platform=ChatPlatform.Claude},Entry("running",80,running:true),Entry("idle",10),Entry("expired",180),Entry("compacted",1) with{Compacted=true,CompactedAt=now},Entry("unknown",1) with{ActivityUncertain=true}});
             var window=new MainWindow(app,model,codex,opts);Set("_window",window);window.Render();
             var startup=(CheckBox)window.FindName("StartupCheck");
             if(startup.IsEnabled)throw new Exception("Snapshot must not modify Windows startup");
@@ -46,6 +46,7 @@ static class Probe
             var rows=Control<StackPanel>("CompactChatRows");
             Check(rows.Children.Count==4,"compact active list truncated");
             Check(rows.Children.Cast<UIElement>().Select(Title).SequenceEqual(new[]{"urgent-x","urgent-c","idle","running"}),"relative priority or archived filtering wrong");
+            Check(rows.Children.Cast<Grid>().Where(row=>Title(row)!="urgent-c").All(row=>ReferenceEquals(((Border)row.Children[0]).Background,Theme.Brush("Green"))),"Codex timers still use age-based colors");
             Check(Control<TextBlock>("CompactClaudeRateValue").Text=="—"&&Control<TextBlock>("CompactCodexRateValue").Text=="—","empty data became zero rate");
             Check(Control<TextBlock>("CompactClaudePoints").Text=="近1h · —","missing amount became zero");
             Set("_currentChatSession",new ChatSession{Id="compact-title",Start=now.AddHours(-2),End=now});window.RenderCache();
@@ -71,7 +72,7 @@ static class Probe
             Check(Control<RateChart>("Chart").View is {ClaudeCumulativeMode:false,CodexCumulativeMode:true},"Codex/Claude choices are coupled");
             Click("CodexRateMode");
             Check(Control<ToggleButton>("RateMode").IsChecked==true&&Control<ToggleButton>("CodexRateMode").IsChecked==true,"rate buttons did not restore");
-            Check(Control<UniformGrid>("RangeTabs").Children.Cast<ToggleButton>().Select(b=>b.Content.ToString()).SequenceEqual(new[]{"1h","5h","12h","24h","3d","all"}),"range labels or ordering wrong");
+            Check(Control<UniformGrid>("RangeTabs").Children.Cast<ToggleButton>().Select(b=>b.Content.ToString()).SequenceEqual(new[]{"1h","5h","12h","24h","3d","all ⌄"}),"range labels or ordering wrong");
             Check(!Control<Expander>("TokenDiagnostics").IsExpanded&&!Control<Expander>("ChartCalculation").IsExpanded&&Control<TextBlock>("ChartDiagnosticsText").Text.Contains("平滑"),"calculation details lost or exposed by default");
             Check(Control<StackPanel>("CompactDetails").Visibility==Visibility.Collapsed&&Control<StackPanel>("CacheRows").Children.Count==4,"expanded mode changed active list");
             void Collapse(string name,bool value) {Control<ToggleButton>(name).IsChecked=value;Click(name);}

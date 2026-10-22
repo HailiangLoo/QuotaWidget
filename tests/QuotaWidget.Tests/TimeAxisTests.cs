@@ -14,6 +14,12 @@ static class TimeAxisTests
             foreach(var (a,b) in ticks.Zip(ticks.Skip(1)))
                 Check(a.Time<b.Time&&a.Left+a.Width+8<=b.Left,"unsorted/overlapping labels");
         }
+        Test("long ranges bound text measurement by screen width",()=>
+        {
+            var landmarks=Enumerable.Range(0,20000).Select(i=>new AxisLandmark(t.AddMinutes(i*2),AxisLandmarkKind.Stage,3)).ToArray();
+            var measured=0;var ticks=TimeAxis.Select(t,t.AddDays(30),300,landmarks,_=>{measured++;return 38;});
+            Layout(ticks,300);Check(measured<=53&&ticks.Count>=3,"long range measured thousands of labels or lost readable ticks");
+        });
         Test("stage edges and rate peaks retain exact timestamps and available range labels",()=>
         {
             var stage=t.AddMinutes(43.408);var peak=t.AddMinutes(73.3);

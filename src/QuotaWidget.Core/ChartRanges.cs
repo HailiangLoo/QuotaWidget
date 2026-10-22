@@ -10,13 +10,16 @@ public static class ChartRanges
 {
     // Zero means every recorded day of the current account/plan, not the last 24 hours.
     public const int All = 0;
+    public const int Week = 7 * 1440;
+    public const int Month = 30 * 1440;
     public static int[] Available(params HistoryBounds?[] histories)
     {
         var span = histories.Where(b => b is not null).Select(b => b!.Span).DefaultIfEmpty(TimeSpan.Zero).Max();
         // Offer the next longer view once a day is available, even before the entire
         // three-day window has filled. Its missing prefix is never fabricated.
-        return WidgetSettings.RangeChoices.Where(m => m == All || TimeSpan.FromMinutes(m==4320?1440:m) <= span).ToArray();
+        return WidgetSettings.RangeChoices.Where(m => m == All || TimeSpan.FromMinutes(m switch
+            { 4320 => 1440, Week => 4320, Month => Week, _ => m }) <= span).ToArray();
     }
     public static int Select(int preferred, IReadOnlyCollection<int> available) => available.Contains(preferred) ? preferred : All;
-    public static string Label(int minutes) => minutes == All ? Loc.T("全部") : Loc.T("近") + WidgetModel.RangeLabel(minutes);
+    public static string Label(int minutes) => minutes == All ? Loc.T("全部") : minutes == Month ? Loc.T("近30天") : Loc.T("近") + WidgetModel.RangeLabel(minutes);
 }

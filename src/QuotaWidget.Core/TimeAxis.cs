@@ -57,8 +57,14 @@ public static class TimeAxis
         }
         Option Reserve(AxisTick tick,double score,int region)=>new(tick,score,region,
             Math.Min(tick.Left-gap/2,tick.X-spacing/2),Math.Max(tick.Left+tick.Width+gap/2,tick.X+spacing/2));
-        var anchors=landmarks.Where(a=>a.Time>=start&&a.Time<=end&&a.Kind!=AxisLandmarkKind.Regular&&double.IsFinite(a.Importance)&&a.Importance>0)
-            .GroupBy(a=>a.Time).Select(g=>g.OrderByDescending(a=>a.Importance).ThenBy(a=>a.Kind).First())
+        var candidates=landmarks.Where(a=>a.Time>=start&&a.Time<=end&&a.Kind!=AxisLandmarkKind.Regular&&double.IsFinite(a.Importance)&&a.Importance>0)
+            .GroupBy(a=>a.Time).Select(g=>g.OrderByDescending(a=>a.Importance).ThenBy(a=>a.Kind).First());
+        // At week/month scale many landmarks occupy the same few pixels. Bound
+        // expensive text measurement to visual resolution; data and curves stay intact.
+        if(span.TotalDays>=7)
+            candidates=candidates.GroupBy(a=>(int)((a.Time-start).TotalSeconds/span.TotalSeconds*width/6))
+                .Select(g=>g.OrderByDescending(a=>a.Importance).ThenBy(a=>a.Time).First());
+        var anchors=candidates
             .OrderBy(a=>a.Time).Select(a=>(Mark:a,Tick:Tick(a.Time,a.Kind))).Where(a=>a.Tick is not null).ToArray();
         var max=anchors.Select(a=>a.Mark.Importance).DefaultIfEmpty(1).Max();
         var options=new List<Option>();var region=0;AxisTick? previous=null;

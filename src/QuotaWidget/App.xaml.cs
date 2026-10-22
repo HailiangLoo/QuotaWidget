@@ -87,7 +87,7 @@ public sealed class AppOptions
                 case "--monitor": o.Monitoring=Next();break;
                 case "--language": o.Language=Next();break;
                 case "--usage-pinned": o.UsagePinned=true;break;
-                case "--usage-range": o.UsageMinutes=int.TryParse(Next(),out var um)&&new[]{0,60,120,300,720,1440,4320}.Contains(um)?um:0;break;
+                case "--usage-range": o.UsageMinutes=int.TryParse(Next(),out var um)&&(um==120||WidgetSettings.RangeChoices.Contains(um))?um:0;break;
                 case "--history-date": o.HistoryDay = DateTime.TryParseExact(Next(),"yyyy-MM-dd",System.Globalization.CultureInfo.InvariantCulture,System.Globalization.DateTimeStyles.None,out var day) ? day : null; break;
                 case "--collect-once": o.CollectOnce = true; break;
                 case "--hidden": o.Hidden = true; break;
@@ -588,11 +588,11 @@ public partial class App : Application
     {
         var entries = new List<ChatCacheEntry>
         {
-        new(ChatPlatform.Codex, "demo-a", Loc.T("额度挂件"), now.AddMinutes(-6), 30, Loc.T("演示数据"), true, "QuotaWidget"),
+        new(ChatPlatform.Codex, "demo-a", Loc.T("额度挂件"), now.AddMinutes(-6), 120, Loc.T("演示数据"), true, "QuotaWidget"),
         new(ChatPlatform.Claude, "demo-b", Loc.T("规则核对"), now.AddMinutes(-34), 60, Loc.T("演示 1h 缓存"), false, "Demo project"),
-        new(ChatPlatform.Codex, "demo-c", Loc.T("界面审查"), now.AddMinutes(-26), 30, Loc.T("演示数据"), false, "QuotaWidget"),
+        new(ChatPlatform.Codex, "demo-c", Loc.T("界面审查"), now.AddMinutes(-26), 120, Loc.T("演示数据"), false, "QuotaWidget"),
         new(ChatPlatform.Claude, "demo-d", Loc.T("历史数据检查"), now.AddMinutes(-51), 60, Loc.T("演示 1h 缓存"), false, "Demo project"),
-        new(ChatPlatform.Codex, "demo-e", Loc.T("已结束的记录"), now.AddMinutes(-83), 30, Loc.T("演示数据"), false),
+        new(ChatPlatform.Codex, "demo-e", Loc.T("已结束的记录"), now.AddMinutes(-183), 120, Loc.T("演示数据"), false),
         new(ChatPlatform.Claude, "demo-f", Loc.T("已经 compact 的对话"), now.AddMinutes(-95), 60, Loc.T("演示 compact 记录"), false, "QuotaWidget", CompactedAt: now.AddMinutes(-70), Compacted: true, ActivityAt: now.AddMinutes(-70)),
         };
         if (_opts.Scenario == "many-chats")

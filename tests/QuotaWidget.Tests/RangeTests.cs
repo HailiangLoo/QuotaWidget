@@ -20,8 +20,9 @@ static class RangeTests
             Choices(720, 60, 300, 720, 0); Choices(1439.99, 60, 300, 720, 0);
             Choices(1440, 60, 300, 720, 1440, 4320, 0);
             Choices(4319.99, 60, 300, 720, 1440, 4320, 0);
-            Choices(4320, 60, 300, 720, 1440, 4320, 0);
-            Choices(20000, 60, 300, 720, 1440, 4320, 0);
+            Choices(4320, 60, 300, 720, 1440, 4320, ChartRanges.Week, 0);
+            Choices(10080, 60, 300, 720, 1440, 4320, ChartRanges.Week, ChartRanges.Month, 0);
+            Choices(20000, 60, 300, 720, 1440, 4320, ChartRanges.Week, ChartRanges.Month, 0);
             Check(WidgetModel.RangeLabel(4320)=="3d"&&WidgetModel.RangeLabel(0)=="all","long-range labels wrong");
         });
         Test("idle time and unrelated provider observations do not unlock long ranges", () =>
@@ -47,9 +48,25 @@ static class RangeTests
             Check(all.Chart.Start == now.AddDays(-10), "all truncated to live window");
             Check(m.Store.IndexCount == 2 && m.Records.Count == 2 && m.ArchiveLoaded, "archive leaked into live store");
             m.BuildView(now, 60);
-            Check(!m.ArchiveLoaded, "archive retained after leaving all view");
+            Check(m.ArchiveLoaded, "1h detail lookup discarded the active archive");
+            m.ReleaseArchive();
+            Check(!m.ArchiveLoaded, "display could not release archive");
             var restarted = new WidgetModel(paths, false, () => now); restarted.Initialize();
             Check(Math.Abs(restarted.BuildView(now, 0).SummaryTotal - 3) < 1e-9, "history changed on restart");
+        }));
+        Test("week/month ranges read the right history without changing live retention", () => WithRoot(paths =>
+        {
+            Seed(paths);
+            Write(paths, Record(now.AddDays(-40), 10)); Write(paths, Record(now.AddDays(-40).AddMinutes(5), 14));
+            var m=new WidgetModel(paths,false,()=>now);m.Initialize();
+            var week=m.BuildView(now,ChartRanges.Week);var month=m.BuildView(now,ChartRanges.Month);
+            Check(week.SummaryTotal==1&&month.SummaryTotal==3&&month.Chart.Start==now.AddDays(-30),"month clipped to live 8-day records or week included older history");
+            Check(!month.Chart.Gaps.Any(g=>g.Label=="未记录"&&g.End==m.Records[0].T),"valid archive covered by a false live-retention gap");
+            m.BuildView(now,60);
+            Check(ReferenceEquals(month.Chart.Total,m.BuildView(now,ChartRanges.Month).Chart.Total),"detail card evicted the month cache");
+            Check(m.BuildView(now,0).SummaryTotal==7&&m.Records.Count==2&&m.Store.IndexCount==2,"all range or live index changed");
+            foreach(var range in new[]{ChartRanges.Week,ChartRanges.Month})
+            {var settings=new WidgetSettings{RangeMinutes=range};settings.Save(paths.Settings);Check(WidgetSettings.Load(paths.Settings,out _).RangeMinutes==range,"new range not persisted");}
         }));
         Test("all view respects old suspend evidence and profile isolation", () => WithRoot(paths =>
         {
