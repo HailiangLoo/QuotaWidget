@@ -118,6 +118,7 @@ public sealed class RateChart : FrameworkElement
                         ? _creditCumulative.Segments.GroupBy(s=>s.Group).Select(g=>(IReadOnlyList<TrendPoint>)g.SelectMany(s=>new[]{new TrendPoint(s.Start,s.From),new TrendPoint(s.End,s.To)}).ToArray()).ToList()
                         : credits.Segments.Where(s=>s.Valid&&s.Start>=v.Start&&s.End<=v.End).GroupBy(s=>s.Group)
                             .Select(g=>(IReadOnlyList<TrendPoint>)g.SelectMany(s=>new[]{new TrendPoint(s.Start,s.Rate),new TrendPoint(s.End,s.Rate)}).ToArray()).ToList();
+                    _creditPoints = ChartPath.PositiveRuns(_creditPoints);
                     CreditScale = ChartScale.Create(_creditPoints.SelectMany(r=>r).Select(p=>p.Rate).DefaultIfEmpty(0).Max()*1.12);
                 }
                 // Show actual coverage when recording only began recently.
