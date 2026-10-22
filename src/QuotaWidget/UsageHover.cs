@@ -129,11 +129,15 @@ public partial class MainWindow
         if(minutes==RecentUsageRate.WindowMinutes)
         {
             var model=platform==ChatPlatform.Claude?_model:_codex;
-            var recent=RecentUsageRate.Build(model.BuildView(now,minutes).Chart.Total,now,
+            var view=model.BuildView(now,minutes).Chart;
+            var recent=RecentUsageRate.Build(view.Total,now,
                 model.LastEnvelope?.EffectivePollIntervalSeconds??model.Settings.PollIntervalSeconds);
             if(recent.Rate is {} value)rate=Loc.T("近1h · ")+recent.Points.ToString("0.#")+Loc.T("点")+
                 Loc.T(" · 均速 ")+RatePresentation.Estimate(value)+Loc.T(" 点/h")+
                 (recent.LastObserved is {} at?Loc.F($" · 截至 {at.ToLocalTime():HH:mm}"):"")+(recent.Partial?Loc.T(" · 记录不全"):"");
+            if(platform==ChatPlatform.Codex&&CreditUsage(view,now) is {} credits)
+                rate="Codex · "+Loc.T("近1h · ")+credits.Text+"\n"+Loc.T("仅累计近一小时已记录用量，不折算成每小时速率。")+
+                    (credits.Text.Contains('*')?"\n"+Loc.T("* 记录不全，只累计已观测区间。"):"");
         }
         var card=new PlatformUsageCard(platform,data,names,minutes,ShowUsage,CloseUsage,
             (_model.Settings.TokenTrackingEnabled?"":Loc.T("统计已暂停；仅展示已保存记录。\n"))+_app.TokenDetail,rate,

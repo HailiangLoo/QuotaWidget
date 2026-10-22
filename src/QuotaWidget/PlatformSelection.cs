@@ -60,6 +60,7 @@ public partial class MainWindow
         }
         RateLayout(claudeInline,CompactClaudePrimaryRate,CompactClaudeRateHeading,CompactClaudeRateValue,CompactClaudeRateUnit,CompactClaudeRateArrow,"Claude","Claude");
         RateLayout(codexOnly&&s.CompactMode,CompactCodexPrimaryRate,CompactCodexRateHeading,CompactCodexRateValue,CompactCodexRateUnit,CompactCodexRateArrow,"Codex","Violet");
+        CodexInlineRateValue.FontSize=16;
         foreach(var meter in new[]{FiveMeter,WeekMeter,FableMeter}) meter.Visibility=Show(claude);
         CodexFiveMeter.Visibility=Show(five);CodexMeter.Visibility=Show(week);
         // Give each provider a row when five quotas would squeeze the compact or

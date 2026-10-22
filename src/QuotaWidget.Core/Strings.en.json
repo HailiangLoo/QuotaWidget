@@ -462,5 +462,8 @@
   "右轴 cr/h 为采样区间均速，cr 为累计净减少。不折算周额度；充值、缺失与停采处断开，过期及同时充值可能影响净额。": "Right axis: cr/h is the sampled interval average; cr is cumulative net decrease. No weekly-quota conversion. Increases, missing data and recording gaps break the line. Expiry and concurrent top-ups can affect the net amount.",
   "Credits 使用右轴原单位；速率是相邻余额采样的平均净减少，累计只计完整有效区间。余额增加、缺失或停采处断开；过期、退款或同时充值可能影响净额，不代表逐任务账单。": "Credits use their own units on the right axis: rates are average balance decreases between samples; totals include complete valid intervals only. Increases, missing balances and recording gaps break the line. Expiry, refunds and concurrent grants can affect net changes; this is not a per-task bill.",
   "* 记录不全，只累计已观测区间。": "* Partial coverage; only observed intervals are totaled.",
-  "* 余额是上次读数，尚未更新。": "* Last reported balance; awaiting an update."
+  "* 余额是上次读数，尚未更新。": "* Last reported balance; awaiting an update.",
+  "仅累计近一小时已记录用量，不折算成每小时速率。": "Observed use in the last hour; not extrapolated to an hourly rate.",
+  "周额度有效采样 {0:0.#} 分钟": "Valid weekly-quota samples: {0:0.#} minutes",
+  "Credits 为余额净减少，可能受充值、退款或过期影响。": "Credits show net balance decrease; top-ups, refunds or expiry can affect it."
 }

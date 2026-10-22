@@ -280,6 +280,7 @@ public partial class MainWindow : Window
             RenderCompactRate(CodexInlineUsage,CodexInlineRateValue,CodexInlinePoints,"Codex",codex.Chart.Total,_codex,now);
         CompactRates.ToolTip=null;
         RenderCredits(codex.Chart,now.AddHours(-1),now,60,now);
+        if (s.Monitors(ChatPlatform.Codex) && CreditUsage(codex.Chart,now) is { } creditUsage) RenderCompactCredits(creditUsage);
         RenderCompactChats(now);
         Title = s.Monitors(ChatPlatform.Claude)?view.TrayText:"Codex · "+codex.Week.Value;
         return view;
@@ -287,6 +288,8 @@ public partial class MainWindow : Window
 
     void RenderCredits(ChartView view,DateTimeOffset start,DateTimeOffset end,int range,DateTimeOffset now)
     {
+        CreditsUsedText.Visibility = Visibility.Visible;
+        Grid.SetColumnSpan(CreditsBalanceText, 1);
         var sum = view.Credits is { } data ? RateEngine.SumRange(data,start,end) : new RangeSum(0,0);
         var balance = view.CreditsBalance;
         var visible = _model.Settings.Monitors(ChatPlatform.Codex) && (balance is not null || sum.CoverageMinutes>0);

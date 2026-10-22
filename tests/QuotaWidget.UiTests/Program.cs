@@ -22,6 +22,7 @@ static class Probe
             StartupProbe.Run();
             SettingSliderProbe.Run();
             if(args.Contains("--credits-only")){CreditsChartProbe.Run(args.Length>1?args[1]:null);return 0;}
+            if(args.Contains("--compact-credits-only")){CompactCreditsProbe.Run(app,args.Length>1?args[1]:null);return 0;}
             if(args.Contains("--expanded-chats-only")){ExpandedChatListProbe.Run(app);return 0;}
             if(args.Contains("--scale-only")) { ScalingProbe.Run(app); return 0; }
             var opts=AppOptions.Parse(["--compact","--snapshot","unused"]);
@@ -265,6 +266,7 @@ static class Probe
             Console.WriteLine("Chart axes: each expanded provider has its own axis; collapsed providers reserve no axis space; headers never overlap either axis.");
             ChartInspectProbe.Run();
             CreditsChartProbe.Run();
+            CompactCreditsProbe.Run(app);
             IdleLinkProbe.Run();
             MonitoringRefreshProbe.Run(app);
             FableTransitionProbe.Run(app);

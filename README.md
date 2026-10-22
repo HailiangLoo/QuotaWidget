@@ -37,7 +37,7 @@ Each chart chooses Rate or Total independently. The numbers in its header remain
 
 ### Local usage details
 
-**To see which tasks account for your usage, click “Claude usage ↗ / Codex usage ↗” in the TOKEN section. In compact mode, click the value below “Last 1h” for a single provider, or the provider's rate ↗ when showing both.** Hover to preview; click the card to pin it. “Last 1h” shows the observed recent-hour average in points/hour.
+**To see which tasks account for your usage, click “Claude usage ↗ / Codex usage ↗” in the TOKEN section. In compact mode, click the value below “Last 1h” for a single provider, or the provider's usage ↗ when showing both.** Hover to preview; click the card to pin it. Subscription-only usage shows the observed recent-hour average in points/hour. When the last hour includes Codex credits, its summary shows recorded amounts instead: credits alone, or points + credits for mixed usage. Units stay separate; `*` marks incomplete or stale coverage. Credits are account-level net balance decreases and are not attributed to chats.
 
 Each provider has its own movable detail window. Choose **1h / 5h / 12h / 24h / 3d / all**, then compare model totals and individual chat/model rows: input, cached-input and output tokens, plus validated quota estimates. Different models used within one chat get separate rows. Project names appear in smaller, muted text; confirmed subagent usage is grouped under its parent chat. The initial range follows the full view, or starts at 1h in compact mode; each window then selects its range independently. Drag content to move either window; controls and scrolling retain their usual actions.
 
