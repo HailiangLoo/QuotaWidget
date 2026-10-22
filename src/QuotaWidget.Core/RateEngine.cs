@@ -18,7 +18,8 @@ public sealed class RateSegment
     /// <summary>Only the counter changed: normal sampling, same account/source, no interruption evidence.
     /// Still invalid for accounting; a rate estimator may share context if work also continued.</summary>
     public bool CounterResetOnly { get; init; }
-    /// <summary>The old counter was capped, so a flat reading cannot constrain further trend.</summary>
+    /// <summary>The old allowance was exhausted. Flat readings are zero for this metric;
+    /// work may continue on credits, but must not carry its subscription rate through a reset.</summary>
     public bool StartsAtCapacity { get; init; }
 
     public bool Valid => Issue == SegmentIssue.None;

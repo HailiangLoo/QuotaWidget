@@ -2,10 +2,11 @@ namespace QuotaWidget.Core;
 
 /// <summary>Accounting boundaries are not necessarily changes in work intensity.
 /// The original series remains the ledger. This copy shares estimation context only
-/// across a normally sampled counter reset inside one continuous work episode.</summary>
+/// across an uncapped, normally sampled reset inside one continuous work episode.
+/// Exhausted allowance is a boundary even when work continues on credits.</summary>
 static class TrendContinuity
 {
-    public static (SeriesData Source,List<RateSegment> Resets) Prepare(SeriesData source,
+    public static SeriesData Prepare(SeriesData source,
         DateTimeOffset asOf,IReadOnlyList<WorkSpan> episodes)
     {
         var resets=new List<RateSegment>();
@@ -13,11 +14,11 @@ static class TrendContinuity
         foreach(var s in source.Segments)
         {
             if(s.End>asOf)break;
-            if(s.Issue==SegmentIssue.Reset&&s.CounterResetOnly&&previous is {Valid:true}&&previous.End==s.Start&&
+            if(s.Issue==SegmentIssue.Reset&&s.CounterResetOnly&&!s.StartsAtCapacity&&previous is {Valid:true}&&previous.End==s.Start&&
                 episodes.Any(a=>a.Start<s.Start&&a.End>=s.End&&(!a.KnownEnd||a.End>s.End)))resets.Add(s);
             previous=s;
         }
-        if(resets.Count==0)return(source,resets);
+        if(resets.Count==0)return source;
         var bridges=resets.ToHashSet();var group=0;previous=null;
         var segments=new List<RateSegment>();
         foreach(var s in source.Segments)
@@ -33,6 +34,6 @@ static class TrendContinuity
                 CounterResetOnly=s.CounterResetOnly,StartsAtCapacity=s.StartsAtCapacity});
             previous=s;
         }
-        return(new(){Key=source.Key,Segments=segments},resets);
+        return new(){Key=source.Key,Segments=segments};
     }
 }

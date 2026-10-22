@@ -81,5 +81,39 @@ static class CreditsTests
             }
             finally { if(Directory.Exists(dir)) Directory.Delete(dir,true); }
         });
+        Test("ongoing credit-funded work cannot pull new weekly usage before an exhausted reset",()=>
+        {
+            HistoryRecord NewPeriod(int minute,decimal balance,double used)
+            {
+                var r=Record(minute,balance,quota:used);
+                return r with{Snapshot=r.Snapshot with{Limits=new(null,UsageParser.Limit(used,At.AddDays(14)),null)}};
+            }
+            var records=new[]{Record(-10,1000,quota:99),Record(-5,1000),Record(0,950),Record(5,900),NewPeriod(10,880,0),NewPeriod(15,880,1),NewPeriod(20,880,2)};
+            foreach(var withCredits in new[]{true,false})
+            foreach(var withWork in new[]{true,false})
+            {
+                var selected=withCredits?records:records.Select(r=>r with{Snapshot=r.Snapshot with{Credits=null}}).ToArray();
+                var quota=RateEngine.Build(selected,SeriesKey.Total,[]);
+                var credits=CreditsUsage.Build(selected,[]);
+                var work=withWork?new[]{new WorkSpan(At.AddMinutes(-10),At.AddMinutes(30),true,false,null)}:[];
+                foreach(var end in new[]{5,10,15,20})
+                {
+                    var trend=ActiveRateEstimator.Build(quota,At.AddMinutes(end),work);
+                    Check(trend.ValueAt(At.AddMinutes(-2))==0&&trend.ValueAt(At.AddMinutes(2))==0,"weekly rate appeared while capped");
+                    if(end>=10)Check(trend.ValueAt(At.AddMinutes(7)) is null,"unknown reset interval was smoothed");
+                    if(end>=15)Check(trend.ValueAt(At.AddMinutes(12))>0,"post-reset quota disappeared");
+                    var measured=quota.Segments.Where(s=>s.Valid&&s.End<=At.AddMinutes(end)).Sum(s=>s.Delta);
+                    Check(Math.Abs(trend.Delta-measured)<1e-8,"quota accounting changed");
+                }
+                foreach(var range in new[]{60,300,1440,4320})
+                {
+                    var view=new ChartView{Start=At.AddMinutes(20-range),End=At.AddMinutes(20),Total=quota,Fable=quota,Codex=quota,Credits=credits,Gaps=[],Smooth=true,Activity=new([],[],work)};
+                    Check(view.CodexAt(At.AddMinutes(2))==0&&view.CodexAt(At.AddMinutes(7)) is null&&view.CodexAt(At.AddMinutes(12))>0,"view or hover crossed funding boundary");
+                }
+                if(withCredits)Check(RateEngine.SumRange(credits,At.AddMinutes(-10),At.AddMinutes(20)).Delta==120&&credits.ValueAt(At.AddMinutes(7))>0&&credits.ValueAt(At.AddMinutes(12))==0,"credit observations were forced to match quota");
+                var interrupted=RateEngine.Build(selected,SeriesKey.Total,[new(At.AddMinutes(2),EventTypes.CollectFail,Statuses.Error,"network")]);
+                Check(ActiveRateEstimator.Build(interrupted,At.AddMinutes(20),work).ValueAt(At.AddMinutes(2)) is null,"capped gap became observed zero");
+            }
+        });
     }
 }

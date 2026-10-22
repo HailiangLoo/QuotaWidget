@@ -10,7 +10,7 @@ static class ContinuousResetTests
         void Near(double a,double b)=>Check(Math.Abs(a-b)<1e-6,$"expected {a}, got {b}");
         HistoryRecord Rec(int minute,double used,DateTimeOffset reset)=>new(CodexUsageSource.SourceId,"fixture","Codex plus",t.AddMinutes(minute),Statuses.Partial,300,
             new("s"+minute,t.AddMinutes(minute),new(null,UsageParser.Limit(used,reset),null)));
-        HistoryRecord[] Records()=>Enumerable.Range(-24,24).Select(i=>Rec(i*5,Math.Min(100,95+(i+24)/4),t.AddDays(5)))
+        HistoryRecord[] Records(bool capped=false)=>Enumerable.Range(-24,24).Select(i=>Rec(i*5,(capped?95:90)+(i+24)/4,t.AddDays(5)))
             .Concat(Enumerable.Range(0,17).Select(i=>Rec(i*5,i==0?0:1+(i-1)/4,t.AddDays(7)))).ToArray();
         WorkSpan[] Work(double end)=>[new(t.AddHours(-2),t.AddMinutes(end),true,false,null)];
         double Area(IEnumerable<TrendRun> runs)=>runs.Sum(r=>r.Points.Zip(r.Points.Skip(1),(a,b)=>(a.Rate+b.Rate)/2*(b.Time-a.Time).TotalHours).Sum());
@@ -32,7 +32,7 @@ static class ContinuousResetTests
             var source=RateEngine.Build(Records(),SeriesKey.Total,[]);
             var curve=ActiveRateEstimator.Build(source,t.AddMinutes(35),Work(35));
             var reset=source.Segments.Single(s=>s.Issue==SegmentIssue.Reset);
-            Check(!reset.Valid&&reset.Delta==-100,"raw reset was rewritten");
+            Check(!reset.Valid&&reset.Delta==-95,"raw reset was rewritten");
             Near(2,RateEngine.SumRange(source,t,t.AddMinutes(35)).Delta);
             Near(7,curve.Delta);Near(7,Area(curve.Runs.Where(r=>!r.Provisional)));
             foreach(var minute in Enumerable.Range(-15,36))
@@ -64,15 +64,17 @@ static class ContinuousResetTests
                 Check(ActiveRateEstimator.Build(source,records[^1].T,closed).ValueAt(t.AddMinutes(-minutes/4d)) is null,"reset extends completed work");
             }
         });
-        Test("saturated counter carries context immediately without waiting for later increments",()=>
+        Test("exhausted allowance stops rate context before and after new-period increments",()=>
         {
-            var source=RateEngine.Build(Records(),SeriesKey.Total,[]);
-            foreach(var minute in new[]{0,5,15,35})
+            var source=RateEngine.Build(Records(capped:true),SeriesKey.Total,[]);
+            foreach(var minute in new[]{-5,0,5,15,35})
             {
                 var curve=ActiveRateEstimator.Build(source,t.AddMinutes(minute),Work(minute));
-                foreach(var near in new[]{-5d,-2,0})Check(curve.ValueAt(t.AddMinutes(near)) is >1.5 and <4,"early reset flash at "+minute);
+                foreach(var near in new[]{-18d,-12,-6})Near(0,curve.ValueAt(t.AddMinutes(near))!.Value);
+                if(minute>=0)Check(curve.ValueAt(t.AddMinutes(-2)) is null,"exhausted reset shared rate context");
+                if(minute>=5)Check(curve.ValueAt(t.AddMinutes(2))>0,"new allowance increment lost");
                 var expected=source.Segments.Where(s=>s.Valid&&s.End<=t.AddMinutes(minute)).Sum(s=>s.Delta);
-                Near(expected,curve.Delta);
+                Near(expected,curve.Delta);Near(expected,Area(curve.Runs.Where(r=>!r.Provisional)));
                 Check(curve.Runs.All(r=>r.Points[^1].Time<=t.AddMinutes(minute)),"used future coverage");
             }
         });

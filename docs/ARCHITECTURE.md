@@ -48,7 +48,7 @@ Before adding either as an acquisition source, establish account/meter/window id
 
 ## Deliberate boundaries
 
-- Clean reset continuity uses the configured collection cadence and explicit continuous work. The crossing remains invalid for accounting. Slow polling alone is not a task boundary; failures, missed samples and actual work ends still break estimation.
+- Uncapped reset continuity uses the configured collection cadence and explicit continuous work. Exhausted allowance stops smoothing; credits-funded activity cannot extend subscription rates or borrow from a fresh allowance. The crossing remains invalid for accounting. Slow polling alone is not a task boundary; failures, missed samples and actual work ends still break estimation.
 - `latest.json` is the durable collector-to-model boundary. Its cheap file check also supports restart recovery and external snapshot ingestion; a second in-memory delivery path is not required.
 - Recent cache timers and historical token import have different horizons, cursor recovery and completeness requirements. Reuse shared parsing and lifecycle helpers where semantics match; do not tie a current timer to completion of an archival import.
 - Each provider's model keeps its own history, identity and storage. Shared display preferences do not justify sharing account state.

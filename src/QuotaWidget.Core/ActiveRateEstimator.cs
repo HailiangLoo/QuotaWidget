@@ -1,7 +1,7 @@
 namespace QuotaWidget.Core;
 
 /// <summary>One estimate per continuous work/observation context, independent of the viewport.
-/// A clean counter reset may share rate context without joining its accounting periods.
+/// An uncapped counter reset may share context without joining accounting periods.
 /// Integer increments are spread between observations on the shared active clock, not
 /// assigned as separate bills to individual tasks. No token-to-quota conversion.</summary>
 public static class ActiveRateEstimator
@@ -20,7 +20,7 @@ public static class ActiveRateEstimator
         // Only the estimation copy may span a counter reset. The caller's original
         // source still owns cumulative points, coverage, reset labels and recent-hour facts.
         var continuity=TrendContinuity.Prepare(source,asOf,activity);
-        var separated=RateContexts.Separate(continuity.Source,contexts,activity);
+        var separated=RateContexts.Separate(continuity,contexts,activity);
         source=separated.Source;
         var result=new RateTrend();var run=new List<RateSegment>();var afterBreak=false;
         foreach(var s in source.Segments)
@@ -29,6 +29,15 @@ public static class ActiveRateEstimator
             if(!s.Valid||s.Minutes<=0||!double.IsFinite(s.Delta)||s.Delta<0)
             {
                 Flush(closedByReset:s.Issue==SegmentIssue.Reset,closedByBreak:true);
+                afterBreak=true;continue;
+            }
+            // Continuous work does not imply continuous subscription consumption.
+            // At capacity this metric has no increment; keep its measured zero and
+            // stop smoothing before credits-funded work or a later fresh allowance.
+            if(s.StartsAtCapacity&&s.Delta==0)
+            {
+                Flush(closedByBreak:true);
+                result.Runs.Add(new([new(s.Start,0),new(s.End,0)],0,0));
                 afterBreak=true;continue;
             }
             if(run.Count>0&&(run[^1].End!=s.Start||run[^1].Group!=s.Group)){Flush(closedByBreak:true);afterBreak=true;}
@@ -149,20 +158,7 @@ public static class ActiveRateEstimator
                 // The infinite trapezoid series sums to one quantum:
                 // rate * step * (1+decay) / (120 * (1-growth*decay)).
                 var rate=points[^1].Rate;
-                var pendingFrom=observedThrough;
-                // Until the first new-period increment arrives, a saturated old
-                // counter cannot imply deceleration. Carry its estimated endpoint
-                // through the reset; only the new counter's unchanged readings use
-                // the usual one-quantum decay budget. Subsequent increments replace
-                // this prediction with the shared, area-constrained estimate above.
-                foreach(var reset in continuity.Resets.Where(r=>r.StartsAtCapacity&&r.Start>=origin&&r.End<=end))
-                {
-                    var span=spans.FirstOrDefault(a=>a.Start<=reset.End&&a.End>=reset.End);
-                    if(span is not null)pendingFrom=Math.Max(pendingFrom,span.U+(reset.End-span.Start).TotalMinutes);
-                }
-                var pending=new List<TrendPoint>{new(clock.AddMinutes(observedThrough),rate)};
-                if(pendingFrom>observedThrough)pending.Add(new(clock.AddMinutes(pendingFrom),rate));
-                pending.AddRange(DecayTail(clock.AddMinutes(pendingFrom),clock.AddMinutes(activeMinutes),rate,quantum).Skip(1));
+                var pending=DecayTail(clock.AddMinutes(observedThrough),clock.AddMinutes(activeMinutes),rate,quantum);
                 Map(pending,observedThrough,activeMinutes,true,0);
             }
             run.Clear();

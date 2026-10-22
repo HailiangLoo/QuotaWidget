@@ -74,6 +74,26 @@ static class CreditsChartProbe
                     using var stream=File.Create(Path.Combine(output,$"credits-{(theme?"dark":"light")}-{(cumulative?"cumulative":"rate")}.png"));encoder.Save(stream);
                 }
             }
+            // Exercise the complete quota/credit path with continuous work over
+            // exhaustion and a reset, including the actual drawn paths and hover.
+            HistoryRecord R(int minute,double used,decimal balance,bool reset=false)=>new(CodexUsageSource.SourceId,"fixture","Codex pro",t.AddMinutes(minute),Statuses.Partial,300,
+                new("fixture-"+minute,t.AddMinutes(minute),new(null,UsageParser.Limit(used,t.AddDays(reset?14:7)),null),new(true,false,balance)));
+            var records=new[]{R(0,99,500),R(5,100,500),R(10,100,450),R(15,0,425,true),R(20,1,425,true),R(25,1,425,true),R(30,1,425,true)};
+            var resetQuota=RateEngine.Build(records,SeriesKey.Total,[]);var resetCredits=CreditsUsage.Build(records,[]);
+            chart.View=new(){Start=t,End=t.AddMinutes(30),Total=resetQuota,Fable=resetQuota,Codex=resetQuota,Credits=resetCredits,Gaps=[],Smooth=true,
+                TotalVisible=false,FableVisible=false,CodexVisible=true,Activity=new([],[],[new(t,t.AddMinutes(30),true,false,null)])};
+            chart.FitHeight(180);host.Width=300;host.Measure(new Size(300,600));host.Arrange(new Rect(0,0,300,600));host.UpdateLayout();
+            var lane=((IEnumerable)typeof(RateChart).GetField("_lanes",flags)!.GetValue(chart)!).Cast<object>().Single();
+            var paths=(List<IReadOnlyList<TrendPoint>>)typeof(RateChart).GetMethod("Points",BindingFlags.Static|BindingFlags.NonPublic)!.Invoke(null,[lane,chart.View])!;
+            Check(paths.Count==2&&!paths.Any(p=>p[0].Time<t.AddMinutes(15)&&p[^1].Time>t.AddMinutes(5)),"quota stroke/fill crosses credits period or reset");
+            chart.PinInspect(t.AddMinutes(7),true);
+            var resetRows=Property<IEnumerable>(Call("BuildInspectCard",overlay)!,"Rows").Cast<object>().ToArray();
+            Check(Property<string>(resetRows[0],"Value")==RatePresentation.Estimate(0)&&Property<string>(resetRows[1],"Value")=="600 cr/h","capped hover disagrees with independent credit mean");
+            chart.PinInspect(t.AddMinutes(12),true);
+            resetRows=Property<IEnumerable>(Call("BuildInspectCard",overlay)!,"Rows").Cast<object>().ToArray();
+            Check(Property<string>(resetRows[0],"Value")==Loc.T("重置")&&Property<string>(resetRows[1],"Value")=="300 cr/h","reset crossing erased real credit observations or fabricated quota");
+            chart.ClearInspect();
+            Console.WriteLine("PASS: credit-funded work, quota reset paths/fills and hover remain separate.");
             chart.View=new(){Start=t,End=t.AddHours(1),Total=Quota(),Fable=Quota(),Codex=Quota(),Gaps=[],Smooth=false,TotalVisible=true,FableVisible=false,CodexVisible=false,Credits=Credits(1)};
             Check(!(bool)typeof(RateChart).GetProperty("HasCreditCurve",flags)!.GetValue(chart)!,"Claude-only showed credits");
             Console.WriteLine("PASS: credits independent scale, sampled gaps, right-axis spacing, both units/readouts and provider visibility across 96 width/height/theme/language cases.");
