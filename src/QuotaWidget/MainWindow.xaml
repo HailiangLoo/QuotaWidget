@@ -9,6 +9,10 @@
         TextOptions.TextFormattingMode="Ideal">
   <Grid x:Name="WindowSurface" Margin="12">
     <Grid.Resources>
+      <Style x:Key="ChatListToggle" TargetType="ToggleButton" BasedOn="{StaticResource IconButton}">
+        <Setter Property="Width" Value="20" /><Setter Property="Height" Value="16" />
+        <Setter Property="Padding" Value="0" /><Setter Property="FontSize" Value="12" />
+      </Style>
       <Style TargetType="ScrollBar">
               <Setter Property="Width" Value="8" />
               <Setter Property="Template">
@@ -198,10 +202,16 @@
                 </Viewbox>
               </StackPanel>
             </Grid>
-            <Border x:Name="CompactChats" BorderBrush="{DynamicResource Line}" BorderThickness="0,1,0,0" Padding="0,3,0,0">
+            <Border x:Name="CompactChats">
               <StackPanel>
+                <Grid Height="16">
+                  <Border Background="{DynamicResource Line}" Height="1" Margin="0,0,23,0" VerticalAlignment="Center" IsHitTestVisible="False" />
+                  <ToggleButton x:Name="CompactChatListToggle" Style="{StaticResource ChatListToggle}" HorizontalAlignment="Right" Content="⌄" Click="ChatListToggle_Click" />
+                </Grid>
+                <StackPanel x:Name="CompactChatBody">
                 <TextBlock x:Name="CompactChatsEmpty" local:Translate.Text="暂无计时 chat" FontSize="10" Foreground="{DynamicResource Muted}" Margin="1,2,0,0" />
                 <StackPanel x:Name="CompactChatRows" />
+                </StackPanel>
               </StackPanel>
             </Border>
           </StackPanel>
@@ -270,7 +280,12 @@
               </Grid>
             </StackPanel>
           </Border>
-          <Border x:Name="CachePanel" BorderBrush="{DynamicResource Line}" BorderThickness="0,1,0,0" Margin="0,8,0,0" Padding="0,8,0,0">
+          <Border x:Name="CachePanel" Margin="0,8,0,0">
+            <StackPanel>
+            <Grid Height="16">
+              <Border Background="{DynamicResource Line}" Height="1" Margin="0,0,23,0" VerticalAlignment="Center" IsHitTestVisible="False" />
+              <ToggleButton x:Name="ChatListToggle" Style="{StaticResource ChatListToggle}" HorizontalAlignment="Right" Content="⌄" Click="ChatListToggle_Click" />
+            </Grid>
             <ScrollViewer x:Name="ChatViewport" MaxHeight="180" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" PanningMode="VerticalOnly">
             <StackPanel>
               <TextBlock x:Name="CacheEmpty" local:Translate.Text="暂无近期可识别的本地 chat" Foreground="{DynamicResource Muted}" FontSize="11" Margin="0,7,0,3" />
@@ -302,6 +317,7 @@
               </Expander>
             </StackPanel>
             </ScrollViewer>
+            </StackPanel>
           </Border>
         </StackPanel>
 

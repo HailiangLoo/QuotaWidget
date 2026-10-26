@@ -472,5 +472,7 @@
   "Codex · 容量已满": "Codex · Capacity",
   "模型容量已满，任务已停止。收到重试后的有效响应后解除提醒。": "The model is at capacity and the task stopped. The warning clears after the retry produces a new response.",
   "任务因模型容量已满而停止。请在 Codex 中重试或切换模型。": "The task stopped because the model is at capacity. Retry or switch models in Codex.",
-  "还有 {0} 个 chat": "{0} more chats"
+  "还有 {0} 个 chat": "{0} more chats",
+  "展开 chat 列表": "Expand chat list",
+  "收起 chat 列表": "Collapse chat list"
 }

@@ -339,7 +339,10 @@ public partial class MainWindow : Window
     {
         CompactChats.Visibility=_model.Settings.CacheRemindersEnabled?Visibility.Visible:Visibility.Collapsed;
         if(!_model.Settings.CacheRemindersEnabled) return;
-        var active=OrderedActiveChats(_app.CacheEntries(now),now);
+        var entries=_app.CacheEntries(now);
+        ApplyChatListDisclosure(entries);
+        if(_model.Settings.ChatListCollapsed)return;
+        var active=OrderedActiveChats(entries,now);
         var signature=Theme.IsDark+"|"+_app.CacheWarning+"|"+string.Join(";",active.Select(e=>$"{e.Platform}:{e.Id}:{e.Title}:{e.Project}:{e.Running}:{e.CapacityBlockedAt}:{Math.Floor(e.AgeMinutes(now))}:{e.WindowMinutes}"));
         if(signature==_compactChatSignature) return;
         _compactChatSignature=signature;
@@ -406,6 +409,30 @@ public partial class MainWindow : Window
     DateTimeOffset _chatSortedAt;
     static string ChatKey(ChatCacheEntry e) => e.Platform + ":" + e.Id;
 
+    void ApplyChatListDisclosure(IReadOnlyList<ChatCacheEntry> entries)
+    {
+        var collapsed=_model.Settings.ChatListCollapsed;
+        var blocked=entries.Any(e=>e.CapacityBlocked);
+        ChatViewport.Visibility=CompactChatBody.Visibility=collapsed?Visibility.Collapsed:Visibility.Visible;
+        foreach(var button in new[]{ChatListToggle,CompactChatListToggle})
+        {
+            button.IsChecked=collapsed;
+            button.Content=collapsed?"›":"⌄";
+            button.Foreground=Theme.Brush(blocked?"Red":"Muted");
+            var action=Loc.T(collapsed?"展开 chat 列表":"收起 chat 列表");
+            button.ToolTip=action+(blocked?" · "+Loc.T("容量已满"):"");
+            System.Windows.Automation.AutomationProperties.SetName(button,action);
+        }
+    }
+
+    void ChatListToggle_Click(object sender,RoutedEventArgs e)
+    {
+        _model.Settings.ChatListCollapsed=((System.Windows.Controls.Primitives.ToggleButton)sender).IsChecked==true;
+        _model.SaveSettings();
+        _app.Render();
+        QueueScaleFit();
+    }
+
     List<ChatCacheEntry> OrderedActiveChats(IReadOnlyList<ChatCacheEntry> entries,DateTimeOffset now)
     {
         var keys = entries.Select(ChatKey).ToHashSet();
@@ -442,6 +469,8 @@ public partial class MainWindow : Window
         CachePanel.Visibility = _model.Settings.CacheRemindersEnabled ? Visibility.Visible : Visibility.Collapsed;
         if (!_model.Settings.CacheRemindersEnabled) return;
         var entries = _app.CacheEntries(now);
+        ApplyChatListDisclosure(entries);
+        if(_model.Settings.ChatListCollapsed)return;
         var active = OrderedActiveChats(entries,now);
         var expired = entries.Where(e => !e.CapacityBlocked && (e.Compacted || e.Expired(now) || e.ActivityUncertain))
             .OrderByDescending(e => e.Compacted ? e.CompactedAt ?? e.RequestAt : e.ActivityAt ?? e.RequestAt).ToList();

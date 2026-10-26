@@ -144,6 +144,26 @@ static class ExpandedChatListProbe
             CheckCapacity(C<StackPanel>("CompactChatRows"));inspect?.Invoke(window,"capacity-compact");
             Mode(false,0);CheckCapacity(rows);Check(!archived.Children.Cast<UIElement>().Select(Name).Contains(blocked.Title),"blocked chat also appeared in archive");
             inspect?.Invoke(window,"capacity-full");
+            void Disclosure(string name)
+            {
+                var button=C<System.Windows.Controls.Primitives.ToggleButton>(name);
+                button.IsChecked=button.IsChecked!=true;
+                button.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));Layout(false);
+            }
+            var fullHeight=C<Grid>("Outer").ActualHeight;
+            var readOnly=model.ReadOnly;model.ReadOnly=false;
+            Disclosure("ChatListToggle");model.ReadOnly=readOnly;
+            Check(model.Settings.ChatListCollapsed&&WidgetSettings.Load(paths.Settings,out _).ChatListCollapsed,"collapse choice did not persist");
+            Check(viewport.Visibility==Visibility.Collapsed&&C<System.Windows.Controls.Primitives.ToggleButton>("ChatListToggle").Visibility==Visibility.Visible,"full disclosure hides its own arrow or leaves chats visible");
+            Check(Math.Abs(C<Grid>("Outer").ActualHeight-fullHeight)<1,"collapse changed saved full height");
+            Check(C<System.Windows.Controls.Primitives.ToggleButton>("ChatListToggle").Foreground==Theme.Brush("Red"),"collapsed arrow hid unresolved capacity warning");
+            inspect?.Invoke(window,"chat-list-full-collapsed");
+            Mode(true,1);var foldedHeight=C<Grid>("Outer").ActualHeight;
+            Check(C<StackPanel>("CompactChatBody").Visibility==Visibility.Collapsed&&C<System.Windows.Controls.Primitives.ToggleButton>("CompactChatListToggle").IsChecked==true,"compact did not share collapsed state");
+            inspect?.Invoke(window,"chat-list-compact-collapsed");
+            Disclosure("CompactChatListToggle");
+            Check(C<StackPanel>("CompactChatBody").Visibility==Visibility.Visible&&C<Grid>("Outer").ActualHeight>foldedHeight+30,"compact expansion did not restore rows/height");
+            Mode(false,2);Check(viewport.Visibility==Visibility.Visible&&!model.Settings.ChatListCollapsed,"full mode did not share expansion");
             data[1]=blocked with{CapacityBlockedAt=null,Running=true,ActivityAt=now};Tick(1);
             Check(!rows.Children.Cast<Grid>().Any(r=>Status(r)==Loc.T("容量已满")),"recovered status did not redraw inside minute cooldown");
             // Exercise the actual notification selection with no native popup or
@@ -152,13 +172,16 @@ static class ExpandedChatListProbe
             IReadOnlyList<ChatCacheEntry> Alerts()=>(IReadOnlyList<ChatCacheEntry>)take.Invoke(app,[now])!;
             Set("_cacheEntries",new[]{blocked});Check(Alerts().Count==0,"snapshot triggered a system notification");
             Set("_opts",new AppOptions());
-            Set("_cacheEntries",new[]{blocked,blocked with{Id="second",Title="Second"}});Check(Alerts().Count==2,"simultaneous errors were lost");
+            model.Settings.ChatListCollapsed=true;
+            Set("_cacheEntries",new[]{blocked,blocked with{Id="second",Title="Second"}});Check(Alerts().Count==2,"simultaneous errors were lost or collapsing suppressed notifications");
             Check(Alerts().Count==0,"same failure repeated the popup");
             Set("_cacheEntries",new[]{blocked with{CapacityBlockedAt=null,Running=true,ActivityAt=now}});Check(Alerts().Count==0,"recovery produced an alert");
             Set("_cacheEntries",new[]{blocked with{CapacityBlockedAt=now}});Check(Alerts().Count==1&&Alerts().Count==0,"new failure did not alert exactly once");
             model.Settings.CacheRemindersEnabled=false;Set("_cacheEntries",new[]{blocked with{Id="disabled"}});Check(Alerts().Count==0,"disabled reminders still notified");
             model.Settings.CacheRemindersEnabled=true;
+            model.Settings.ChatListCollapsed=false;
             Set("_opts",opts);
+            Console.WriteLine("PASS: arrow collapses/expands only chat region, persisted shared state across layouts, compact auto-height/full height preserved, red capacity arrow and hidden-list notification selection passed.");
             Console.WriteLine("PASS: capacity stays red/visible in full and compact, recovery redraws immediately, normal timers stay green; isolated notification batching/deduplication/recurrence and snapshot/disabled suppression passed.");
             Console.WriteLine("PASS: chats scroll locally; 8/20 rows × four heights × two scales stay reachable, meters/charts stay fixed, wheel stops locally, archive stays reachable; both layouts share longest-idle-first ordering, stable ties and minute cooldown, preserve them across switches, and defer during interaction.");
         }
