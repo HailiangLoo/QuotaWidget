@@ -432,7 +432,7 @@ public partial class App : Application
                     if (_exiting) return;
                     if (_window.IsVisible) _window.RenderCache();
                     // Notifications also work with the widget hidden in the tray.
-                    if (_tray is not null) _tray.AlertCapacity(TakeCapacityAlerts(DateTimeOffset.Now));
+                    UpdateCapacityNotifications(DateTimeOffset.Now);
                 });
                 await Task.Delay(TimeSpan.FromSeconds(5), _cts.Token);
             }

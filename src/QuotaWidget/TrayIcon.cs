@@ -16,15 +16,17 @@ public sealed class TrayIcon : IDisposable
     string _lastKey = "";
     readonly Bitmap _claudeLogo=ProviderIcon.TrayBitmap("Claude");
     readonly Bitmap _codexLogo=ProviderIcon.TrayBitmap("Codex");
+    readonly Action _showWidget;
+    CapacityNotice? _capacityNotice;
 
     public TrayIcon(App app)
     {
+        _showWidget=app.ShowWindow;
         _menu = new TrayMenu(app.ToggleWindow,app.OpenSettings,app.ExitApp);
         _menu.Opening += (_, _) => _menu.Prepare(Theme.IsDark,app.WindowVisible);
 
         _icon = new NotifyIcon { ContextMenuStrip = _menu, Text = Loc.T("额度"), Visible = true };
         _icon.MouseClick += (_, e) => { if (e.Button == MouseButtons.Left) app.ToggleWindow(); };
-        _icon.BalloonTipClicked += (_, _) => app.ShowWindow();
         SetIcon(app.Monitors(ChatPlatform.Claude),app.Monitors(ChatPlatform.Codex));
     }
 
@@ -44,15 +46,19 @@ public sealed class TrayIcon : IDisposable
 
     static double? Remaining(MeterView meter)=>!meter.Missing&&meter.UsedPercent is { } used&&double.IsFinite(used)?Math.Clamp(100-used,0,100):null;
 
-    public void AlertCapacity(System.Collections.Generic.IReadOnlyList<ChatCacheEntry> chats)
+    public bool AlertCapacity(System.Collections.Generic.IReadOnlyList<ChatCacheEntry> chats, Action<string>? log = null)
     {
-        if (chats.Count == 0) return;
-        var message = Loc.T("任务因模型容量已满而停止。请在 Codex 中重试或切换模型。") + "\n" +
-            string.Join("\n", chats.Take(3).Select(e => e.Title.Length > 40 ? e.Title[..40] + "…" : e.Title));
-        if (chats.Count > 3) message += "\n" + Loc.F($"还有 {chats.Count - 3} 个 chat");
-        try { _icon.ShowBalloonTip(10000, Loc.T("Codex · 容量已满"), message, ToolTipIcon.Error); }
-        catch (Exception e) when (e is InvalidOperationException or System.ComponentModel.Win32Exception) { }
+        if(chats.Count==0||NotificationEnvironment.DeferVisual())return false;
+        if(_capacityNotice is null)
+        {
+            var notice=new CapacityNotice(_showWidget,log:log);_capacityNotice=notice;
+            notice.Closed+=(_,_)=>{if(ReferenceEquals(_capacityNotice,notice))_capacityNotice=null;};
+        }
+        _capacityNotice.Add(chats);
+        return _capacityNotice.Present();
     }
+
+    public void SynchronizeCapacity(System.Collections.Generic.IReadOnlyList<ChatCacheEntry> current)=>_capacityNotice?.Synchronize(current);
 
     void SetIcon(bool claudeEnabled,bool codexEnabled)
     {
@@ -71,6 +77,7 @@ public sealed class TrayIcon : IDisposable
 
     public void Dispose()
     {
+        _capacityNotice?.Close();
         _icon.Visible = false;
         var image = _icon.Icon;
         _icon.Dispose();

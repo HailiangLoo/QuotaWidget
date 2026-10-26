@@ -21,6 +21,7 @@ static class Probe
             app.InitializeComponent(); Theme.Apply(true);
             StartupProbe.Run();
             SettingSliderProbe.Run();
+            CapacityNotificationProbe.Run(app);
             if(args.Contains("--credits-only")){CreditsChartProbe.Run(args.Length>1?args[1]:null);return 0;}
             if(args.Contains("--compact-credits-only")){CompactCreditsProbe.Run(app,args.Length>1?args[1]:null);return 0;}
             if(args.Contains("--expanded-chats-only")){ExpandedChatListProbe.Run(app);return 0;}
