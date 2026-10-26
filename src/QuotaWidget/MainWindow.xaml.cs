@@ -340,7 +340,7 @@ public partial class MainWindow : Window
         CompactChats.Visibility=_model.Settings.CacheRemindersEnabled?Visibility.Visible:Visibility.Collapsed;
         if(!_model.Settings.CacheRemindersEnabled) return;
         var active=OrderedActiveChats(_app.CacheEntries(now),now);
-        var signature=Theme.IsDark+"|"+_app.CacheWarning+"|"+string.Join(";",active.Select(e=>$"{e.Platform}:{e.Id}:{e.Title}:{e.Project}:{e.Running}:{Math.Floor(e.AgeMinutes(now))}:{e.WindowMinutes}"));
+        var signature=Theme.IsDark+"|"+_app.CacheWarning+"|"+string.Join(";",active.Select(e=>$"{e.Platform}:{e.Id}:{e.Title}:{e.Project}:{e.Running}:{e.CapacityBlockedAt}:{Math.Floor(e.AgeMinutes(now))}:{e.WindowMinutes}"));
         if(signature==_compactChatSignature) return;
         _compactChatSignature=signature;
         CompactChatRows.Children.Clear();
@@ -412,7 +412,7 @@ public partial class MainWindow : Window
         foreach (var key in _chatOrder.Keys.Where(k => !keys.Contains(k)).ToArray()) _chatOrder.Remove(key);
         foreach (var entry in entries)
             if (!_chatOrder.ContainsKey(ChatKey(entry))) _chatOrder[ChatKey(entry)] = _chatSequence++;
-        var active = entries.Where(e => !e.Compacted && !e.Expired(now) && !e.ActivityUncertain)
+        var active = entries.Where(e => e.CapacityBlocked || !e.Compacted && !e.Expired(now) && !e.ActivityUncertain)
             .OrderBy(e => _chatOrder[ChatKey(e)]).ToList();
         // Longest idle timer first, with running chats last. Re-rank at most once
         // a minute; both layouts share stable ties, order and cooldown.
@@ -428,7 +428,8 @@ public partial class MainWindow : Window
                 _chatOrder[ChatKey(entry)] = _chatSequence++;
             _chatSortedAt = active.Count == 0 ? default : now;
         }
-        return active;
+        // A stopped task must remain visible even before the normal sort cooldown.
+        return active.OrderByDescending(e => e.CapacityBlocked).ToList();
     }
 
     public void RenderCache() => RenderCacheAt(DateTimeOffset.Now);
@@ -442,10 +443,10 @@ public partial class MainWindow : Window
         if (!_model.Settings.CacheRemindersEnabled) return;
         var entries = _app.CacheEntries(now);
         var active = OrderedActiveChats(entries,now);
-        var expired = entries.Where(e => e.Compacted || e.Expired(now) || e.ActivityUncertain)
+        var expired = entries.Where(e => !e.CapacityBlocked && (e.Compacted || e.Expired(now) || e.ActivityUncertain))
             .OrderByDescending(e => e.Compacted ? e.CompactedAt ?? e.RequestAt : e.ActivityAt ?? e.RequestAt).ToList();
         // Usually only the minute changes: avoid replacing controls every polling tick.
-        var signature = Theme.IsDark + "|" + _app.CacheWarning + "|" + string.Join(",",active.Select(ChatKey)) + "|" + string.Join("|", entries.Select(e => $"{e.Platform}:{e.Id}:{e.Title}:{e.Project}:{Math.Floor(e.AgeMinutes(now))}:{Math.Floor((now - (e.CompactedAt ?? now)).TotalMinutes)}:{e.WindowMinutes}:{e.Urgency(now)}:{e.Running}:{e.ActivityUncertain}:{e.Compacted}:{e.CompactedAt}:{e.Basis}"));
+        var signature = Theme.IsDark + "|" + _app.CacheWarning + "|" + string.Join(",",active.Select(ChatKey)) + "|" + string.Join("|", entries.Select(e => $"{e.Platform}:{e.Id}:{e.Title}:{e.Project}:{Math.Floor(e.AgeMinutes(now))}:{Math.Floor((now - (e.CompactedAt ?? now)).TotalMinutes)}:{e.WindowMinutes}:{e.Urgency(now)}:{e.Running}:{e.ActivityUncertain}:{e.Compacted}:{e.CompactedAt}:{e.CapacityBlockedAt}:{e.Basis}"));
         if (signature == _cacheSignature) return;
         _cacheSignature = signature;
         CachePanel.ToolTip = _app.CacheWarning is null?null:Loc.T("部分 chat 状态暂不可读");
@@ -472,6 +473,7 @@ public partial class MainWindow : Window
         if (e.WorkPending) color = Theme.Brush(e.Running ? "Green" : "Muted");
         if (e.Compacted || historical) color = Theme.Brush("Muted");
         if (e.Platform == ChatPlatform.Codex) color = Theme.Brush("Green");
+        if (e.CapacityBlocked && !historical) color = Theme.Brush("Red");
         var row = new Grid { Height = dense?22:30, Background = Brushes.Transparent, ToolTip = new ToolTip { Content = ChatTip(e, now, historical) } };
         // Refresh on hover; token polling must not replace every row and close an open card.
         row.ToolTipOpening += (_, _) => ((ToolTip)row.ToolTip).Content = ChatTip(e, DateTimeOffset.Now, historical);
@@ -510,7 +512,9 @@ public partial class MainWindow : Window
                 minutes.Inlines.Add(new Run("m") { FontSize=10 });
             }
         }
-        if (e.Compacted)
+        if (e.CapacityBlocked && !historical)
+            minutes.Inlines.Add(new Run(Loc.T("容量已满")) { FontSize = 11, FontWeight = FontWeights.SemiBold });
+        else if (e.Compacted)
         {
             if (historical) minutes.Inlines.Add(new Run(e.CompactedAt?.ToLocalTime().ToString("HH:mm") ?? "—") { FontSize = 12 });
             else if (e.CompactedAt is { } compact)
@@ -539,7 +543,8 @@ public partial class MainWindow : Window
         TextBlock Text(string value,double size,string color="Ink") => new() {Text=value,FontSize=size,Foreground=Theme.Brush(color),TextWrapping=TextWrapping.NoWrap,TextTrimming=TextTrimming.CharacterEllipsis};
         var title=Text(entry.Title,12); title.FontWeight=FontWeights.SemiBold; panel.Children.Add(title);
         panel.Children.Add(Text(entry.Platform + (entry.Project is {Length:>0} project ? " · "+project : ""),10,"Muted"));
-        var status=entry.Compacted ? Loc.F($"已 compact · {entry.CompactedAt?.ToLocalTime():M/d HH:mm}")
+        var status=entry.CapacityBlocked ? Loc.T("模型容量已满，任务已停止。收到重试后的有效响应后解除提醒。")
+            : entry.Compacted ? Loc.F($"已 compact · {entry.CompactedAt?.ToLocalTime():M/d HH:mm}")
             : entry.Running ? Loc.T("进行中") : entry.ActivityUncertain ? Loc.T("状态未确认") : Loc.T("本轮已结束");
         if(historical) status=Loc.T("末次状态 · ")+status;
         else if(!entry.Compacted)

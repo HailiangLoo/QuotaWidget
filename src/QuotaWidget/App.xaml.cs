@@ -427,7 +427,13 @@ public partial class App : Application
                     catch { _cacheWarning = "本地记录暂不可读"; }
                 }
                 else { _cacheEntries = Array.Empty<ChatCacheEntry>(); _cacheWarning = null; }
-                await Dispatcher.InvokeAsync(() => { if (!_exiting && _window.IsVisible) _window.RenderCache(); });
+                await Dispatcher.InvokeAsync(() =>
+                {
+                    if (_exiting) return;
+                    if (_window.IsVisible) _window.RenderCache();
+                    // Notifications also work with the widget hidden in the tray.
+                    if (_tray is not null) _tray.AlertCapacity(TakeCapacityAlerts(DateTimeOffset.Now));
+                });
                 await Task.Delay(TimeSpan.FromSeconds(5), _cts.Token);
             }
         }

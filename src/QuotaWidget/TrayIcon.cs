@@ -24,6 +24,7 @@ public sealed class TrayIcon : IDisposable
 
         _icon = new NotifyIcon { ContextMenuStrip = _menu, Text = Loc.T("额度"), Visible = true };
         _icon.MouseClick += (_, e) => { if (e.Button == MouseButtons.Left) app.ToggleWindow(); };
+        _icon.BalloonTipClicked += (_, _) => app.ShowWindow();
         SetIcon(app.Monitors(ChatPlatform.Claude),app.Monitors(ChatPlatform.Codex));
     }
 
@@ -42,6 +43,16 @@ public sealed class TrayIcon : IDisposable
     }
 
     static double? Remaining(MeterView meter)=>!meter.Missing&&meter.UsedPercent is { } used&&double.IsFinite(used)?Math.Clamp(100-used,0,100):null;
+
+    public void AlertCapacity(System.Collections.Generic.IReadOnlyList<ChatCacheEntry> chats)
+    {
+        if (chats.Count == 0) return;
+        var message = Loc.T("任务因模型容量已满而停止。请在 Codex 中重试或切换模型。") + "\n" +
+            string.Join("\n", chats.Take(3).Select(e => e.Title.Length > 40 ? e.Title[..40] + "…" : e.Title));
+        if (chats.Count > 3) message += "\n" + Loc.F($"还有 {chats.Count - 3} 个 chat");
+        try { _icon.ShowBalloonTip(10000, Loc.T("Codex · 容量已满"), message, ToolTipIcon.Error); }
+        catch (Exception e) when (e is InvalidOperationException or System.ComponentModel.Win32Exception) { }
+    }
 
     void SetIcon(bool claudeEnabled,bool codexEnabled)
     {

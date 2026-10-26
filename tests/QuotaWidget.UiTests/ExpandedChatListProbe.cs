@@ -128,6 +128,38 @@ static class ExpandedChatListProbe
             Check(Order().Contains("recent")&&Order().Contains("long-running")&&!Order().Contains("folded"),"Codex 2h boundary or running retention wrong");
             Check(archived.Children.Cast<UIElement>().Select(Name).SequenceEqual(new[]{"folded"}),"Codex older than 2h did not fold");
             Mode(true,0);Check(CompactOrder().Contains("recent")&&!CompactOrder().Contains("folded"),"compact differs at Codex 2h boundary");
+            // Capacity bypasses the idle fold/sort cooldown in both layouts; normal
+            // Codex timers remain green. New response status must redraw immediately.
+            var blocked=Entry("Capacity task",180) with{CapacityBlockedAt=now.AddSeconds(-1),ActivityAt=now.AddSeconds(-1)};
+            data=[Entry("normal",10),blocked];Tick(0);
+            string Status(Grid row)=>new System.Windows.Documents.TextRange(row.Children.OfType<TextBlock>().Single().ContentStart,row.Children.OfType<TextBlock>().Single().ContentEnd).Text;
+            void CheckCapacity(StackPanel panel)
+            {
+                Check(Name(panel.Children[0])==blocked.Title,"capacity chat did not move above idle list");
+                var row=(Grid)panel.Children[0];
+                Check(Status(row)==Loc.T("容量已满")&&row.Children.OfType<TextBlock>().Single().Foreground==Theme.Brush("Red"),"capacity status missing or not red");
+                Check(((Border)row.Children[0]).Background==Theme.Brush("Red"),"capacity marker is not red");
+                Check(((Grid)panel.Children[1]).Children.OfType<TextBlock>().Single().Foreground==Theme.Brush("Green"),"normal Codex timer lost green");
+            }
+            CheckCapacity(C<StackPanel>("CompactChatRows"));inspect?.Invoke(window,"capacity-compact");
+            Mode(false,0);CheckCapacity(rows);Check(!archived.Children.Cast<UIElement>().Select(Name).Contains(blocked.Title),"blocked chat also appeared in archive");
+            inspect?.Invoke(window,"capacity-full");
+            data[1]=blocked with{CapacityBlockedAt=null,Running=true,ActivityAt=now};Tick(1);
+            Check(!rows.Children.Cast<Grid>().Any(r=>Status(r)==Loc.T("容量已满")),"recovered status did not redraw inside minute cooldown");
+            // Exercise the actual notification selection with no native popup or
+            // workers: startup/rescan dedupe, recovery, recurrence and batch alerts.
+            var take=typeof(App).GetMethod("TakeCapacityAlerts",flags)!;
+            IReadOnlyList<ChatCacheEntry> Alerts()=>(IReadOnlyList<ChatCacheEntry>)take.Invoke(app,[now])!;
+            Set("_cacheEntries",new[]{blocked});Check(Alerts().Count==0,"snapshot triggered a system notification");
+            Set("_opts",new AppOptions());
+            Set("_cacheEntries",new[]{blocked,blocked with{Id="second",Title="Second"}});Check(Alerts().Count==2,"simultaneous errors were lost");
+            Check(Alerts().Count==0,"same failure repeated the popup");
+            Set("_cacheEntries",new[]{blocked with{CapacityBlockedAt=null,Running=true,ActivityAt=now}});Check(Alerts().Count==0,"recovery produced an alert");
+            Set("_cacheEntries",new[]{blocked with{CapacityBlockedAt=now}});Check(Alerts().Count==1&&Alerts().Count==0,"new failure did not alert exactly once");
+            model.Settings.CacheRemindersEnabled=false;Set("_cacheEntries",new[]{blocked with{Id="disabled"}});Check(Alerts().Count==0,"disabled reminders still notified");
+            model.Settings.CacheRemindersEnabled=true;
+            Set("_opts",opts);
+            Console.WriteLine("PASS: capacity stays red/visible in full and compact, recovery redraws immediately, normal timers stay green; isolated notification batching/deduplication/recurrence and snapshot/disabled suppression passed.");
             Console.WriteLine("PASS: chats scroll locally; 8/20 rows × four heights × two scales stay reachable, meters/charts stay fixed, wheel stops locally, archive stays reachable; both layouts share longest-idle-first ordering, stable ties and minute cooldown, preserve them across switches, and defer during interaction.");
         }
         finally{window?.Close();Set("_window",null);Set("_cacheEntries",Array.Empty<ChatCacheEntry>());if(Directory.Exists(root))Directory.Delete(root,true);}

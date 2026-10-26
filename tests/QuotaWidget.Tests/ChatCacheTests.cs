@@ -20,6 +20,63 @@ static class ChatCacheTests
     public static void Register(List<(string Name, Func<Task> Body)> tests)
     {
         void Test(string name, Action body) => tests.Add((name, () => { body(); return Task.CompletedTask; }));
+        string Start(double min,string turn)=>Line(min,"event_msg",new{type="task_started",turn_id=turn});
+        string Capacity(double min,string turn,string code="server_overloaded")=>Line(min,"event_msg",new{type="task_complete",turn_id=turn,error=new{codex_error_info=code,message="Selected model is at capacity. Please try a different model."}});
+        Test("capacity: terminal overload survives retry input, tool results and starts until actual model work",()=>
+        {
+            var s=new ChatCacheState(ChatPlatform.Codex,"chat");s.Read(Start(0,"a"));s.Read(Usage(1,"r"));s.Read(Capacity(2,"a"));
+            Check(s.View(T.AddMinutes(3)) is {CapacityBlocked:true,Running:false,WorkPending:false},"terminal failure is not a visible stopped task");
+            s.Read(Start(4,"retry"));s.Read(Line(5,"response_item",new{type="message",role="user",content="retry"}));
+            s.Read(Line(6,"response_item",new{type="function_call_output",output="tool result"}));
+            Check(s.View(T.AddMinutes(7)) is {CapacityBlocked:true,Running:false},"input/start/tool output falsely claimed recovery");
+            s.Read(Line(8,"response_item",new{type="reasoning",summary=new[]{new{type="summary_text",text="working"}}}));
+            Check(s.View(T.AddMinutes(9)) is {CapacityBlocked:false,Running:true},"real model response did not clear overload");
+            s.Read(Capacity(10,"retry"));Check(s.CapacityBlockedAt==T.AddMinutes(10),"second failure did not create a new alert");
+            s.Read(Start(11,"retry2"));s.Read(Usage(12,"new-response"));
+            Check(s.View(T.AddMinutes(13)) is {CapacityBlocked:false,Running:true},"confirmed model usage did not clear overload");
+            var legacy=new ChatCacheState(ChatPlatform.Codex,"legacy");legacy.Read(Capacity(0,"a"));legacy.Read(Start(1,"b"));
+            legacy.Read(Line(2,"event_msg",new{type="token_count",info=new{total_token_usage=new{input_tokens=10},last_token_usage=new{input_tokens=10}}}));
+            Check(legacy.View(T.AddMinutes(3)) is {CapacityBlocked:false,Running:true},"legacy confirmed usage did not clear overload");
+        });
+        Test("capacity: only explicit terminal error codes count; replay and late older turns cannot resurrect warnings",()=>
+        {
+            var s=new ChatCacheState(ChatPlatform.Codex,"chat");s.Read(Start(0,"a"));
+            s.Read(Capacity(1,"a","rate_limit_exceeded"));Check(s.CapacityBlockedAt is null,"message text became capacity evidence");
+            s.Read(Start(2,"b"));s.Read(Capacity(3,"b"));s.Read(Start(4,"c"));s.Read(Usage(5,"new"));
+            s.Read(Capacity(3,"b"));s.Read(Capacity(6,"old-turn"));
+            Check(s.View(T.AddMinutes(7)) is {CapacityBlocked:false,Running:true},"duplicate or mismatched old turn stopped new work");
+            s.Read(Line(8,"response_item",new{type="function_call_output",output="server_overloaded"}));
+            s.Read(Line(9,"event_msg",new{type="error",error=new{codex_error_info="server_overloaded"}}));
+            Check(s.CapacityBlockedAt is null,"quoted output or a non-terminal retry became a blocked turn");
+            s.Read(Capacity(10,"c"));s.Read(Line(10,"response_item",new{type="reasoning"}));s.Read(Usage(5,"new"));
+            Check(s.CapacityBlockedAt==T.AddMinutes(10),"same-time/stale response cleared capacity");
+        });
+        Test("capacity: cold terminal event is retained beyond two hours; model changes and compaction are not recovery",()=>
+        {
+            var s=new ChatCacheState(ChatPlatform.Codex,"chat");s.Read(Capacity(0,"a"));
+            Check(s.View(T.AddHours(3)) is {CapacityBlocked:true} v&&!v.Expired(T.AddHours(3)),"cold or old blocked chat folded/disappeared");
+            s.Read(Line(1,"turn_context",new{model="model-a"}));s.Read(Line(2,"turn_context",new{model="model-b"}));
+            s.Read(Line(3,"compacted"));Check(s.View(T.AddMinutes(4)) is {CapacityBlocked:true,Compacted:false},"model/compact cleared or hid the warning");
+            s.Read(Line(4,"response_item",new{type="reasoning"}));
+            Check(s.View(T.AddMinutes(4)) is {CapacityBlocked:false,Running:true},"response after a missing retry start resurrected retained warning");
+            s.Read(Start(4.5,"retry"));s.Read(Capacity(4.75,"retry"));
+            s.Read(Start(5,"b"));s.Read(Line(6,"response_item",new{type="message",role="assistant",content=new[]{new{type="output_text",text="back"}}}));
+            Check(s.View(T.AddMinutes(7)) is {CapacityBlocked:false},"assistant output did not resume");
+            s.Read(Line(8,"session_meta",new{source=new{subagent=new{}}}));s.Read(Capacity(9,"b"));
+            Check(s.View(T.AddMinutes(10)) is null,"subagent warning leaked to main chat list");
+        });
+        Test("capacity: journal restart preserves unresolved metadata and fresh recovery overrides retained warning",()=>
+        {
+            var root=Temp();try
+            {
+                var entry=new ChatCacheEntry(ChatPlatform.Codex,"chat","Task",T,120,"fixture",false,ActivityAt:T.AddMinutes(2),CapacityBlockedAt:T.AddMinutes(2));
+                var journal=new ChatSessionHistory(root);journal.Capture([entry],T.AddMinutes(3));journal.Flush(T.AddMinutes(3));
+                var saved=new ChatSessionHistory(root).Current(T.AddMinutes(3))!.Chats.Single().Last;
+                Check(saved.CapacityBlockedAt==entry.CapacityBlockedAt,"restart forgot unresolved failure");
+                var resumed=entry with{CapacityBlockedAt=null,ActivityAt=T.AddMinutes(4),Running=true};
+                Check(!ChatListPolicy.Merge([resumed],[saved],T.AddMinutes(5)).Single().CapacityBlocked,"retained warning overrode observed recovery");
+            }finally{Directory.Delete(root,true);}
+        });
         Test("cache: terminal Claude rejection restores the last real cache clock and never changes model or TTL",()=>
         {
             string Error(double min,string id="error")=>JsonSerializer.Serialize(new{type="assistant",timestamp=T.AddMinutes(min),requestId=id,isApiErrorMessage=true,message=new{model="<synthetic>",stop_reason="stop_sequence"}});

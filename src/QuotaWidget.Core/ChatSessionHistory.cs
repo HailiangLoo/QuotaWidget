@@ -67,10 +67,11 @@ public sealed class ChatSessionHistory
                 var at = e.ActivityAt ?? e.RequestAt;
                 if (e.RequestAt < at)
                     result.Add(e with { ActivityAt = e.RequestAt, Running = false, ActivityUncertain = false, Compacted = false,
-                        CompactedAt = e.CompactedAt <= e.RequestAt ? e.CompactedAt : null });
+                        CompactedAt = e.CompactedAt <= e.RequestAt ? e.CompactedAt : null, CapacityBlockedAt = null });
                 if (e.CompactedAt is { } compact && compact < at && compact != e.RequestAt)
                     result.Add(e with { RequestAt = e.RequestAt < compact ? e.RequestAt : compact, ActivityAt = compact,
-                        Running = false, ActivityUncertain = false, AwaitingUsage = false, Compacted = true });
+                        Running = false, ActivityUncertain = false, AwaitingUsage = false, Compacted = true,
+                        CapacityBlockedAt = e.CapacityBlockedAt <= compact ? e.CapacityBlockedAt : null });
                 result.Add(e); return result;
             }).OrderBy(e => e.ActivityAt ?? e.RequestAt);
             foreach (var e in observations)

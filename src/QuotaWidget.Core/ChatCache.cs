@@ -7,14 +7,17 @@ namespace QuotaWidget.Core;
 public enum ChatPlatform { Codex, Claude }
 public sealed record ChatCacheEntry(ChatPlatform Platform, string Id, string Title, DateTimeOffset RequestAt,
     int WindowMinutes, string Basis, bool Running, string? Project = null, bool AwaitingUsage = false, bool ActivityUncertain = false,
-    DateTimeOffset? CompactedAt = null, bool Compacted = false, DateTimeOffset? ActivityAt = null)
+    DateTimeOffset? CompactedAt = null, bool Compacted = false, DateTimeOffset? ActivityAt = null,
+    DateTimeOffset? CapacityBlockedAt = null)
 {
     public double AgeMinutes(DateTimeOffset now) => Math.Max(0, (now - RequestAt).TotalMinutes);
     // Codex uses a display-retention window, including entries saved by older versions.
     [System.Text.Json.Serialization.JsonIgnore]
     public int DisplayWindowMinutes => Platform == ChatPlatform.Codex ? 120 : WindowMinutes;
-    public bool WorkPending => !Compacted && (Running || ActivityUncertain);
-    public bool Expired(DateTimeOffset now) => !WorkPending && AgeMinutes(now) >= DisplayWindowMinutes;
+    [System.Text.Json.Serialization.JsonIgnore]
+    public bool CapacityBlocked => Platform == ChatPlatform.Codex && CapacityBlockedAt is not null;
+    public bool WorkPending => !CapacityBlocked && !Compacted && (Running || ActivityUncertain);
+    public bool Expired(DateTimeOffset now) => !CapacityBlocked && !WorkPending && AgeMinutes(now) >= DisplayWindowMinutes;
     public int Urgency(DateTimeOffset now) => WorkPending || Platform == ChatPlatform.Codex ? 0 : Expired(now) ? 3 : AgeMinutes(now) / WindowMinutes >= 2.0 / 3 ? 2 : AgeMinutes(now) / WindowMinutes >= 1.0 / 3 ? 1 : 0;
 }
 
@@ -30,6 +33,7 @@ public sealed class ChatCacheState(ChatPlatform platform, string id)
     public DateTimeOffset Boundary { get; private set; }
     public DateTimeOffset ResetAt { get; private set; }
     public DateTimeOffset? CompactedAt { get; private set; }
+    public DateTimeOffset? CapacityBlockedAt { get; private set; }
     DateTimeOffset? _beforeCompactRequest;
     public bool Excluded { get; private set; }
     DateTimeOffset _activity;
@@ -57,16 +61,17 @@ public sealed class ChatCacheState(ChatPlatform platform, string id)
 
     public ChatCacheEntry? View(DateTimeOffset now)
     {
-        var compacted = CompactedAt is { } compactAt && compactAt == ResetAt && compactAt >= LastObserved && RequestAt is null;
-        var request = RequestAt ?? (compacted ? _beforeCompactRequest ?? CompactedAt : null);
+        var compacted = CapacityBlockedAt is null && CompactedAt is { } compactAt && compactAt == ResetAt && compactAt >= LastObserved && RequestAt is null;
+        var request = RequestAt ?? (compacted ? _beforeCompactRequest ?? CompactedAt : CapacityBlockedAt);
         if (Excluded || request is not { } at || at > now.AddMinutes(1) || _activity > now.AddMinutes(1) || now - (_activity > at ? _activity : at) > TimeSpan.FromHours(6)) return null;
         // Silence is not an end event. A very old unmatched start becomes unconfirmed,
         // never an idle/expired claim. Long thinking and tool waits survive the old 2m cutoff.
-        var uncertain = _running && now - _activity >= Core.WorkActivity.UnconfirmedAfter;
+        var uncertain = CapacityBlockedAt is null && _running && now - _activity >= Core.WorkActivity.UnconfirmedAfter;
         return new(Platform, Id, Title ?? $"{Platform} · {Id[..Math.Min(8, Id.Length)]}", at, _ttl,
             _awaitingUsage ? "新请求已开始，缓存用量待确认；此处先按请求时间计时。\n" + _basis : _basis,
-            !compacted && _running && !uncertain, AwaitingUsage: !compacted && _awaitingUsage, ActivityUncertain: !compacted && uncertain,
-            CompactedAt: CompactedAt, Compacted: compacted, ActivityAt: _activity > LastObserved ? _activity : LastObserved > at ? LastObserved : at);
+            !compacted && CapacityBlockedAt is null && _running && !uncertain, AwaitingUsage: !compacted && _awaitingUsage, ActivityUncertain: !compacted && uncertain,
+            CompactedAt: CompactedAt, Compacted: compacted, ActivityAt: _activity > LastObserved ? _activity : LastObserved > at ? LastObserved : at,
+            CapacityBlockedAt: CapacityBlockedAt);
     }
 
     void Compact(DateTimeOffset at, bool preservePending)
@@ -132,7 +137,9 @@ public sealed class ChatCacheState(ChatPlatform platform, string id)
                         if (at >= _activity && (turnId is null || !_endedTurns.Contains(turnId)))
                         { _turnId = turnId; _activity = at; _running = true; Input(at); }
                     }
-                    else FinishWork(at, turnId);
+                    else if (FinishWork(at, turnId) && kind == "task_complete" && at >= ResetAt &&
+                        S(O(p, "error"), "codex_error_info") == "server_overloaded")
+                        CapacityBlockedAt = at;
                 }
                 if (type == "response_item")
                 {
@@ -140,6 +147,7 @@ public sealed class ChatCacheState(ChatPlatform platform, string id)
                     // First response activity gives an estimate if the preceding request boundary was outside the tail.
                     else if (kind is "reasoning" or "function_call" or "custom_tool_call" || kind == "message" && S(p, "role") == "assistant")
                     {
+                        CodexResponded(at);
                         if (Boundary <= LastObserved) Boundary = at;
                         if (_running || _workEndedAt == default) WorkActivity(at);
                     }
@@ -148,7 +156,8 @@ public sealed class ChatCacheState(ChatPlatform platform, string id)
                 {
                     _nativeUsage = true;
                     var usage = O(p, "usage");
-                    if (N(usage, "input_tokens") > 0 && Observe(at, S(p, "response_id"), usage) && _running) WorkActivity(at);
+                    if (N(usage, "input_tokens") > 0 && Observe(at, S(p, "response_id"), usage))
+                    { CodexResponded(at); if (_running) WorkActivity(at); }
                 }
                 else if (!_nativeUsage && type == "event_msg" && kind == "token_count")
                 {
@@ -160,7 +169,8 @@ public sealed class ChatCacheState(ChatPlatform platform, string id)
                         var usage = O(info, "last_token_usage");
                         // Post-compaction/context summaries carry old cumulative totals
                         // with zero request input. They establish a baseline, not a request.
-                        if (N(usage, "input_tokens") > 0 && Observe(at, "fallback-" + total, usage) && _running) WorkActivity(at);
+                        if (N(usage, "input_tokens") > 0 && Observe(at, "fallback-" + total, usage))
+                        { CodexResponded(at); if (_running) WorkActivity(at); }
                     }
                 }
             }
@@ -256,16 +266,30 @@ public sealed class ChatCacheState(ChatPlatform platform, string id)
         _running = true;
     }
 
-    void FinishWork(DateTimeOffset at, string? turnId = null)
+    // Starting a retry, sending input, compaction and tool results do not prove
+    // that the model accepted work. Only new model output/usage clears capacity.
+    void CodexResponded(DateTimeOffset at)
+    {
+        if (CapacityBlockedAt is { } blocked && at > blocked && at >= _activity && at >= ResetAt)
+        {
+            CapacityBlockedAt = null;
+            // A bounded cold tail can miss the retry start. The response itself
+            // still proves new work, and must supersede a retained warning.
+            if (RequestAt is null) RequestAt = Boundary = at;
+            WorkActivity(at);
+        }
+    }
+
+    bool FinishWork(DateTimeOffset at, string? turnId = null)
     {
         if (turnId is not null)
         {
-            if (!_endedTurns.Add(turnId)) return;
+            if (!_endedTurns.Add(turnId)) return false;
             _endedTurnOrder.Enqueue(turnId);
             while (_endedTurnOrder.Count > 128) _endedTurns.Remove(_endedTurnOrder.Dequeue());
         }
         // A late completion from an older turn must not stop a newer one.
-        if (at < _activity || turnId is not null && _turnId is not null && turnId != _turnId) return;
+        if (at < _activity || turnId is not null && _turnId is not null && turnId != _turnId) return false;
         _activity = _workEndedAt = at;
         _running = false;
         _turnId = null;
@@ -276,6 +300,7 @@ public sealed class ChatCacheState(ChatPlatform platform, string id)
             && LastObserved <= compact && (RequestAt is null || RequestAt <= compact))
         { RequestAt = _pendingAt = null; _awaitingUsage = false; }
         // Otherwise RequestAt stays untouched: finishing work never renews server cache.
+        return true;
     }
 
     void Input(DateTimeOffset at)
