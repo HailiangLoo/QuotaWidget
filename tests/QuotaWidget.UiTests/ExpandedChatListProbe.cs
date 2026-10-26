@@ -69,6 +69,7 @@ static class ExpandedChatListProbe
             // Changing layouts must reuse the same order and minute budget,
             // rather than restarting a second sort policy or cooldown.
             var compactRows=C<StackPanel>("CompactChatRows");
+            var compactViewport=C<ScrollViewer>("CompactChatViewport");
             string[] CompactOrder()=>compactRows.Children.Cast<UIElement>().Select(Name).ToArray();
             void Mode(bool compact,int seconds)
             {
@@ -79,8 +80,8 @@ static class ExpandedChatListProbe
             Check(CompactOrder().SequenceEqual(fullOrder),"compact changed the shared order");
             data[0]=data[0] with{RequestAt=now.AddMinutes(-119.6)};Tick(150);
             Check(CompactOrder().SequenceEqual(fullOrder),"switching to compact reset the minute budget");
-            body.Focusable=true;Keyboard.Focus(body);Layout(false);
-            Check(body.IsKeyboardFocusWithin,"compact focus fixture failed");Tick(185);
+            compactViewport.Focusable=true;Keyboard.Focus(compactViewport);Layout(false);
+            Check(compactViewport.IsKeyboardFocusWithin,"compact focus fixture failed");Tick(185);
             Check(CompactOrder().SequenceEqual(fullOrder),"focused compact list reordered during interaction");
             Keyboard.Focus(C<System.Windows.Controls.Primitives.ButtonBase>("SettingsButton"));Tick(186);
             Check(CompactOrder().First()=="codex-warning"&&CompactOrder().Last()=="running","compact did not use the same idle-duration policy");
@@ -91,6 +92,31 @@ static class ExpandedChatListProbe
             data[0]=data[0] with{RequestAt=now.AddMinutes(-1)};Tick(200);
             Check(Order().SequenceEqual(compactOrder),"returning to expanded reset the minute budget");
             Tick(247);Check(Order().First()=="claude-hour","shared cooldown did not expire across layouts");
+            foreach(var count in new[]{0,2,5,8,20})foreach(var scale in new[]{1d,1.25d})
+            {
+                model.Settings.UiScale=scale;
+                Set("_cacheEntries",Enumerable.Range(0,count).Select(i=>Entry("compact-work-"+i,10,running:true)).ToArray());
+                model.Settings.CompactMode=true;typeof(MainWindow).GetMethod("ApplyCompactLayout",flags)!.Invoke(window,null);Layout();
+                compactViewport.ScrollToTop();Layout(false);
+                Check(compactRows.Children.Count==count,"compact scrolling lost overflow chats");
+                Check(compactViewport.ActualHeight<=111&&body.ScrollableHeight<1,"compact list exceeded five rows or made the entire widget scroll");
+                var arrow=C<System.Windows.Controls.Primitives.ToggleButton>("CompactChatListToggle");var header=(Grid)arrow.Parent;
+                Check(Math.Abs(arrow.TransformToAncestor(header).Transform(new Point(arrow.ActualWidth/2,0)).X-header.ActualWidth/2)<1,"compact disclosure arrow is not centered");
+                if(count<=5){Check(compactViewport.ScrollableHeight<1,"short compact list acquired unnecessary scrolling");continue;}
+                Check(Math.Abs(compactViewport.ViewportHeight-110)<1&&compactViewport.ComputedVerticalScrollBarVisibility==Visibility.Visible,"overflow does not show a five-row scrollbar");
+                var meter=C<FrameworkElement>("MeterGrid");var meterPosition=meter.TransformToAncestor(window).Transform(new Point());
+                var rate=C<FrameworkElement>("CompactRates");var ratePosition=rate.TransformToAncestor(window).Transform(new Point());
+                if(scale==1)inspect?.Invoke(window,$"compact-{count}-top");
+                compactViewport.ScrollToBottom();Layout(false);
+                var last=(FrameworkElement)compactRows.Children[^1];var bounds=last.TransformToAncestor(compactViewport).TransformBounds(new Rect(last.RenderSize));
+                Check(bounds.Top>=-1&&bounds.Bottom<=compactViewport.ViewportHeight+1,"compact final chat is unreachable");
+                var offset=compactViewport.VerticalOffset;window.RenderCache();Layout(false);
+                Check(Math.Abs(compactViewport.VerticalOffset-offset)<1,"refresh reset compact scroll offset");
+                var wheel=new MouseWheelEventArgs(Mouse.PrimaryDevice,0,-120){RoutedEvent=Mouse.MouseWheelEvent};compactViewport.RaiseEvent(wheel);Layout(false);
+                Check(wheel.Handled&&body.VerticalOffset==0&&meter.TransformToAncestor(window).Transform(new Point())==meterPosition&&rate.TransformToAncestor(window).Transform(new Point())==ratePosition,"compact wheel escaped to meters/rates");
+                if(scale==1)inspect?.Invoke(window,$"compact-{count}-bottom");
+            }
+            model.Settings.CompactMode=false;typeof(MainWindow).GetMethod("ApplyCompactLayout",flags)!.Invoke(window,null);
             foreach(var count in new[]{8,20})foreach(var height in new[]{360d,600d,700d,1000d})foreach(var scale in new[]{1d,1.25d})
             {
                 model.Settings.Height=height;model.Settings.UiScale=scale;
@@ -143,6 +169,8 @@ static class ExpandedChatListProbe
             }
             CheckCapacity(C<StackPanel>("CompactChatRows"));inspect?.Invoke(window,"capacity-compact");
             Mode(false,0);CheckCapacity(rows);Check(!archived.Children.Cast<UIElement>().Select(Name).Contains(blocked.Title),"blocked chat also appeared in archive");
+            var fullArrow=C<System.Windows.Controls.Primitives.ToggleButton>("ChatListToggle");var fullHeader=(Grid)fullArrow.Parent;
+            Check(Math.Abs(fullArrow.TransformToAncestor(fullHeader).Transform(new Point(fullArrow.ActualWidth/2,0)).X-fullHeader.ActualWidth/2)<1,"full disclosure arrow is not centered");
             inspect?.Invoke(window,"capacity-full");
             void Disclosure(string name)
             {
@@ -181,6 +209,7 @@ static class ExpandedChatListProbe
             model.Settings.CacheRemindersEnabled=true;
             model.Settings.ChatListCollapsed=false;
             Set("_opts",opts);
+            Console.WriteLine("PASS: centered arrows in both layouts; compact 0/2/5/8/20 chats at two scales, five-row cap, final-row reachability, preserved scroll offset, local wheel and fixed quota/rate positions.");
             Console.WriteLine("PASS: arrow collapses/expands only chat region, persisted shared state across layouts, compact auto-height/full height preserved, red capacity arrow and hidden-list notification selection passed.");
             Console.WriteLine("PASS: capacity stays red/visible in full and compact, recovery redraws immediately, normal timers stay green; isolated notification batching/deduplication/recurrence and snapshot/disabled suppression passed.");
             Console.WriteLine("PASS: chats scroll locally; 8/20 rows × four heights × two scales stay reachable, meters/charts stay fixed, wheel stops locally, archive stays reachable; both layouts share longest-idle-first ordering, stable ties and minute cooldown, preserve them across switches, and defer during interaction.");

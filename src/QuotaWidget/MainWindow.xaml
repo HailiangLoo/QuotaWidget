@@ -205,13 +205,18 @@
             <Border x:Name="CompactChats">
               <StackPanel>
                 <Grid Height="16">
-                  <Border Background="{DynamicResource Line}" Height="1" Margin="0,0,23,0" VerticalAlignment="Center" IsHitTestVisible="False" />
-                  <ToggleButton x:Name="CompactChatListToggle" Style="{StaticResource ChatListToggle}" HorizontalAlignment="Right" Content="⌄" Click="ChatListToggle_Click" />
+                  <Grid.ColumnDefinitions><ColumnDefinition /><ColumnDefinition Width="Auto" /><ColumnDefinition /></Grid.ColumnDefinitions>
+                  <Border Background="{DynamicResource Line}" Height="1" Margin="0,0,4,0" VerticalAlignment="Center" IsHitTestVisible="False" />
+                  <ToggleButton x:Name="CompactChatListToggle" Grid.Column="1" Style="{StaticResource ChatListToggle}" Content="⌃" Click="ChatListToggle_Click" />
+                  <Border Grid.Column="2" Background="{DynamicResource Line}" Height="1" Margin="4,0,0,0" VerticalAlignment="Center" IsHitTestVisible="False" />
                 </Grid>
+                <!-- Five dense rows (5 × 22); the list scrolls independently. -->
+                <ScrollViewer x:Name="CompactChatViewport" MaxHeight="110" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" PanningMode="VerticalOnly">
                 <StackPanel x:Name="CompactChatBody">
                 <TextBlock x:Name="CompactChatsEmpty" local:Translate.Text="暂无计时 chat" FontSize="10" Foreground="{DynamicResource Muted}" Margin="1,2,0,0" />
                 <StackPanel x:Name="CompactChatRows" />
                 </StackPanel>
+                </ScrollViewer>
               </StackPanel>
             </Border>
           </StackPanel>
@@ -283,8 +288,10 @@
           <Border x:Name="CachePanel" Margin="0,8,0,0">
             <StackPanel>
             <Grid Height="16">
-              <Border Background="{DynamicResource Line}" Height="1" Margin="0,0,23,0" VerticalAlignment="Center" IsHitTestVisible="False" />
-              <ToggleButton x:Name="ChatListToggle" Style="{StaticResource ChatListToggle}" HorizontalAlignment="Right" Content="⌄" Click="ChatListToggle_Click" />
+              <Grid.ColumnDefinitions><ColumnDefinition /><ColumnDefinition Width="Auto" /><ColumnDefinition /></Grid.ColumnDefinitions>
+              <Border Background="{DynamicResource Line}" Height="1" Margin="0,0,4,0" VerticalAlignment="Center" IsHitTestVisible="False" />
+              <ToggleButton x:Name="ChatListToggle" Grid.Column="1" Style="{StaticResource ChatListToggle}" Content="⌃" Click="ChatListToggle_Click" />
+              <Border Grid.Column="2" Background="{DynamicResource Line}" Height="1" Margin="4,0,0,0" VerticalAlignment="Center" IsHitTestVisible="False" />
             </Grid>
             <ScrollViewer x:Name="ChatViewport" MaxHeight="180" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" PanningMode="VerticalOnly">
             <StackPanel>

@@ -124,8 +124,8 @@ static class ScalingProbe
                 Check(C<StackPanel>("CompactChatRows").Children.Count==count,"compact fixture row count differs");
                 return C<Grid>("Outer").ActualHeight;
             }
-            var many=Rows(20);var two=Rows(2);var empty=Rows(0);var again=Rows(2);
-            Check(many>two+100&&two>empty&&Math.Abs(two-again)<1,"compact did not follow live row changes");
+            var many=Rows(20);var five=Rows(5);var two=Rows(2);var empty=Rows(0);var again=Rows(2);
+            Check(Math.Abs(many-five)<1&&many>two+60&&two>empty&&Math.Abs(two-again)<1,"compact did not cap at five rows or follow short live lists");
             var outer=C<Grid>("Outer");var body=C<StackPanel>("BodyContent");
             var bottom=body.TransformToAncestor(outer).Transform(new Point(0,body.ActualHeight)).Y;
             Check(outer.ActualHeight-bottom<2,"compact leaves space below its content");
@@ -134,7 +134,7 @@ static class ScalingProbe
             Rows(2);Check(outer.ActualHeight<230,"compact stayed at screen cap after rows disappeared");
             Click("CompactButton");Layout();Near(420,C<Grid>("Outer").Height,"compact auto-fit changed full-mode height");
             Set("_opts",opts);
-            Console.WriteLine("Compact content fit: 20→2→0→2 live rows shrink/grow without full render; legacy height ignored; bottom follows content; long lists scroll at cap and shrink again; full height retained.");
+            Console.WriteLine("Compact content fit: 20/5 share a five-row cap, 2→0→2 shrink/grow without full render; legacy height ignored; long lists scroll and shrink again; full height retained.");
             Console.WriteLine("Resize UI: all eight handles, full/compact, rate/cumulative, completion/cancel; physical HWND dimensions/opposite anchors, hit areas, no refresh during drag, history/inspector retention, limits, font size, scrolling and per-mode persistence passed.");
         }
         finally{window?.Close();Directory.Delete(root,true);}

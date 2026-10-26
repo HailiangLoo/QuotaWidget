@@ -413,11 +413,11 @@ public partial class MainWindow : Window
     {
         var collapsed=_model.Settings.ChatListCollapsed;
         var blocked=entries.Any(e=>e.CapacityBlocked);
-        ChatViewport.Visibility=CompactChatBody.Visibility=collapsed?Visibility.Collapsed:Visibility.Visible;
+        ChatViewport.Visibility=CompactChatViewport.Visibility=CompactChatBody.Visibility=collapsed?Visibility.Collapsed:Visibility.Visible;
         foreach(var button in new[]{ChatListToggle,CompactChatListToggle})
         {
             button.IsChecked=collapsed;
-            button.Content=collapsed?"›":"⌄";
+            button.Content=collapsed?"⌄":"⌃";
             button.Foreground=Theme.Brush(blocked?"Red":"Muted");
             var action=Loc.T(collapsed?"展开 chat 列表":"收起 chat 列表");
             button.ToolTip=action+(blocked?" · "+Loc.T("容量已满"):"");
@@ -443,8 +443,8 @@ public partial class MainWindow : Window
             .OrderBy(e => _chatOrder[ChatKey(e)]).ToList();
         // Longest idle timer first, with running chats last. Re-rank at most once
         // a minute; both layouts share stable ties, order and cooldown.
-        // Compact scrolling belongs to BodyViewport, including its scrollbar.
-        var viewport = _model.Settings.CompactMode ? BodyViewport : ChatViewport;
+        // Both layouts keep chat scrolling and interaction inside their list.
+        var viewport = _model.Settings.CompactMode ? CompactChatViewport : ChatViewport;
         if (_chatSortedAt == default || ((now - _chatSortedAt >= TimeSpan.FromMinutes(1) || now < _chatSortedAt) &&
             !viewport.IsMouseOver && !viewport.IsKeyboardFocusWithin && Mouse.LeftButton != MouseButtonState.Pressed))
         {
