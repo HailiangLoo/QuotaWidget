@@ -169,7 +169,7 @@ public partial class MainWindow : Window
         var available = AvailableRanges();
         var range = ChartRanges.Select(s.RangeMinutes, available);
         if (range != ChartRanges.All && range <= WidgetModel.Lookback.TotalMinutes)
-        { _model.ReleaseArchive(); _codex.ReleaseArchive(); }
+        { _model.ReleaseArchive(); if(!watchCodex)_codex.ReleaseArchive(); }
         var v = _model.BuildView(now, watchClaude?range:60);
         _codex.Settings.RangeMinutes = s.RangeMinutes;
         _codex.Settings.Smoothing = s.Smoothing;
@@ -177,7 +177,7 @@ public partial class MainWindow : Window
         _codex.Settings.IdleLinkMinutes = s.IdleLinkMinutes;
         _codex.Settings.Display = s.Display;
         _codex.Settings.PollIntervalSeconds = s.PollIntervalSeconds;
-        var cv = _codex.BuildView(now, watchCodex?range:60);
+        var cv = _codex.BuildView(now,watchCodex?range:60,allProfiles:watchCodex);
         var historyStart = v.Chart.EstimationStart < cv.Chart.EstimationStart ? v.Chart.EstimationStart : cv.Chart.EstimationStart;
         var dashboard = Dashboard.Combine(v, cv, s, now, _codex.LastEnvelope, range,
             _app.TrendSessionEdges(historyStart, now), _app.WorkTrendActivity(now));
@@ -723,14 +723,13 @@ public partial class MainWindow : Window
 
     void RenderHistory(bool force = false)
     {
-        if(force || _historyProfilesCurrent!=_codex.ProfileKey) RefreshHistoryProfiles();
         RenderSessionStart(DateTimeOffset.Now);
         TagText.Text = _model.DemoMode ? Loc.T("演示数据") : "";
         TagText.Visibility = _model.DemoMode ? Visibility.Visible : Visibility.Collapsed;
         var now=DateTimeOffset.Now;
         var date = _historyDay;
         var claudeDays=_model.CalendarMonth(_historyMonth,now);
-        var codexDays=_codex.CalendarMonth(_historyMonth,now,_historyCodexProfile);
+        var codexDays=_codex.CalendarMonth(_historyMonth,now,allProfiles:true);
         if(_opts.Demo && _opts.Scenario=="calendar")
         {
             IReadOnlyList<DayQuota> DemoDays(int salt) => Enumerable.Range(1,DateTime.DaysInMonth(_historyMonth.Year,_historyMonth.Month)).Select(d=>
@@ -742,8 +741,8 @@ public partial class MainWindow : Window
         }
         var monthSessions=_app.SessionsForMonth(_historyMonth);
         var current = _app.CurrentSession(DateTimeOffset.Now);
-        var signature = _historyMonth + "|" + date.Date + "|" + _historyCodexProfile + "|" + string.Join(";",monthSessions.Select(s=>$"{s.Id}:{s.End:O}:{s.Chats.Count}")) + "|" + _selectedSession + "|" + Theme.IsDark
-            + "|" + string.Join(";",claudeDays.Concat(codexDays).Select(d=>$"{d.Points}:{d.CoverageMinutes}:{d.HasGap}"));
+        var signature = _historyMonth + "|" + date.Date + "|" + string.Join(";",monthSessions.Select(s=>$"{s.Id}:{s.End:O}:{s.Chats.Count}")) + "|" + _selectedSession + "|" + Theme.IsDark
+            + "|" + string.Join(";",claudeDays.Concat(codexDays).Select(d=>$"{d.Points}:{d.CoverageMinutes}:{d.HasGap}:{RateEngine.FormatAmounts(d.Parts)}:{string.Join(";",d.ProfileChanges)}"));
         if (!force && signature == _historySignature) return;
         _historySignature = signature;
         RenderCalendar(claudeDays,codexDays,monthSessions);
@@ -797,12 +796,15 @@ public partial class MainWindow : Window
         NextMonthButton.Opacity=NextMonthButton.IsEnabled?1:.3;
         string Number(double? value) => value is not { } v ? "—" : v>=100 ? v.ToString("0",CultureInfo.InvariantCulture) : v.ToString("0.#",CultureInfo.InvariantCulture);
         double? Total(IReadOnlyList<DayQuota> days) => days.Any(d=>d.Points is not null) ? days.Sum(d=>d.Points??0) : null;
+        var parts=codex.SelectMany(d=>d.Parts).GroupBy(p=>(p.ProfileKey,p.Label)).Select(g=>new QuotaAmount(g.Key.ProfileKey,g.Key.Label,g.Sum(p=>p.Points))).ToArray();
+        HistoryProfileNote.Visibility=parts.Length>1?Visibility.Visible:Visibility.Collapsed;
+        HistoryProfileNote.Text=string.Join(" → ",parts.Select(p=>(p.Label??"Codex").Replace("Codex ","")))+" · "+Loc.T("│ 订阅切换；点数按当时档位");
         MonthQuotaSummary.Inlines.Clear();
         MonthQuotaSummary.Inlines.Add(new Run(Loc.T("已记录  ")){Foreground=Theme.Brush("Muted")});
         MonthQuotaSummary.Inlines.Add(new Run($"Claude {Number(Total(claude))}"){Foreground=Theme.Brush("Claude")});
         MonthQuotaSummary.Inlines.Add(new Run("   "));
-        MonthQuotaSummary.Inlines.Add(new Run($"Codex {Number(Total(codex))}"){Foreground=Theme.Brush("Violet")});
-        MonthQuotaSummary.ToolTip=Loc.T("本月已记录 · 各平台周额度点");
+        MonthQuotaSummary.Inlines.Add(new Run("Codex "+(parts.Length>1?RateEngine.FormatAmounts(parts):Number(Total(codex)))){Foreground=Theme.Brush("Violet")});
+        MonthQuotaSummary.ToolTip=Loc.T("本月已记录 · 各平台周额度点")+"\n"+string.Join("\n",parts.Select(p=>$"{p.Label} · {p.Points:0.##}"));
         var c=claude.ToDictionary(d=>d.Day); var x=codex.ToDictionary(d=>d.Day);
         var offset=((int)_historyMonth.DayOfWeek+6)%7;
         var first=_historyMonth.AddDays(-offset);
@@ -813,7 +815,7 @@ public partial class MainWindow : Window
             var day=first.AddDays(i); var own=day.Month==_historyMonth.Month; var future=day>DateTime.Today;
             var a=c.GetValueOrDefault(day)??DayQuota.Empty(day); var b=x.GetValueOrDefault(day)??DayQuota.Empty(day);
             var linked=sessions.Count(s=>s.Start.ToLocalTime().Date<=day&&s.End.ToLocalTime().Date>=day);
-            var hasRecord=a.Points is not null || b.Points is not null || linked>0;
+            var hasRecord=a.Points is not null || b.Parts.Count>0 || b.Points is not null || b.ProfileChanges.Count>0 || linked>0;
             var selected=day==_historyDay; var today=day==DateTime.Today;
             // Explicit text rows leave room for each baseline, including the selected border at fractional DPI.
             var stack=new Grid {Height=46};
@@ -825,12 +827,13 @@ public partial class MainWindow : Window
             var date=Text(day.Day.ToString(),own?"Ink":"Muted",11); date.FontWeight=hasRecord||today?FontWeights.SemiBold:FontWeights.Normal; header.Children.Add(date);
             if(linked>0&&own) header.Children.Add(new System.Windows.Shapes.Ellipse {Width=3,Height=3,Fill=Theme.Brush("Muted"),HorizontalAlignment=HorizontalAlignment.Right,VerticalAlignment=VerticalAlignment.Top,Margin=new Thickness(0,3,3,0)});
             stack.Children.Add(header);
+            if(b.ProfileChanges.Count>0&&own)header.Children.Add(new Border{Width=2,Height=10,Background=Theme.Brush("Violet"),HorizontalAlignment=HorizontalAlignment.Left,VerticalAlignment=VerticalAlignment.Center,Margin=new Thickness(2,0,0,0)});
             var claudeNumber=Text(!own||future?" ":Number(a.Points),a.Points is null?"Muted":"Claude",11);
-            var codexNumber=Text(!own||future?" ":Number(b.Points),b.Points is null?"Muted":"Violet",11);
+            var codexNumber=Text(!own||future?" ":b.Parts.Count>1?RateEngine.FormatAmounts(b.Parts).Replace(" / ","/"):Number(b.Points),b.Points is null&&b.Parts.Count==0?"Muted":"Violet",b.Parts.Count>1?8.5:11);
             Grid.SetRow(claudeNumber,1); Grid.SetRow(codexNumber,2); stack.Children.Add(claudeNumber); stack.Children.Add(codexNumber);
-            string Metric(string name,DayQuota d) => d.Points is { } points
+            string Metric(string name,DayQuota d) => (d.Parts.Count>1?string.Join("\n",d.Parts.Select(p=>$"{p.Label} · {p.Points:0.##} "+Loc.T("点"))):d.Points is { } points
                 ? Loc.F($"{name} {(d.SplitAtMidnight?"≈":"")}{points:0.##} 点 · {d.CoverageMinutes/60:0.#}h记录")+(d.HasGap?Loc.T(" · 缺采样"):"")
-                : name+Loc.T(" — · 无记录");
+                : name+Loc.T(" — · 无记录"))+ (d.ProfileChanges.Count>0?"\n"+string.Join("\n",d.ProfileChanges):"");
             var button=new Button {Style=(Style)FindResource("FlatButton"),Content=stack,Padding=new Thickness(0,2,0,2),HorizontalContentAlignment=HorizontalAlignment.Stretch,
                 IsEnabled=!future, ToolTip=Loc.F($"{day:yyyy/M/d} · {linked} 个使用段\n{Metric("Claude",a)}\n{Metric("Codex",b)}")};
             System.Windows.Automation.AutomationProperties.SetName(button,Loc.F($"{day:yyyy年M月d日}，{Metric("Claude",a)}，{Metric("Codex",b)}，{linked}个使用段"));

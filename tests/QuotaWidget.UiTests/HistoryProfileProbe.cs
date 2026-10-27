@@ -23,7 +23,7 @@ static class HistoryProfileProbe
             var paths=new DataPaths(root);new WidgetSettings{SetupCompleted=true,Language=language}.Save(paths.Settings);
             var cx=new DataPaths(Path.Combine(root,"codex"));
             new WidgetSettings{LastSourceId=CodexUsageSource.SourceId,LastProfileKey="new"}.Save(cx.Settings);
-            var now=DateTimeOffset.Now;var first=new DateTimeOffset(new DateTime(now.Year,now.Month,1),now.Offset);
+            var now=DateTimeOffset.Now;var first=now.AddMinutes(-55);
             void Write(string profile,string plan,DateTimeOffset at,double used)
             {
                 var r=new HistoryRecord(CodexUsageSource.SourceId,profile,plan,at,Statuses.Partial,300,
@@ -31,7 +31,7 @@ static class HistoryProfileProbe
                 var dir=new HistoryStore(cx,false).ProfileDir(r.SourceId,profile);Directory.CreateDirectory(dir);
                 File.AppendAllText(Path.Combine(dir,at.ToLocalTime().ToString("yyyy-MM-dd")+".jsonl"),HistoryStore.FormatLine(r)+"\n");
             }
-            Write("old","Codex plus",first,10);Write("old","Codex plus",first.AddMinutes(5),15);
+            for(var i=0;i<10;i++)Write("old","Codex plus",first.AddMinutes(i*5),10+i);
             Write("new","Codex promax",now.AddMinutes(-5),38);Write("new","Codex promax",now,42);
             var model=new WidgetModel(paths,false){ReadOnly=true};model.Initialize();model.Settings.CompactMode=false;
             var codex=new WidgetModel(cx,false){ReadOnly=true};codex.Initialize();
@@ -43,29 +43,32 @@ static class HistoryProfileProbe
             T C<T>(string key)=>(T)window.FindName(key);
             void Check(bool yes,string why){if(!yes)throw new Exception(why);}
             C<Button>("HistoryButton").RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
-            var choices=C<ComboBox>("HistoryCodexProfile");
             string Summary()=>string.Concat(C<TextBlock>("MonthQuotaSummary").Inlines.OfType<Run>().Select(r=>r.Text));
             void Snapshot(string name)
             {
                 if(output is null)return;
                 Directory.CreateDirectory(output);
                 var content=(FrameworkElement)window.Content;
-                content.Measure(new Size(280,760));content.Arrange(new Rect(0,0,280,760));content.UpdateLayout();
+                content.Measure(new Size(window.Width,760));content.Arrange(new Rect(0,0,window.Width,760));content.UpdateLayout();
                 window.SaveSnapshot(Path.Combine(output,name+".png"),2);
             }
-            Check(choices.Visibility==Visibility.Visible&&choices.Items.Count==2,"old profile not reachable");
-            Check(Summary().Contains("Codex 4"),"current profile monthly points wrong");
-            Snapshot("synthetic-current");
-            choices.SelectedItem=choices.Items.OfType<ComboBoxItem>().Single(i=>(string)i.Tag=="old");
-            Check(Summary().Contains("Codex 5")&&!Summary().Contains("Codex 9"),"selection mixed or lost historical points");
+            Check(window.FindName("HistoryCodexProfile") is null,"archive still requires profile switching");
+            Check(Summary().Contains("Codex 9 / 4"),"all-history calendar lost a profile or combined its units");
             window.Render();
-            Check((string)((ComboBoxItem)choices.SelectedItem).Tag=="old"&&Summary().Contains("Codex 5"),"render reset archive selection");
-            Snapshot("synthetic-old");
+            Check(Summary().Contains("Codex 9 / 4")&&C<TextBlock>("HistoryProfileNote").Visibility==Visibility.Visible,"render lost timeline or boundary legend");
+            Snapshot("synthetic-calendar");
             Check(codex.ProfileKey=="new"&&codex.BuildView(now).SummaryTotal==4,"archive changed live model");
-            choices.SelectedItem=choices.Items.OfType<ComboBoxItem>().Single(i=>(string)i.Tag=="new");
-            Check(Summary().Contains("Codex 4"),"return to current reused wrong month cache");
+            model.Settings.RangeMinutes=ChartRanges.All;model.Settings.Smoothing=false;
+            C<Button>("HistoryButton").RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));window.Render();
+            var timeline=C<RateChart>("Chart").View!.Codex!;
+            Check(timeline.Segments.Any(s=>s.ProfileKey=="old"&&s.Valid)&&timeline.Segments.Any(s=>s.ProfileKey=="new"&&s.Valid),"full chart omitted old or current history");
+            Check(timeline.Segments.Any(s=>s.Issue==SegmentIssue.ProfileChange),"full chart has no profile boundary");
+            Snapshot("synthetic-timeline");
+            model.Settings.CodexChartMode="cumulative";window.Render();
+            Check(C<RateChart>("Chart").View!.CodexCumulative!.Segments.Last().To==4,"cumulative full chart crossed subscription units");
+            Snapshot("synthetic-cumulative");
             window.Close();
-            Console.WriteLine("PASS: history profile selector exposes old allowance records, keeps each total separate, persists through renders and leaves live meters/collection unchanged.");
+            Console.WriteLine("PASS: calendar and full chart show all profiles together, expose subscription boundaries, retain separate amounts, and leave live meters/collection unchanged.");
         }
         finally
         {

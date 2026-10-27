@@ -31,6 +31,7 @@ static class TrendContinuity
             // positive increments over this shared context. It does not create quota.
             segments.Add(new(){Start=s.Start,End=s.End,Delta=bridge?0:s.Delta,
                 Issue=bridge?SegmentIssue.None:s.Issue,Label=s.Label,Group=group,
+                ProfileKey=s.ProfileKey,ProfileLabel=s.ProfileLabel,
                 CounterResetOnly=s.CounterResetOnly,StartsAtCapacity=s.StartsAtCapacity});
             previous=s;
         }

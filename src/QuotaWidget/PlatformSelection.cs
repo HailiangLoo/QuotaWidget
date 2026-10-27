@@ -8,7 +8,7 @@ namespace QuotaWidget.App;
 
 public partial class MainWindow
 {
-    int[] AvailableRanges()=>ChartRanges.Available(_model.Settings.Monitors(ChatPlatform.Claude)?_model.Bounds:null,_model.Settings.Monitors(ChatPlatform.Codex)?_codex.Bounds:null);
+    int[] AvailableRanges()=>ChartRanges.Available(_model.Settings.Monitors(ChatPlatform.Claude)?_model.Bounds:null,_model.Settings.Monitors(ChatPlatform.Codex)?_codex.TimelineBounds:null);
     void ApplyPlatformLayout()
     {
         var s=_model.Settings;var claude=s.Monitors(ChatPlatform.Claude);var codex=s.Monitors(ChatPlatform.Codex);

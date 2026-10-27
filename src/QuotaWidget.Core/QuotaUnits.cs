@@ -16,6 +16,7 @@ public static class QuotaUnits
         Segments = source.Segments.Select(s => new RateSegment
         {
             Start = s.Start, End = s.End, Delta = s.Delta * factor,
+            ProfileKey=s.ProfileKey,ProfileLabel=s.ProfileLabel,
             Issue = s.Issue, Label = s.Label, Group = s.Group,
             CounterResetOnly=s.CounterResetOnly,StartsAtCapacity=s.StartsAtCapacity,
         }).ToList(),

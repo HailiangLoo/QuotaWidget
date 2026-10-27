@@ -48,7 +48,8 @@ static class FloatingResetTests
             Reset(a,Sample(5,0,at.AddDays(14)),"unrelated deadline jump ignored");
             Reset(Sample(0,2),Sample(5,3),"active deadline drift ignored");
             Reset(a with {SourceId="claude-oauth-usage"},b with {SourceId="claude-oauth-usage"},"Claude behavior changed");
-            Reset(a,b with {ProfileKey="different"},"cross-profile exception");
+            var changed=RateEngine.Build([a,b with {ProfileKey="different"}],SeriesKey.Total,[]);
+            Check(changed.Segments.Single().Issue==SegmentIssue.ProfileChange&&RateEngine.SumRange(changed,a.T,b.T).CoverageMinutes==0,"cross-profile empty window accepted as continuous");
             var x=a with {Snapshot=a.Snapshot with {Limits=a.Snapshot.Limits with {AllWeek=a.Snapshot.Limits.AllWeek! with {WindowId="first"}}}};
             var y=b with {Snapshot=b.Snapshot with {Limits=b.Snapshot.Limits with {AllWeek=b.Snapshot.Limits.AllWeek! with {WindowId="second"}}}};
             Reset(x,y,"explicit window identity ignored");

@@ -19,6 +19,10 @@ The recent-hour rate ends at the latest reading, then picks a continuous earlier
 
 The cumulative stroke connects known sampling endpoints. It does not reveal the exact moment an increment occurred inside an interval.
 
+## Subscription boundaries
+
+The full Codex chart and history calendar display all stored profiles on one timeline. Each counter difference is computed only within the same source, profile and plan. A transition is marked at the first new reading; its precise occurrence within the sampling interval is unknown. No rate, idle bridge or quota difference crosses it. Cumulative quota curves restart there. Headers, mixed days and monthly totals show the native amounts in profile order, separated by `/`; hover identifies each plan. These percentages are not converted to the current allowance. Credit balances keep their original unit and existing discontinuity rules. The live quota meters, recent-hour compact view and chat calibration retain the current profile; historical display does not alter records or enlarge the live dedupe index.
+
 ## Credits
 
 The existing official `account/rateLimits/read` query can return a decimal credit balance in the Codex bucket. It is separate from earned rate-limit resets; the widget never redeems a reset or purchases credits. [Protocol](https://learn.chatgpt.com/docs/app-server); [pricing](https://learn.chatgpt.com/docs/pricing).

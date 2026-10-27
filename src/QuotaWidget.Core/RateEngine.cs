@@ -2,11 +2,13 @@ namespace QuotaWidget.Core;
 
 public enum SeriesKey { Total, Fable, Credits }
 
-public enum SegmentIssue { None, Missing, UnknownWindow, Reset, Decrease, Gap }
+public enum SegmentIssue { None, Missing, UnknownWindow, Reset, Decrease, Gap, ProfileChange }
 
 /// <summary>The interval between two consecutive stored observations, for one bucket.</summary>
 public sealed class RateSegment
 {
+    public string? ProfileKey { get; init; }
+    public string? ProfileLabel { get; init; }
     public required DateTimeOffset Start { get; init; }
     public required DateTimeOffset End { get; init; }
     /// <summary>Increase in this series' units; native in the engine, converted only in Dashboard. Meaningful when Valid.</summary>
@@ -57,6 +59,7 @@ public sealed class SeriesData
 }
 
 public sealed record RangeSum(double Delta, double CoverageMinutes);
+public sealed record QuotaAmount(string? ProfileKey,string? Label,double Points);
 
 public sealed record CumulativeAverage(DateTimeOffset From, DateTimeOffset To, double Delta, bool IncludesGap)
 {
@@ -108,10 +111,10 @@ public static class RateEngine
     }
 
     /// <summary>Power and app events always count; collection failures only for this source and profile.</summary>
-    public static List<AppEvent> RelevantEvents(IEnumerable<AppEvent> events, string? sourceId, string? profileKey) =>
+    public static List<AppEvent> RelevantEvents(IEnumerable<AppEvent> events,string? sourceId,string? profileKey,IReadOnlySet<string>? profiles=null) =>
         events.Where(e => e.Type != EventTypes.CollectFail ||
                           ((e.SourceId is null || e.SourceId == sourceId) &&
-                           (e.ProfileKey is null || e.ProfileKey == "unknown" || e.ProfileKey == profileKey)))
+                           (e.ProfileKey is null || e.ProfileKey == "unknown" || e.ProfileKey == profileKey || profiles?.Contains(e.ProfileKey)==true)))
               .ToList();
 
     public static SeriesData Build(IReadOnlyList<HistoryRecord> records, SeriesKey key, IReadOnlyList<AppEvent> events)
@@ -133,7 +136,9 @@ public static class RateEngine
 
             SegmentIssue issue;
             string? structural = null;
-            if (la is null || lb is null) { issue = SegmentIssue.Missing; structural = "缺指标"; }
+            if(a.SourceId!=b.SourceId||a.ProfileKey!=b.ProfileKey||a.PlanLabel!=b.PlanLabel)
+            {issue=SegmentIssue.ProfileChange;structural=a.PlanLabel==b.PlanLabel?"账号或套餐变化":$"{a.PlanLabel} → {b.PlanLabel}";anchor=lb;}
+            else if (la is null || lb is null) { issue = SegmentIssue.Missing; structural = "缺指标"; }
             else if (la.WindowMode != WindowModes.Fixed || lb.WindowMode != WindowModes.Fixed) { issue = SegmentIssue.UnknownWindow; structural = "口径未确认"; }
             else if (!emptyContinuation && !SameWindow(la, lb)) { issue = SegmentIssue.Reset; structural = "重置"; }
             else if (!emptyContinuation && anchor is not null && !SameWindow(anchor, lb)) { issue = SegmentIssue.Reset; structural = "周期变化"; }
@@ -153,6 +158,7 @@ public static class RateEngine
             string? label = issue == SegmentIssue.None ? null : structural ?? eventLabel ?? "缺口";
             var delta = la is not null && lb is not null ? lb.UsedPercent - la.UsedPercent : 0;
             segments.Add(new RateSegment { Start = a.T, End = b.T, Delta = delta, Issue = issue, Label = label,
+                ProfileKey=b.ProfileKey,ProfileLabel=b.PlanLabel,
                 CounterResetOnly=issue==SegmentIssue.Reset&&structural=="重置"&&delta<0&&
                     a.SourceId==b.SourceId&&a.ProfileKey==b.ProfileKey&&a.PlanLabel==b.PlanLabel&&!longGap&&eventLabel is null,
                 StartsAtCapacity=la?.UsedPercent>=100 });
@@ -245,6 +251,13 @@ public static class RateEngine
         return new RangeSum(delta, minutes);
     }
 
+    public static IReadOnlyList<QuotaAmount> SumProfiles(SeriesData data,DateTimeOffset start,DateTimeOffset end) =>
+        data.Segments.Where(s=>s.Valid&&s.Start>=start&&s.End<=end).GroupBy(s=>(s.ProfileKey,s.ProfileLabel))
+            .Select(g=>new QuotaAmount(g.Key.ProfileKey,g.Key.ProfileLabel,g.Sum(s=>s.Delta))).ToArray();
+
+    public static string FormatAmounts(IEnumerable<QuotaAmount> parts) =>
+        string.Join(" / ",parts.Select(p=>p.Points.ToString("0.#",System.Globalization.CultureInfo.InvariantCulture)));
+
     /// <summary>
     /// Net change from the first to the latest reading of the current reliable window. It may span
     /// gaps only because both ends report the same reset instant (no reset in between).
@@ -262,6 +275,7 @@ public static class RateEngine
         var laterUsed = latest.UsedPercent;
         for (var i = last - 1; i >= 0; i--)
         {
+            if(records[i].SourceId!=records[last].SourceId||records[i].ProfileKey!=records[last].ProfileKey||records[i].PlanLabel!=records[last].PlanLabel)break;
             var l = Select(records[i], key);
             if (l is null) continue;
             if (l.WindowMode != WindowModes.Fixed || !SameWindow(l, latest)) break;

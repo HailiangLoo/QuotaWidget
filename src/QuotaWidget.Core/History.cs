@@ -27,7 +27,7 @@ public sealed record StoredProfile(string ProfileKey, string? PlanLabel, History
 
 /// <summary>
 /// Daily JSONL files, one directory per source and profile (account + plan), so a
-/// different account or plan never mixes into the same curve.
+/// counter differences and live dedupe remain isolated. Display may compose a segmented timeline.
 /// </summary>
 public sealed class HistoryStore
 {
@@ -51,7 +51,7 @@ public sealed class HistoryStore
     public string ProfileDir(string sourceId, string profileKey) =>
         Path.Combine(_paths.HistoryDir, Sanitize(sourceId), Sanitize(profileKey));
 
-    /// <summary>Explicit archive choices, never an automatic merge of accounts or allowances.</summary>
+    /// <summary>Discover archives without joining their counters or indexing old observations.</summary>
     public IReadOnlyList<StoredProfile> Profiles(string sourceId, DateTimeOffset now)
     {
         var source = Path.Combine(_paths.HistoryDir, Sanitize(sourceId));
@@ -66,6 +66,11 @@ public sealed class HistoryStore
         }
         return profiles.OrderByDescending(p => p.Bounds.Last).ToArray();
     }
+
+    /// <summary>Display timeline only; live collection and dedupe remain profile-scoped.</summary>
+    public List<HistoryRecord> LoadTimeline(string sourceId,DateTimeOffset since,DateTimeOffset now) =>
+        Profiles(sourceId,now).SelectMany(p=>Load(sourceId,p.ProfileKey,since,index:false,until:now))
+            .OrderBy(r=>r.T).ThenBy(r=>r.ProfileKey,StringComparer.Ordinal).ToList();
 
     static string Sanitize(string s)
     {

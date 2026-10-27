@@ -14,7 +14,7 @@ public sealed class MeterView
     public DateTimeOffset? ResetsAt { get; init; }
 }
 
-public sealed record GapRegion(DateTimeOffset Start, DateTimeOffset End, string Label);
+public sealed record GapRegion(DateTimeOffset Start, DateTimeOffset End, string Label,bool Important=false);
 
 public enum NoteAction { None, Login, Retry }
 
@@ -166,28 +166,40 @@ public sealed class WidgetModel
     SeriesData? _archiveTotal, _archiveFable, _archiveCredits;
     int _archiveVersion = -1;
     int _archiveRange = -1;
+    bool _archiveAll;
+    (int Version,HistoryBounds? Bounds)? _timelineBounds;
+    public HistoryBounds? TimelineBounds
+    {
+        get
+        {
+            if(_timelineBounds is {} cache&&cache.Version==_dataVersion)return cache.Bounds;
+            var profiles=SourceId is {} source?Store.Profiles(source,_clock()):[];
+            var bounds=profiles.Count==0?Bounds:new HistoryBounds(profiles.Min(p=>p.Bounds.First),profiles.Max(p=>p.Bounds.Last));
+            _timelineBounds=(_dataVersion,bounds);return bounds;
+        }
+    }
     public bool ArchiveLoaded => _archiveTotal is not null;
     CumulativeAverage? _cumTotal, _cumFable;
 
     void Touch() => _dataVersion++;
 
-    (DateTime Month,string? Profile,int Version,IReadOnlyList<DayQuota> Days)? _calendar;
-    public IReadOnlyList<DayQuota> CalendarMonth(DateTime month,DateTimeOffset now,string? profileKey=null)
+    (DateTime Month,string? Profile,bool All,int Version,IReadOnlyList<DayQuota> Days)? _calendar;
+    public IReadOnlyList<DayQuota> CalendarMonth(DateTime month,DateTimeOffset now,string? profileKey=null,bool allProfiles=false)
     {
         profileKey ??= ProfileKey;
         month=new DateTime(month.Year,month.Month,1);
-        if(_calendar is { } cached && cached.Month==month && cached.Profile==profileKey && cached.Version==_dataVersion) return cached.Days;
+        if(_calendar is { } cached && cached.Month==month && cached.Profile==profileKey && cached.All==allProfiles && cached.Version==_dataVersion) return cached.Days;
         var next=month.AddMonths(1); var zone=TimeZoneInfo.Local;
         // One prior quota cycle provides the reset-jitter anchor; one following day covers midnight samples.
         var from=DailyQuota.Midnight(month.AddDays(-8),zone);
         var until=DailyQuota.Midnight(next.AddDays(1),zone); if(until>now) until=now;
-        var records=SourceId is not null && profileKey is not null ? Store.Load(SourceId,profileKey,from,index:false,until:until) : [];
+        var records=SourceId is not null && profileKey is not null ? allProfiles?Store.LoadTimeline(SourceId,from,until):Store.Load(SourceId,profileKey,from,index:false,until:until) : [];
         var keys=records.Select(r=>r.Key).ToHashSet();
-        records.AddRange(Records.Where(r=>r.ProfileKey==profileKey&&r.T>=from&&r.T<=until&&keys.Add(r.Key)));
+        records.AddRange(Records.Where(r=>(allProfiles||r.ProfileKey==profileKey)&&r.T>=from&&r.T<=until&&keys.Add(r.Key)));
         records.Sort((a,b)=>a.T.CompareTo(b.T));
-        var events=RateEngine.RelevantEvents(EventLog.Merge(Events.Load(from,until),EventList.Where(e=>e.T>=from&&e.T<=until)),SourceId,profileKey);
+        var events=RateEngine.RelevantEvents(EventLog.Merge(Events.Load(from,until),EventList.Where(e=>e.T>=from&&e.T<=until)),SourceId,profileKey,allProfiles?records.Select(r=>r.ProfileKey).ToHashSet():null);
         var days=DailyQuota.Build(RateEngine.Build(records,SeriesKey.Total,events),month,next,zone,now);
-        _calendar=(month,profileKey,_dataVersion,days);
+        _calendar=(month,profileKey,allProfiles,_dataVersion,days);
         return days;
     }
     public void ReleaseCalendar() => _calendar=null;
@@ -198,25 +210,26 @@ public sealed class WidgetModel
         _archiveVersion = -1;
     }
 
-    (SeriesData Total, SeriesData Fable) Archive(DateTimeOffset now, int range)
+    (SeriesData Total, SeriesData Fable) Archive(DateTimeOffset now,int range,bool allProfiles=false)
     {
-        if (_archiveVersion != _dataVersion || _archiveRange != range || _archiveTotal is null || _archiveFable is null)
+        if (_archiveVersion != _dataVersion || _archiveRange != range || _archiveAll!=allProfiles || _archiveTotal is null || _archiveFable is null)
         {
             // A temporary read-only load. Never expand the live 8-day dedupe index.
             // Keep one prior cycle for reset-jitter anchors when loading a bounded range.
             var from = range == ChartRanges.All ? DateTimeOffset.UnixEpoch : now.AddMinutes(-range) - Lookback;
             var records = SourceId is not null && ProfileKey is not null
-                ? Store.Load(SourceId, ProfileKey, from, index: false) : [];
+                ? allProfiles?Store.LoadTimeline(SourceId,from,now):Store.Load(SourceId, ProfileKey, from, index: false) : [];
             var keys = records.Select(r => r.Key).ToHashSet();
             records.AddRange(Records.Where(r => keys.Add(r.Key)));
             records.RemoveAll(r => r.T > now);
             records.Sort((a, b) => a.T.CompareTo(b.T));
-            var events = RateEngine.RelevantEvents(EventLog.Merge(Events.Load(from), EventList), SourceId, ProfileKey);
+            var events = RateEngine.RelevantEvents(EventLog.Merge(Events.Load(from), EventList), SourceId, ProfileKey,allProfiles?records.Select(r=>r.ProfileKey).ToHashSet():null);
             _archiveTotal = RateEngine.Build(records, SeriesKey.Total, events);
             _archiveFable = RateEngine.Build(records, SeriesKey.Fable, events);
             _archiveCredits = CreditsUsage.Build(records, events);
             _archiveVersion = _dataVersion;
             _archiveRange = range;
+            _archiveAll=allProfiles;
         }
         return (_archiveTotal, _archiveFable);
     }
@@ -445,20 +458,21 @@ public sealed class WidgetModel
         return (now - last.T).TotalSeconds > RateEngine.GapFactor * poll + 60;
     }
 
-    public WidgetView BuildView(DateTimeOffset now, int? rangeMinutes = null)
+    public WidgetView BuildView(DateTimeOffset now,int? rangeMinutes=null,bool allProfiles=false)
     {
         var s = Settings;
         var last = Records.Count > 0 ? Records[^1] : null;
         var fableName = s.FableModelName;
         var (total, fable, cumT, cumF) = Derived();
         var range = rangeMinutes ?? s.RangeMinutes;
-        var archived = range == ChartRanges.All || range > Lookback.TotalMinutes;
-        if (archived) (total, fable) = Archive(now, range);
+        var archived = allProfiles || range == ChartRanges.All || range > Lookback.TotalMinutes;
+        if (archived) (total, fable) = Archive(now,range,allProfiles);
+        var bounds=allProfiles?TimelineBounds:Bounds;
         var stale = IsStale(now);
 
         // Chart window
         var end = last is null || stale ? now : last.T;
-        var start = range == ChartRanges.All ? Bounds?.First ?? end.AddHours(-1) : end.AddMinutes(-range);
+        var start = range == ChartRanges.All ? bounds?.First ?? end.AddHours(-1) : end.AddMinutes(-range);
         if (start >= end) start = end.AddMinutes(-5);
         var gaps = new List<GapRegion>();
         string? blocked = null;
@@ -467,7 +481,7 @@ public sealed class WidgetModel
             blocked = Records.Count == 1 ? Loc.T("等待下一次采样") : Loc.T("暂无可计算的连续记录");
         if (last is not null)
         {
-            var first = archived ? Bounds?.First ?? Records[0].T : Records[0].T;
+            var first = archived ? bounds?.First ?? Records[0].T : Records[0].T;
             if (first > start) gaps.Add(new GapRegion(start, first, "未记录"));
             foreach (var seg in total.Segments)
                 if (!seg.Valid && seg.End > start && seg.Start < end) gaps.Add(new GapRegion(seg.Start, seg.End, seg.Label ?? "缺口"));

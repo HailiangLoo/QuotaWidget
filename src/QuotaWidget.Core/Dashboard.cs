@@ -58,8 +58,9 @@ public static class Dashboard
         foreach (var (name, series) in totals)
         {
             var sum = RateEngine.SumRange(series, start, end);
-            summaries.Add(sum.CoverageMinutes > 0 ? sum.Delta.ToString("0.#", System.Globalization.CultureInfo.InvariantCulture) : "—");
-            details.Add(sum.CoverageMinutes > 0
+            var parts=RateEngine.SumProfiles(series,start,end);
+            summaries.Add(sum.CoverageMinutes > 0 ? parts.Count>1?RateEngine.FormatAmounts(parts):sum.Delta.ToString("0.#", System.Globalization.CultureInfo.InvariantCulture) : "—");
+            details.Add(parts.Count>1?string.Join("\n",parts.Select(p=>$"{p.Label} · {p.Points:0.##} "+Loc.T("点"))):sum.CoverageMinutes > 0
                 ? Loc.F($"{name}：{sum.Delta:0.##} 点 / {WidgetModel.Duration(sum.CoverageMinutes)} · 平均 {sum.Delta * 60 / sum.CoverageMinutes:0.##} 点/h")
                 : Loc.F($"{name}：所选时段没有连续记录"));
         }

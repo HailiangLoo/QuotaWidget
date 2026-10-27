@@ -75,6 +75,29 @@ static class CalendarTests
             var interrupted=model.CalendarMonth(new DateTime(2026,9,1),now).Last();
             Check(interrupted.Points is null && interrupted.HasGap,"known outage counted as consumption");
         }));
+        Test("profile boundaries never create quota or credit consumption or bridge trend", () =>
+        {
+            foreach(var newBase in new[]{38d,80d})
+            {
+                HistoryRecord Row(int minute,double used,string profile,decimal credits)=>
+                    Record(midnight.AddMinutes(minute),used) with {ProfileKey=profile,PlanLabel="Codex "+profile,
+                        Snapshot=new(minute.ToString(),midnight.AddMinutes(minute),new(null,UsageParser.Limit(used,midnight.AddDays(7)),null),new(true,false,credits))};
+                var rows=new[]{Row(0,10,"old",100),Row(5,15,"old",90),Row(10,newBase,"new",90),Row(15,newBase+2,"new",88),Row(20,newBase+4,"new",85)};
+                var series=RateEngine.Build(rows,SeriesKey.Total,[]);
+                Check(series.Segments[1].Issue==SegmentIssue.ProfileChange&&!series.Segments[1].CounterResetOnly,"profile treated as ordinary reset/growth");
+                Near(9,RateEngine.SumRange(series,midnight,midnight.AddMinutes(20)).Delta);
+                Check(RateEngine.FormatAmounts(RateEngine.SumProfiles(series,midnight,midnight.AddMinutes(20)))=="5 / 4","amount units lost");
+                Near(4,RateEngine.Cumulative(rows,SeriesKey.Total,series)!.Delta);
+                Near(4,CumulativeSeries.Build(series,midnight,midnight.AddMinutes(20)).Segments.Last().To);
+                var mixedDay=DailyQuota.Build(series,midnight.LocalDateTime.Date,midnight.LocalDateTime.Date.AddDays(1),TimeZoneInfo.Local,midnight.AddMinutes(20)).Single();
+                Check(mixedDay.Parts.Count==2&&mixedDay.Points is null&&mixedDay.ProfileChanges.Count==1,"mixed day lost its native units or boundary");
+                var trend=ActiveRateEstimator.Build(series,midnight.AddMinutes(20),[new(midnight,midnight.AddMinutes(20),true,true,"fixture")]);
+                Check(trend.ValueAt(midnight.AddMinutes(7)) is null,"smoothed across changed allowance");
+                var credits=CreditsUsage.Build(rows,[]);
+                Near(15,RateEngine.SumRange(credits,midnight,midnight.AddMinutes(20)).Delta);
+                Near(15,CumulativeSeries.Build(credits,midnight,midnight.AddMinutes(20)).Segments.Last().To);
+            }
+        });
         Test("bounded history and event reads enforce exact timestamp limits", () => WithRoot(paths =>
         {
             var clock=DateTimeOffset.Now.AddMinutes(-30);
@@ -106,6 +129,16 @@ static class CalendarTests
             Near(5,model.CalendarMonth(at.LocalDateTime,now,"old").Sum(d=>d.Points??0));
             Near(4,model.CalendarMonth(at.LocalDateTime,now).Sum(d=>d.Points??0));
             Check(model.ProfileKey=="new"&&model.Records.SequenceEqual(live)&&model.Store.IndexCount==count,"archive selection changed live account or index");
+            var combined=model.CalendarMonth(at.LocalDateTime,now,allProfiles:true);
+            Near(9,combined.Sum(d=>d.Points??0));
+            Check(combined.SelectMany(d=>d.Parts).Select(p=>p.ProfileKey).Distinct().Count()==2,"calendar dropped a profile");
+            Check(combined.Single(d=>d.Day==now.LocalDateTime.Date).ProfileChanges.Count==1,"upgrade day not marked");
+            var timeline=model.BuildView(now,ChartRanges.All,allProfiles:true).Chart.Total;
+            Check(timeline.Segments.Any(s=>s.Issue==SegmentIssue.ProfileChange),"timeline boundary missing");
+            Check(RateEngine.FormatAmounts(RateEngine.SumProfiles(timeline,at,now))=="5 / 4","timeline point units combined");
+            var cumulative=CumulativeSeries.Build(timeline,at,now);
+            Near(4,cumulative.Segments.Last().To);Near(0,cumulative.Segments.Last().From);
+            Check(model.ProfileKey=="new"&&model.Records.SequenceEqual(live)&&model.Store.IndexCount==count,"timeline grew or replaced live data");
             Check(before.All(p=>File.ReadAllText(p.Key)==p.Value)&&Directory.GetFiles(paths.Root,"*",SearchOption.AllDirectories).Length==before.Count,"history or settings rewritten");
             Check(new HistoryStore(paths,true).Profiles("test-usage",now).Count==0,"demo exposed real history");
         }));

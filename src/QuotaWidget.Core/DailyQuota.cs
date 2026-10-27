@@ -2,6 +2,8 @@ namespace QuotaWidget.Core;
 
 public sealed record DayQuota(DateTime Day, double? Points, double CoverageMinutes, bool HasGap, bool SplitAtMidnight)
 {
+    public IReadOnlyList<QuotaAmount> Parts { get; init; } = [];
+    public IReadOnlyList<string> ProfileChanges { get; init; } = [];
     public static DayQuota Empty(DateTime day) => new(day.Date,null,0,false,false);
 }
 
@@ -22,17 +24,20 @@ public static class DailyQuota
         {
             var from=Midnight(day,zone); var to=Midnight(day.AddDays(1),zone);
             double points=0,minutes=0; bool gap=false,split=false;
+            var parts=new Dictionary<(string?,string?),double>();var changes=new List<string>();
             foreach(var s in data.Segments)
             {
+                if(s.Issue==SegmentIssue.ProfileChange&&s.End>=from&&s.End<to&&s.End<=now)changes.Add(s.Label??"账号或套餐变化");
                 if(s.End<=from || s.Start>=to || s.End>now || s.Minutes<=0) continue;
                 var a=s.Start>from?s.Start:from; var b=s.End<to?s.End:to;
                 if(b<=a) continue;
                 if(!s.Valid || !double.IsFinite(s.Delta) || s.Delta<0) {gap=true;continue;}
                 var overlap=(b-a).TotalMinutes;
                 points+=s.Delta*overlap/s.Minutes; minutes+=overlap;
+                var key=(s.ProfileKey,s.ProfileLabel);parts[key]=parts.GetValueOrDefault(key)+s.Delta*overlap/s.Minutes;
                 split|=a!=s.Start || b!=s.End;
             }
-            result.Add(new(day,minutes>0?points:null,minutes,gap,split));
+            result.Add(new(day,minutes>0&&parts.Count<=1?points:null,minutes,gap,split) {Parts=parts.Select(p=>new QuotaAmount(p.Key.Item1,p.Key.Item2,p.Value)).ToArray(),ProfileChanges=changes});
         }
         return result;
     }

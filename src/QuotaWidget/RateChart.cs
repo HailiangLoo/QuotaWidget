@@ -265,7 +265,8 @@ public sealed class RateChart : FrameworkElement
         string Amount(Lane lane,bool compact)
         {
             var sum=RateEngine.SumRange(lane.Source,_view!.Start,_view.End);
-            return sum.CoverageMinutes>0 ? (compact?"":Loc.T("累计 "))+Number(sum.Delta)+(compact?Loc.T("点"):Loc.T(" 点")) : Loc.T("暂无记录");
+            var parts=RateEngine.SumProfiles(lane.Source,_view.Start,_view.End);
+            return sum.CoverageMinutes>0 ? (compact?"":Loc.T("累计 "))+(parts.Count>1?RateEngine.FormatAmounts(parts):Number(sum.Delta))+(compact?Loc.T("点"):Loc.T(" 点")) : Loc.T("暂无记录");
         }
         var shared=lanes.Length>1;
         var left=shared?lanes[0].Name+" · "+Amount(lanes[0],false):lanes[0].Name;
@@ -430,8 +431,8 @@ public sealed class RateChart : FrameworkElement
         var gaps = indices.SelectMany(j => _lanes[j].Source.Segments)
             .Where(s => !s.Valid && s.End > _displayStart && s.Start < view.End)
             .GroupBy(s => (s.Start, s.End))
-            .Select(g => g.OrderBy(s => s.Issue == SegmentIssue.Reset ? 0 : 1).First())
-            .Select(s => new GapRegion(s.Start,s.End,s.Issue == SegmentIssue.Reset ? "重置" : s.Label == "未运行" ? "停采" : s.Label ?? "缺口"))
+            .Select(g => g.OrderBy(s => s.Issue==SegmentIssue.ProfileChange?0:s.Issue == SegmentIssue.Reset ? 1 : 2).First())
+            .Select(s => new GapRegion(s.Start,s.End,s.Issue == SegmentIssue.Reset ? "重置" : s.Label == "未运行" ? "停采" : s.Label ?? "缺口",s.Issue==SegmentIssue.ProfileChange))
             .Concat(providerGaps.Where(g=>g.Label=="断开" && g.End>_displayStart && g.Start<view.End)).OrderBy(s => s.Start);
         var lastLabelRight = double.NegativeInfinity;
         foreach (var gap in ChartBoundaries.Coalesce(gaps))
@@ -439,16 +440,16 @@ public sealed class RateChart : FrameworkElement
             var left = X(gap.Start < _displayStart ? _displayStart : gap.Start);
             var right = X(gap.End > view.End ? view.End : gap.End);
             var x = (left + right) / 2;
-            var quiet = gap.Label == "已暂停" || (right-left<8&&gap.Label is not ("重置" or "周期变化" or "断开"));
+            var quiet = !gap.Important&&(gap.Label == "已暂停" || (right-left<8&&gap.Label is not ("重置" or "周期变化" or "断开")));
             dc.PushOpacity(quiet ? .15 : .35);
             dc.DrawRectangle(Theme.Brush("Line"), null, new Rect(left, PlotTop(panel), Math.Max(1, right-left), PlotBottom(panel)-PlotTop(panel)));
             dc.Pop();
             var pen = new Pen(Theme.Brush("Muted"), .7) { DashStyle = DashStyles.Dot };
-            var boundaryX=gap.Label=="断开" ? left : x;
+            var boundaryX=gap.Important?right:gap.Label=="断开" ? left : x;
             if (quiet) dc.PushOpacity(.3);
             dc.DrawLine(pen, new Point(boundaryX, PlotTop(panel)), new Point(boundaryX, PlotBottom(panel)));
             if (quiet) { dc.Pop(); continue; } // Small historical holes: explain on hover, not a large permanent label.
-            var caption = gap.Label == "断开" ? Loc.F($"{gap.Start.ToLocalTime():HH:mm} 起未更新") : Loc.T(gap.Label);
+            var caption = gap.Important?gap.Label.Replace("Codex ",""):gap.Label == "断开" ? Loc.F($"{gap.Start.ToLocalTime():HH:mm} 起未更新") : Loc.T(gap.Label);
             var text = Text(caption, Theme.Brush("Muted"), 10);
             var tx = Math.Clamp(x - text.Width / 2, _left + 28, Math.Max(_left + 28, PlotRight-text.Width-2));
             if (tx < lastLabelRight + 6) continue;
@@ -580,6 +581,7 @@ public sealed class RateChart : FrameworkElement
             var observed = lane.Source.SegmentAt(time);
             var gap = (lane.Name=="Codex" ? view.CodexGaps : view.ClaudeGaps).LastOrDefault(g=>time>=g.Start && time<g.End);
             var name=lane.Name=="Fable"&&view.FableToClaudeFactor is null?Loc.T("Fable 自身"):lane.Name;
+            if(lane.Name=="Codex"&&observed?.ProfileLabel is {} profile)name=profile;
             var missing = lane.Name=="Fable"&&view.FableRateConflictAt(time)?"分项样本未对齐":observed?.Label ?? (gap?.Label=="断开" ? "未更新" : gap?.Label) ?? (observed is {Valid:true}&&view.Smooth&&!cumulative?"状态未确认":"未记录");
             if (missing == "已暂停") missing = "监听切换";
             var unmatched=!cumulative&&view.Smooth?lane.Trend.UnlocatedAt(time):null;

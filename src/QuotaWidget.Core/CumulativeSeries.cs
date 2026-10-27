@@ -13,6 +13,7 @@ public sealed class CumulativeSeries
         double sum = 0;
         foreach (var s in source.Segments)
         {
+            if(s.Issue==SegmentIssue.ProfileChange)sum=0;
             if (!s.Valid || s.Start < start || s.End > end) continue;
             result.Segments.Add(new(s.Start, s.End, sum, sum + s.Delta, s.Group));
             sum += s.Delta;
