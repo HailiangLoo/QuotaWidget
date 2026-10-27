@@ -120,6 +120,10 @@
             </StackPanel>
             <TextBlock x:Name="HistoryMonthTitle" FontSize="14" FontWeight="SemiBold" VerticalAlignment="Center" />
           </DockPanel>
+          <ComboBox x:Name="HistoryCodexProfile" Style="{StaticResource FlatCombo}" Width="Auto" FontSize="10" MinHeight="24" Margin="0,0,0,3" Visibility="Collapsed"
+                    SelectionChanged="HistoryCodexProfile_SelectionChanged"
+                    local:Translate.Name="Codex 历史档位" local:Translate.ToolTip="切换升级前后的额度历史；各档位分别统计，不改变当前采集。" />
+          <TextBlock x:Name="HistoryProfileNote" FontSize="9" Foreground="{DynamicResource Muted}" TextWrapping="Wrap" Margin="0,0,0,5" Visibility="Collapsed" />
           <TextBlock x:Name="MonthQuotaSummary" FontSize="10" Margin="0,0,0,8" />
           <UniformGrid Columns="7" Margin="0,0,0,4">
             <UniformGrid.Resources><Style TargetType="TextBlock"><Setter Property="FontSize" Value="10"/><Setter Property="Foreground" Value="{DynamicResource Muted}"/><Setter Property="HorizontalAlignment" Value="Center"/></Style></UniformGrid.Resources>

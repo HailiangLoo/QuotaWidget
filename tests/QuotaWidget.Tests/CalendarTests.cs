@@ -88,6 +88,27 @@ static class CalendarTests
             var storedEvents=events.Load(start,end);
             Check(storedEvents.Count==3 && storedEvents.All(e=>e.T>=start&&e.T<=end),"event bounds wrong");
         }));
+        Test("upgraded profiles remain discoverable and selectable without mixing or rewriting", () => WithRoot(paths =>
+        {
+            var at=DailyQuota.Midnight(new DateTime(2026,10,1),TimeZoneInfo.Local);
+            var now=at.AddDays(26).AddHours(12);
+            new WidgetSettings {LastSourceId="test-usage",LastProfileKey="new"}.Save(paths.Settings);
+            Write(paths,Record(at,10) with {ProfileKey="old",PlanLabel="Codex plus"});
+            Write(paths,Record(at.AddMinutes(5),15) with {ProfileKey="old",PlanLabel="Codex plus"});
+            Write(paths,Record(now.AddMinutes(-5),38) with {ProfileKey="new",PlanLabel="Codex promax"});
+            Write(paths,Record(now,42) with {ProfileKey="new",PlanLabel="Codex promax"});
+            var before=Directory.GetFiles(paths.Root,"*",SearchOption.AllDirectories).ToDictionary(f=>f,File.ReadAllText);
+            var model=new WidgetModel(paths,false,()=>now){ReadOnly=true};model.Initialize();
+            var count=model.Store.IndexCount; var live=model.Records.ToArray();
+            var profiles=model.Store.Profiles("test-usage",now);
+            Check(profiles.Count==2&&profiles[0].ProfileKey=="new"&&profiles[1].PlanLabel=="Codex plus","archive profile hidden or unsorted");
+            Near(4,model.CalendarMonth(at.LocalDateTime,now).Sum(d=>d.Points??0));
+            Near(5,model.CalendarMonth(at.LocalDateTime,now,"old").Sum(d=>d.Points??0));
+            Near(4,model.CalendarMonth(at.LocalDateTime,now).Sum(d=>d.Points??0));
+            Check(model.ProfileKey=="new"&&model.Records.SequenceEqual(live)&&model.Store.IndexCount==count,"archive selection changed live account or index");
+            Check(before.All(p=>File.ReadAllText(p.Key)==p.Value)&&Directory.GetFiles(paths.Root,"*",SearchOption.AllDirectories).Length==before.Count,"history or settings rewritten");
+            Check(new HistoryStore(paths,true).Profiles("test-usage",now).Count==0,"demo exposed real history");
+        }));
         Test("cross-month sessions stay whole, selectable from either month and immutable", () => WithRoot(paths =>
         {
             var at=DailyQuota.Midnight(new DateTime(2026,10,1),TimeZoneInfo.Local);

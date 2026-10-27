@@ -171,22 +171,23 @@ public sealed class WidgetModel
 
     void Touch() => _dataVersion++;
 
-    (DateTime Month,int Version,IReadOnlyList<DayQuota> Days)? _calendar;
-    public IReadOnlyList<DayQuota> CalendarMonth(DateTime month,DateTimeOffset now)
+    (DateTime Month,string? Profile,int Version,IReadOnlyList<DayQuota> Days)? _calendar;
+    public IReadOnlyList<DayQuota> CalendarMonth(DateTime month,DateTimeOffset now,string? profileKey=null)
     {
+        profileKey ??= ProfileKey;
         month=new DateTime(month.Year,month.Month,1);
-        if(_calendar is { } cached && cached.Month==month && cached.Version==_dataVersion) return cached.Days;
+        if(_calendar is { } cached && cached.Month==month && cached.Profile==profileKey && cached.Version==_dataVersion) return cached.Days;
         var next=month.AddMonths(1); var zone=TimeZoneInfo.Local;
         // One prior quota cycle provides the reset-jitter anchor; one following day covers midnight samples.
         var from=DailyQuota.Midnight(month.AddDays(-8),zone);
         var until=DailyQuota.Midnight(next.AddDays(1),zone); if(until>now) until=now;
-        var records=SourceId is not null && ProfileKey is not null ? Store.Load(SourceId,ProfileKey,from,index:false,until:until) : [];
+        var records=SourceId is not null && profileKey is not null ? Store.Load(SourceId,profileKey,from,index:false,until:until) : [];
         var keys=records.Select(r=>r.Key).ToHashSet();
-        records.AddRange(Records.Where(r=>r.T>=from&&r.T<=until&&keys.Add(r.Key)));
+        records.AddRange(Records.Where(r=>r.ProfileKey==profileKey&&r.T>=from&&r.T<=until&&keys.Add(r.Key)));
         records.Sort((a,b)=>a.T.CompareTo(b.T));
-        var events=RateEngine.RelevantEvents(EventLog.Merge(Events.Load(from,until),EventList.Where(e=>e.T>=from&&e.T<=until)),SourceId,ProfileKey);
+        var events=RateEngine.RelevantEvents(EventLog.Merge(Events.Load(from,until),EventList.Where(e=>e.T>=from&&e.T<=until)),SourceId,profileKey);
         var days=DailyQuota.Build(RateEngine.Build(records,SeriesKey.Total,events),month,next,zone,now);
-        _calendar=(month,_dataVersion,days);
+        _calendar=(month,profileKey,_dataVersion,days);
         return days;
     }
     public void ReleaseCalendar() => _calendar=null;

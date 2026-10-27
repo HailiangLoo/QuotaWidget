@@ -723,13 +723,14 @@ public partial class MainWindow : Window
 
     void RenderHistory(bool force = false)
     {
+        if(force || _historyProfilesCurrent!=_codex.ProfileKey) RefreshHistoryProfiles();
         RenderSessionStart(DateTimeOffset.Now);
         TagText.Text = _model.DemoMode ? Loc.T("演示数据") : "";
         TagText.Visibility = _model.DemoMode ? Visibility.Visible : Visibility.Collapsed;
         var now=DateTimeOffset.Now;
         var date = _historyDay;
         var claudeDays=_model.CalendarMonth(_historyMonth,now);
-        var codexDays=_codex.CalendarMonth(_historyMonth,now);
+        var codexDays=_codex.CalendarMonth(_historyMonth,now,_historyCodexProfile);
         if(_opts.Demo && _opts.Scenario=="calendar")
         {
             IReadOnlyList<DayQuota> DemoDays(int salt) => Enumerable.Range(1,DateTime.DaysInMonth(_historyMonth.Year,_historyMonth.Month)).Select(d=>
@@ -741,7 +742,7 @@ public partial class MainWindow : Window
         }
         var monthSessions=_app.SessionsForMonth(_historyMonth);
         var current = _app.CurrentSession(DateTimeOffset.Now);
-        var signature = _historyMonth + "|" + date.Date + "|" + string.Join(";",monthSessions.Select(s=>$"{s.Id}:{s.End:O}:{s.Chats.Count}")) + "|" + _selectedSession + "|" + Theme.IsDark
+        var signature = _historyMonth + "|" + date.Date + "|" + _historyCodexProfile + "|" + string.Join(";",monthSessions.Select(s=>$"{s.Id}:{s.End:O}:{s.Chats.Count}")) + "|" + _selectedSession + "|" + Theme.IsDark
             + "|" + string.Join(";",claudeDays.Concat(codexDays).Select(d=>$"{d.Points}:{d.CoverageMinutes}:{d.HasGap}"));
         if (!force && signature == _historySignature) return;
         _historySignature = signature;

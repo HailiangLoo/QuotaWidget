@@ -23,6 +23,8 @@ public sealed record HistoryRecord(
 
 public enum AppendResult { Added, Duplicate, Conflict, Rejected, TooOld }
 
+public sealed record StoredProfile(string ProfileKey, string? PlanLabel, HistoryBounds Bounds);
+
 /// <summary>
 /// Daily JSONL files, one directory per source and profile (account + plan), so a
 /// different account or plan never mixes into the same curve.
@@ -48,6 +50,22 @@ public sealed class HistoryStore
 
     public string ProfileDir(string sourceId, string profileKey) =>
         Path.Combine(_paths.HistoryDir, Sanitize(sourceId), Sanitize(profileKey));
+
+    /// <summary>Explicit archive choices, never an automatic merge of accounts or allowances.</summary>
+    public IReadOnlyList<StoredProfile> Profiles(string sourceId, DateTimeOffset now)
+    {
+        var source = Path.Combine(_paths.HistoryDir, Sanitize(sourceId));
+        if (!Directory.Exists(source) || IsDemoSource(sourceId) != _demoMode) return [];
+        var profiles = new List<StoredProfile>();
+        foreach (var dir in Directory.EnumerateDirectories(source))
+        {
+            var key = Path.GetFileName(dir);
+            if (Bounds(sourceId, key, now) is not { } bounds) continue;
+            var last = Load(sourceId, key, bounds.Last, index: false, until: bounds.Last).LastOrDefault();
+            if (last is not null) profiles.Add(new(key, last.PlanLabel, bounds));
+        }
+        return profiles.OrderByDescending(p => p.Bounds.Last).ToArray();
+    }
 
     static string Sanitize(string s)
     {
