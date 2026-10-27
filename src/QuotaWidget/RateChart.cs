@@ -435,6 +435,8 @@ public sealed class RateChart : FrameworkElement
             .Select(s => new GapRegion(s.Start,s.End,s.Issue == SegmentIssue.Reset ? "重置" : s.Label == "未运行" ? "停采" : s.Label ?? "缺口",s.Issue==SegmentIssue.ProfileChange))
             .Concat(providerGaps.Where(g=>g.Label=="断开" && g.End>_displayStart && g.Start<view.End)).OrderBy(s => s.Start);
         var lastLabelRight = double.NegativeInfinity;
+        var captionRight=HasCreditCurve&&_lanes[indices[0]].Name=="Codex"
+            ?AxisLabels(panel,CreditScale,true).Select(l=>l.Bounds.Left-4).DefaultIfEmpty(PlotRight).Min():PlotRight;
         foreach (var gap in ChartBoundaries.Coalesce(gaps))
         {
             var left = X(gap.Start < _displayStart ? _displayStart : gap.Start);
@@ -451,7 +453,8 @@ public sealed class RateChart : FrameworkElement
             if (quiet) { dc.Pop(); continue; } // Small historical holes: explain on hover, not a large permanent label.
             var caption = gap.Important?gap.Label.Replace("Codex ",""):gap.Label == "断开" ? Loc.F($"{gap.Start.ToLocalTime():HH:mm} 起未更新") : Loc.T(gap.Label);
             var text = Text(caption, Theme.Brush("Muted"), 10);
-            var tx = Math.Clamp(x - text.Width / 2, _left + 28, Math.Max(_left + 28, PlotRight-text.Width-2));
+            text.MaxTextWidth=Math.Max(12,captionRight-_left-30);text.Trimming=TextTrimming.CharacterEllipsis;
+            var tx = Math.Clamp(x - text.Width / 2, _left + 28, Math.Max(_left + 28, captionRight-text.Width-2));
             if (tx < lastLabelRight + 6) continue;
             var box = new Rect(tx-2, PlotTop(panel)+(gap.Label=="断开" ? 22 : 2), text.Width+4, text.Height);
             obstacles.Add(box);
