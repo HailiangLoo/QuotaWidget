@@ -106,6 +106,32 @@ static class ActivityPublicationTests
             Check(restored.WorkActivitySpans(now,"Codex").Single().Start==now.AddHours(-2),"re-enabled provider starts at mode switch");
             Check(restored.WorkActivitySpans(now.AddDays(9),"Codex").Count==0,"quiet in-memory generation outlived database horizon");
         });
+        Test("archive reads retained lifecycle without widening live generations or losing a boundary-spanning turn",root=>
+        {
+            var idx=Path.Combine(root,"idx");Directory.CreateDirectory(idx);
+            var boundary=now-WidgetModel.Lookback;var old=now.AddDays(-20);
+            using(var store=new TokenStore(Path.Combine(idx,"tokens.sqlite")))
+            {
+                store.PutWorkEvent("Codex",new("old",old,"start","old",null));
+                store.PutWorkEvent("Codex",new("old",old.AddHours(1),"end","old",null));
+                store.PutWorkEvent("Codex",new("cross",boundary.AddMinutes(-5),"start","cross",null));
+                store.PutWorkEvent("Codex",new("cross",boundary.AddMinutes(5),"end","cross",null));
+            }
+            var logs=Path.Combine(root,"cx","sessions");Directory.CreateDirectory(logs);
+            File.WriteAllText(Path.Combine(logs,"rollout-aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee.jsonl"),Event(now.AddHours(-2),"task_started")+Event(now.AddHours(-1),"task_complete"));
+            using var index=new TokenIndex(idx,Path.Combine(root,"cx"),Path.Combine(root,"cl"),now);
+            Check(index.WorkActivitySpans(old,now,"Codex").Count==0,"pending generation exposed partial history");
+            index.Poll(now);
+            var live=index.WorkActivitySpans(now,"Codex");
+            Check(live.All(s=>s.Start>=boundary),"archive enlarged live horizon");
+            var archive=index.WorkActivitySpans(old,now,"Codex");
+            Check(archive.Any(s=>s.Start==old&&s.KnownStart&&s.KnownEnd),"old retained activity disappeared");
+            Check(archive.Any(s=>s.Start==boundary.AddMinutes(-5)&&s.End==boundary.AddMinutes(5)&&s.KnownStart&&s.KnownEnd),"archive/live seam truncated a turn");
+            Check(index.WorkActivitySpans(now,"Codex").SequenceEqual(live),"archive read mutated live generation");
+            var series=new SeriesData{Key=SeriesKey.Total,Segments=[new(){Start=old,End=old.AddHours(1),Delta=2}]};
+            var curve=ActiveRateEstimator.Build(series,now,archive);
+            Check(curve.Runs.Any(r=>r.Delta>0&&r.Points.Any(p=>p.Time<boundary&&p.Rate>0)),"old recorded consumption still has no visible rate path");
+        });
         Test("pending provider does not draw fallback curves or affect ready provider",root=>
         {
             var series=new SeriesData{Key=SeriesKey.Total,Segments=[new(){Start=now.AddHours(-1),End=now,Delta=2}]};

@@ -444,16 +444,21 @@ public partial class App : Application
     public string? CacheWarning => _cacheWarning is not { } warning ? null :
         Loc.T(warning) != warning ? Loc.T(warning) : string.Join(" · ",warning.Split(" · ").Select(s=>Loc.T(s)));
     public long TokenVersion => _tokens?.Version ?? 0;
-    (long Version,string Monitoring,DateTimeOffset At,TrendActivity Value)? _trendActivity;
-    public TrendActivity WorkTrendActivity(DateTimeOffset now)
+    (long Version,string Monitoring,DateTimeOffset? From,DateTimeOffset At,TrendActivity Value)? _trendActivity;
+    public TrendActivity WorkTrendActivity(DateTimeOffset now,DateTimeOffset? start=null)
     {
         if(!_model.Settings.TokenTrackingEnabled||_opts.Demo)return TrendActivity.Empty;
-        var mode=_model.Settings.Monitoring;
+        var historicalClaude=start is not null&&_model.Settings.ChartModeFor(ChatPlatform.Claude)=="rate";
+        var historicalCodex=start is not null&&_model.Settings.ChartModeFor(ChatPlatform.Codex)=="rate";
+        var mode=_model.Settings.Monitoring+"|"+historicalClaude+"|"+historicalCodex;
         var version=TokenVersion;
-        if(_trendActivity is { } cache&&cache.Version==version&&cache.Monitoring==mode&&now>=cache.At&&now-cache.At<TimeSpan.FromSeconds(5))return cache.Value;
+        var from=start is {} a?DateTimeOffset.FromUnixTimeSeconds(a.ToUnixTimeSeconds()/60*60):(DateTimeOffset?)null;
+        if(_trendActivity is { } cache&&cache.Version==version&&cache.Monitoring==mode&&cache.From==from&&now>=cache.At&&now-cache.At<TimeSpan.FromSeconds(5))return cache.Value;
         try
         {
-            IReadOnlyList<WorkSpan> Read(string platform)=>_tokens?.WorkActivitySpans(now,platform)??_snapshotTokens?.WorkActivitySpans(now,platform)??[];
+            IReadOnlyList<WorkSpan> Read(string platform)=>from is {} begin&&(platform=="Claude"?historicalClaude:historicalCodex)
+                ?_tokens?.WorkActivitySpans(begin,now,platform)??_snapshotTokens?.WorkActivitySpans(begin,now,platform)??[]
+                :_tokens?.WorkActivitySpans(now,platform)??_snapshotTokens?.WorkActivitySpans(now,platform)??[];
             var claude=Monitors(ChatPlatform.Claude)?Read("Claude"):[];
             var codex=Monitors(ChatPlatform.Codex)?Read("Codex"):[];
             var cadence=TimeSpan.Zero; // Collection backoff never turns real idle time into work.
@@ -462,9 +467,9 @@ public partial class App : Application
                 WorkActivity.Merge(claude.Where(s=>s.Model is null||FableDisplay.IsFable(s.Model)),cadence),WorkActivity.Merge(codex,cadence),
                 !Monitors(ChatPlatform.Claude)||Ready("Claude"),!Monitors(ChatPlatform.Codex)||Ready("Codex"))
                 {FableRunning=WorkActivity.FableRunning(claude,now),ClaudeModels=claude};
-            _trendActivity=(version,mode,now,value);return value;
+            _trendActivity=(version,mode,from,now,value);return value;
         }
-        catch{return _trendActivity is {} last?last.Value with{FableRunning=false}:new TrendActivity([],[],[],false,false);}
+        catch{return _trendActivity is {} last&&last.From==from&&last.Monitoring==mode?last.Value with{FableRunning=false}:new TrendActivity([],[],[],false,false);}
     }
     (DateTimeOffset Start,DateTimeOffset End,long Version,IReadOnlyList<ModelActivity> Rows)? _modelActivity;
     public IReadOnlyList<ModelActivity> ClaudeModelActivity(DateTimeOffset start,DateTimeOffset end)

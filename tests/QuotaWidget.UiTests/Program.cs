@@ -22,6 +22,7 @@ static class Probe
             StartupProbe.Run();
             SettingSliderProbe.Run();
             CapacityNotificationProbe.Run(app);
+            if(args.Contains("--historical-rates-only")){HistoricalRateProbe.Run(app);return 0;}
             if(args.Contains("--history-profiles-only")){HistoryProfileProbe.Run(app,args.Length>1?args[1]:null);return 0;}
             if(args.Contains("--credits-only")){CreditsChartProbe.Run(args.Length>1?args[1]:null);return 0;}
             if(args.Contains("--compact-credits-only")){CompactCreditsProbe.Run(app,args.Length>1?args[1]:null);return 0;}
@@ -277,6 +278,7 @@ static class Probe
             LocalizationProbe.Run(app);
             ConnectionProbe.Run(app);
             HistoryProfileProbe.Run(app);
+            HistoricalRateProbe.Run(app);
             UsageRefreshProbe.Run();
             UsageInteractionProbe.Run();
             ScalingProbe.Run(app);

@@ -180,7 +180,7 @@ public partial class MainWindow : Window
         var cv = _codex.BuildView(now,watchCodex?range:60,allProfiles:watchCodex);
         var historyStart = v.Chart.EstimationStart < cv.Chart.EstimationStart ? v.Chart.EstimationStart : cv.Chart.EstimationStart;
         var dashboard = Dashboard.Combine(v, cv, s, now, _codex.LastEnvelope, range,
-            _app.TrendSessionEdges(historyStart, now), _app.WorkTrendActivity(now));
+            _app.TrendSessionEdges(historyStart, now), _app.WorkTrendActivity(now,historyStart));
         if(watchClaude&&dashboard.Chart.FableToClaudeFactor is not null)
         {
             var chart=dashboard.Chart;

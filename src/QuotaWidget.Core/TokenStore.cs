@@ -145,13 +145,18 @@ public sealed class TokenStore : IDisposable
     public IReadOnlyList<WorkSpan> WorkActivitySpans(DateTimeOffset end,string platform) =>
         WorkActivity.Build(WorkActivityEvents(end,platform),end);
 
+    public IReadOnlyList<WorkSpan> WorkActivitySpans(DateTimeOffset start,DateTimeOffset end,string platform) =>
+        WorkActivity.Build(WorkActivityEvents(start,end,platform,1_000_000),end);
+
     public IReadOnlyList<WorkEvent> WorkActivityEvents(DateTimeOffset end,string platform)
+        => WorkActivityEvents(end.Add(-WidgetModel.Lookback),end,platform);
+
+    public IReadOnlyList<WorkEvent> WorkActivityEvents(DateTimeOffset start,DateTimeOffset end,string platform,int limit=200000)
     {
         if(!_hasWorkEvents)return [];
-        // Match the live quota history's eight-day horizon. A truncated leading turn has
-        // no known start; never promote the first response we happen to retain to a start.
-        var rows=_db.Query("SELECT stream,t,kind,id,model FROM work_events WHERE platform=? AND t>=? AND t<=? ORDER BY stream,t LIMIT 200001",platform,end.Add(-WidgetModel.Lookback).ToUnixTimeMilliseconds(),end.ToUnixTimeMilliseconds());
-        if(rows.Count>200000)return [];
+        var rows=_db.Query("SELECT stream,t,kind,id,model FROM work_events WHERE platform=? AND t>=? AND t<=? ORDER BY stream,t LIMIT ?",platform,start.ToUnixTimeMilliseconds(),end.ToUnixTimeMilliseconds(),limit+1);
+        if(rows.Count>limit)
+        {if(limit==200000)return [];throw new InvalidDataException("Activity history exceeds the requested read limit.");}
         return rows.Select(r=>new WorkEvent((string)r[0]!,DateTimeOffset.FromUnixTimeMilliseconds((long)r[1]!),
             (string)r[2]!,r[3] is string {Length:>0} id?id:null,r[4] as string)).ToArray();
     }

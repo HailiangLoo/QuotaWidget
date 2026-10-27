@@ -435,6 +435,7 @@ public sealed class RateChart : FrameworkElement
             .Select(s => new GapRegion(s.Start,s.End,s.Issue == SegmentIssue.Reset ? "重置" : s.Label == "未运行" ? "停采" : s.Label ?? "缺口",s.Issue==SegmentIssue.ProfileChange))
             .Concat(providerGaps.Where(g=>g.Label=="断开" && g.End>_displayStart && g.Start<view.End)).OrderBy(s => s.Start);
         var lastLabelRight = double.NegativeInfinity;
+        var lastQuietX=double.NegativeInfinity;
         var captionRight=HasCreditCurve&&_lanes[indices[0]].Name=="Codex"
             ?AxisLabels(panel,CreditScale,true).Select(l=>l.Bounds.Left-4).DefaultIfEmpty(PlotRight).Min():PlotRight;
         foreach (var gap in ChartBoundaries.Coalesce(gaps))
@@ -443,6 +444,9 @@ public sealed class RateChart : FrameworkElement
             var right = X(gap.End > view.End ? view.End : gap.End);
             var x = (left + right) / 2;
             var quiet = !gap.Important&&(gap.Label == "已暂停" || (right-left<8&&gap.Label is not ("重置" or "周期变化" or "断开")));
+            if(quiet&&right-left<1)continue;
+            if(quiet&&x-lastQuietX<6)continue;
+            if(quiet)lastQuietX=x;
             dc.PushOpacity(quiet ? .15 : .35);
             dc.DrawRectangle(Theme.Brush("Line"), null, new Rect(left, PlotTop(panel), Math.Max(1, right-left), PlotBottom(panel)-PlotTop(panel)));
             dc.Pop();
