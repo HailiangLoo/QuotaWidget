@@ -28,7 +28,7 @@ static class HistoricalRateProbe
             Row(old,10);Row(old.AddHours(1),12);Row(now.AddHours(-2),30);Row(now.AddHours(-1),32);
             store=new TokenStore(Path.Combine(root,"tokens.sqlite"));
             foreach(var (stream,start) in new[]{("old",old),("new",now.AddHours(-2))})
-            {store.PutWorkEvent("Codex",new(stream,start,"start",stream,null));store.PutWorkEvent("Codex",new(stream,start.AddHours(1),"end",stream,null));}
+            {store.PutWorkEvent("Codex",new(stream,start.AddMinutes(-10),"start",stream,null));store.PutWorkEvent("Codex",new(stream,start.AddHours(1),"end",stream,null));}
             var model=new WidgetModel(paths,false){ReadOnly=true};model.Initialize();
             var codex=new WidgetModel(cx,false){ReadOnly=true};codex.Initialize();
             var opts=AppOptions.Parse(["--snapshot","unused","--expanded"]);
@@ -50,6 +50,7 @@ static class HistoricalRateProbe
             model.Settings.CodexChartMode="rate";
             window.Render();
             Check(((RateChart)window.FindName("Chart")).View!.CodexTrend!.Runs.Any(r=>r.Delta>0&&r.Points.Any(p=>p.Time<old.AddHours(2))),"switching back reused the short activity cache");
+            Check(store.WorkActivitySpans(old,now,"Codex").Any(s=>s.Start.ToUnixTimeMilliseconds()==old.AddMinutes(-10).ToUnixTimeMilliseconds()&&s.KnownStart),"first observation truncated its already-running turn");
             window.Close();
             Console.WriteLine("PASS: actual long-range Render paints twenty-day-old rate paths, conserves totals, and isolates month/all activity caches from compact/live reads.");
         }

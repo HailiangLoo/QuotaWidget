@@ -145,8 +145,13 @@ public sealed class TokenStore : IDisposable
     public IReadOnlyList<WorkSpan> WorkActivitySpans(DateTimeOffset end,string platform) =>
         WorkActivity.Build(WorkActivityEvents(end,platform),end);
 
-    public IReadOnlyList<WorkSpan> WorkActivitySpans(DateTimeOffset start,DateTimeOffset end,string platform) =>
-        WorkActivity.Build(WorkActivityEvents(start,end,platform,1_000_000),end);
+    public IReadOnlyList<WorkSpan> WorkActivitySpans(DateTimeOffset start,DateTimeOffset end,string platform)
+    {
+        // Reconstruct turns before filtering: the first quota sample may fall
+        // inside a turn that started earlier. Cutting events there loses that work.
+        return WorkActivity.Build(WorkActivityEvents(DateTimeOffset.UnixEpoch,end,platform,1_000_000),end)
+            .Where(s=>s.End>=start-WorkActivity.HandoffWindow).ToArray();
+    }
 
     public IReadOnlyList<WorkEvent> WorkActivityEvents(DateTimeOffset end,string platform)
         => WorkActivityEvents(end.Add(-WidgetModel.Lookback),end,platform);

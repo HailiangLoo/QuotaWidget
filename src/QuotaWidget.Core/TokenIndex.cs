@@ -130,7 +130,7 @@ public sealed class TokenIndex : IDisposable
     // Publish complete lifecycle generations. A partial log import is not an empty
     // work history and must never replace the evidence used by the rate estimator.
     readonly Dictionary<string,IReadOnlyList<WorkEvent>> _publishedWork = new();
-    readonly Dictionary<string,(DateTimeOffset From,DateTimeOffset Until,IReadOnlyList<WorkEvent> Events)> _archiveWork = new();
+    readonly Dictionary<string,(DateTimeOffset Until,IReadOnlyList<WorkEvent> Events)> _archiveWork = new();
     readonly HashSet<string> _dirtyWork = new();
     int _next;
     public DateTimeOffset Since { get; }
@@ -184,18 +184,17 @@ public sealed class TokenIndex : IDisposable
         {
             if(!_publishedWork.TryGetValue(platform,out var live))return [];
             var boundary=end-WidgetModel.Lookback;
-            if(start>=boundary)return WorkActivity.Build(live.Where(e=>e.At>=start),end);
             // Older events are retained in SQLite; do not expand the live import horizon.
             // Cache a whole extra hour, but only use the prefix before the current live
             // boundary. The recent tail still comes from an atomically published generation.
             var until=DateTimeOffset.FromUnixTimeSeconds((boundary.ToUnixTimeSeconds()/3600+1)*3600);
-            if(!_archiveWork.TryGetValue(platform,out var cache)||cache.From>start||cache.Until<until)
+            if(!_archiveWork.TryGetValue(platform,out var cache)||cache.Until<until)
             {
-                cache=(start,until,_store.WorkActivityEvents(start,until,platform,1_000_000));
+                cache=(until,_store.WorkActivityEvents(DateTimeOffset.UnixEpoch,until,platform,1_000_000));
                 _archiveWork[platform]=cache;
             }
-            return WorkActivity.Build(cache.Events.Where(e=>e.At>=start&&e.At<boundary)
-                .Concat(live.Where(e=>e.At>=boundary)),end);
+            return WorkActivity.Build(cache.Events.Where(e=>e.At<boundary)
+                .Concat(live.Where(e=>e.At>=boundary)),end).Where(s=>s.End>=start-WorkActivity.HandoffWindow).ToArray();
         }
     }
     public IReadOnlyList<QuotaToken>? QuotaTokens(DateTimeOffset start,DateTimeOffset end,string platform)

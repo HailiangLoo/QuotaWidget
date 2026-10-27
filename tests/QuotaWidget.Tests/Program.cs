@@ -869,8 +869,12 @@ WidgetModel ModelWith(DataPaths paths, Func<DateTimeOffset> clock)
 
 void Feed(WidgetModel m, DataPaths paths, HistoryRecord r)
 {
+    var stamp=File.Exists(paths.Latest)?File.GetLastWriteTimeUtc(paths.Latest):DateTime.UtcNow;
     AtomicFile.WriteAllText(paths.Latest, SnapshotJson.WriteEnvelope(new LatestEnvelope(1, r.SourceId, r.ProfileKey, r.PlanLabel, r.AttemptedAt, r.Status, r.PollSeconds, null, null, r.Snapshot)));
-    m.PollLatest();
+    // Rapid equal-length fixture writes can share an NTFS timestamp. Each Feed
+    // represents a distinct observation, so give the file watcher a distinct stamp.
+    File.SetLastWriteTimeUtc(paths.Latest,stamp.AddMilliseconds(1));
+    True(m.PollLatest(),"fixture update was not observed");
 }
 
 Test("dashboard: Max Fable is half native points throughout rate, cumulative and average displays", () =>
