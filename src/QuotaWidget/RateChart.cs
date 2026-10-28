@@ -63,7 +63,11 @@ public sealed class RateChart : FrameworkElement
     public Rect? AxisBounds(bool codex) => _lanes.FirstOrDefault(l=>(l.Name=="Codex")==codex) is {} lane&&!Collapsed(lane.Panel)
         ? new Rect(_left,PlotBottom(lane.Panel)+1,PlotRight-_left,TimeAxisHeight+8) : null;
     bool CumulativePanel(int panel) => _view?.IsCumulative(_lanes.First(l=>l.Panel==panel).Name=="Codex")==true;
-    double PlotRight => Math.Max(_left + 40, ActualWidth - 1);
+    double ContentRight => Math.Max(_left + 40, ActualWidth - 1);
+    double CreditGutter => HasCreditCurve ? Math.Min(72,ActualWidth*.30) : 0;
+    // Reserve a real axis gutter: labels painted over the newest five-minute
+    // credit interval used to hide its entire dashed stroke.
+    double PlotRight => Math.Max(_left + 40, ContentRight-CreditGutter);
     double PlotTop(int i) => 25 + PanelTop(i);
     double PlotBottom(int i) => PanelTop(i) + PanelHeight(i) - 9;
 
@@ -266,14 +270,28 @@ public sealed class RateChart : FrameworkElement
         {
             var sum=RateEngine.SumRange(lane.Source,_view!.Start,_view.End);
             var parts=RateEngine.SumProfiles(lane.Source,_view.Start,_view.End);
-            return sum.CoverageMinutes>0 ? (compact?"":Loc.T("累计 "))+(parts.Count>1?RateEngine.FormatAmounts(parts):Number(sum.Delta))+(compact?Loc.T("点"):Loc.T(" 点")) : Loc.T("暂无记录");
+            var quota=sum.CoverageMinutes>0 ? (parts.Count>1?RateEngine.FormatAmounts(parts):Number(sum.Delta))+(compact?Loc.T("点"):Loc.T(" 点")) : Loc.T("暂无记录");
+            if(lane.Name=="Codex"&&_view.Credits is {} credits)
+            {
+                var used=RateEngine.SumRange(credits,_view.Start,_view.End);
+                if(used.Delta>0)
+                {
+                    var partial=credits.Segments.Any(s=>!s.Valid&&s.End>_view.Start&&s.Start<_view.End)||
+                        used.CoverageMinutes<(_view.End-_view.Start).TotalMinutes-1;
+                    var credit=used.Delta.ToString("0.#",CultureInfo.InvariantCulture)+" cr"+(partial?"*":"");
+                    // A mixed range keeps its subscription points and credit units.
+                    // If only credits were observed, don't headline a zero-point bill.
+                    return (compact?"":Loc.T("累计 "))+(sum.Delta>0?quota+" + ":"")+credit;
+                }
+            }
+            return sum.CoverageMinutes>0 ? (compact?"":Loc.T("累计 "))+quota : quota;
         }
         var shared=lanes.Length>1;
         var left=shared?lanes[0].Name+" · "+Amount(lanes[0],false):lanes[0].Name;
         var right=(shared?lanes[^1].Name+" · ":"")+Amount(lanes[^1],false);
         var font=10.5;
         double Width(string s)=>Text(s,Theme.Brush("Muted"),font).Width;
-        var available=PlotRight-23-_left;
+        var available=ContentRight-23-_left;
         if(Width(left)+Width(right)+76>available)
         {
             left=shared?lanes[0].Name+" · "+Amount(lanes[0],true):lanes[0].Name;
@@ -300,11 +318,15 @@ public sealed class RateChart : FrameworkElement
             {
                 var value=i==intervals?scale.Top:i*ticks.Step;
                 var unit=credits&&i==intervals ? (_view!.CodexCumulativeMode?" cr":" cr/h") : "";
-                var text=Text(ticks.Label(value)+unit,Theme.Brush(credits?"Credits":"Axis"),credits?10:11.5);
+                var caption=ticks.Label(value)+unit;
+                var font=credits?10d:11.5;
+                var text=Text(caption,Theme.Brush(credits?"Credits":"Axis"),font);
+                if(credits)
+                    while(font>8&&text.Width>CreditGutter-6)text=Text(caption,Theme.Brush("Credits"),font-=.5);
                 text.SetFontWeight(FontWeights.SemiBold);
                 var y=bottom-value/scale.Top*(bottom-top);
                 y=i==0?y-text.Height-1:i==intervals?y+1:y-text.Height/2;
-                labels.Add((value,text,new Rect(credits?PlotRight-text.Width-7:_left,y,text.Width+7,text.Height)));
+                labels.Add((value,text,new Rect(credits?ContentRight-text.Width-2:_left,y,text.Width+(credits?2:7),text.Height)));
             }
             if(labels.All(l=>l.Bounds.Top>=top&&l.Bounds.Bottom<=bottom)&&
                 labels.Zip(labels.Skip(1),(below,above)=>below.Bounds.Top-above.Bounds.Bottom>=3).All(fits=>fits))
@@ -339,7 +361,7 @@ public sealed class RateChart : FrameworkElement
             var drawn=indices.Where(j=>allPoints[j].Count>0).ToArray();
             var header=Header(i);
             Label(dc,header.Left,Theme.Brush(_lanes[indices[0]].Color),_left,PanelTop(i)+3,header.FontSize);
-            Label(dc,header.Right,Theme.Brush(_lanes[indices[^1]].Color),PlotRight-23,PanelTop(i)+3,header.FontSize,TextAlignment.Right);
+            Label(dc,header.Right,Theme.Brush(_lanes[indices[^1]].Color),ContentRight-23,PanelTop(i)+3,header.FontSize,TextAlignment.Right);
             if (Collapsed(i)) continue;
             var axisLabels=YAxisLabels(i,scale);
             var creditPanel=HasCreditCurve&&_lanes[indices[0]].Name=="Codex";
@@ -391,8 +413,7 @@ public sealed class RateChart : FrameworkElement
             }
             dc.Pop();
             DrawBoundaries(dc, i, indices, v, labelObstacles);
-            // Put ticks inside the plot: the data reaches both edges of the narrow widget.
-            // A small background keeps the labels legible if a curve crosses them.
+            // Primary ticks stay inside; credit ticks have their own gutter.
             foreach(var tick in axisLabels.Concat(creditLabels))
             {
                 labelObstacles.Add(tick.Bounds);
@@ -422,6 +443,8 @@ public sealed class RateChart : FrameworkElement
     public double KernelMinutes => _lanes.SelectMany(l => l.Trend.Runs).Select(r => r.KernelMinutes).DefaultIfEmpty(60).Max();
 
     double CreditY(int panel,double value) => PlotBottom(panel)-value/CreditScale.Top*(PlotBottom(panel)-PlotTop(panel));
+    Point[][] CreditPaths(int panel) => HasCreditCurve&&_lanes.First(l=>l.Panel==panel).Name=="Codex"
+        ? _creditPoints.Select(run=>run.Select(p=>new Point(X(p.Time),CreditY(panel,p.Rate))).ToArray()).ToArray() : [];
     double? CreditValue(DateTimeOffset time) => _view is { } v && v.Credits?.SegmentAt(time) is { Valid:true } segment && segment.Start>=v.Start && segment.End<=v.End
         ? v.CodexCumulativeMode ? _creditCumulative?.ValueAt(time) : segment.Rate : null;
 
@@ -436,6 +459,7 @@ public sealed class RateChart : FrameworkElement
             .Concat(providerGaps.Where(g=>g.Label=="断开" && g.End>_displayStart && g.Start<view.End)).OrderBy(s => s.Start);
         var lastLabelRight = double.NegativeInfinity;
         var lastQuietX=double.NegativeInfinity;
+        var creditPaths=CreditPaths(panel);
         var captionRight=HasCreditCurve&&_lanes[indices[0]].Name=="Codex"
             ?AxisLabels(panel,CreditScale,true).Select(l=>l.Bounds.Left-4).DefaultIfEmpty(PlotRight).Min():PlotRight;
         foreach (var gap in ChartBoundaries.Coalesce(gaps))
@@ -461,6 +485,14 @@ public sealed class RateChart : FrameworkElement
             var tx = Math.Clamp(x - text.Width / 2, _left + 28, Math.Max(_left + 28, captionRight-text.Width-2));
             if (tx < lastLabelRight + 6) continue;
             var box = new Rect(tx-2, PlotTop(panel)+(gap.Label=="断开" ? 22 : 2), text.Width+4, text.Height);
+            // Plan-change captions sit at exactly the place where credits often
+            // start. Keep the marker, but move its caption away from that stroke.
+            bool Clear(Rect area){area.Inflate(2,2);return !creditPaths.Any(path=>Crosses(area,path));}
+            if(!Clear(box))
+            {
+                box.Y=PlotBottom(panel)-text.Height-2;
+                if(!Clear(box))continue;
+            }
             obstacles.Add(box);
             dc.DrawRectangle(Theme.Brush("Bg"), null, box);
             dc.DrawText(text, new Point(tx, box.Top));
@@ -474,7 +506,7 @@ public sealed class RateChart : FrameworkElement
         // Use the small band above the top gridline, while staying below the summary text.
         var bounds = new Rect(_left + 1, PlotTop(panel) - 6, PlotRight - _left - 2, PlotBottom(panel) - PlotTop(panel) + 5);
         var curves = indices.SelectMany(j => allPoints[j].Concat(_lanes[j].IdleLinks)).Select(run =>
-            run.Select(p => new Point(X(p.Time), y(panel, p.Rate))).ToArray()).ToArray();
+            run.Select(p => new Point(X(p.Time), y(panel, p.Rate))).ToArray()).Concat(CreditPaths(panel)).ToArray();
         var candidates = indices.SelectMany(j => (_lanes[j].Peaks ??= PeakLabels.Find(allPoints[j]))
             .Where(peak=>_lanes[j].Trend.CanLabelPeak(peak.Time))
             .Select((peak, rank) => (Lane: j, Peak: peak, Rank: rank))).OrderBy(c => c.Rank).ThenByDescending(c => c.Peak.Value);

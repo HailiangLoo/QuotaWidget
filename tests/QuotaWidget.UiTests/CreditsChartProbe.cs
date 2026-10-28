@@ -50,6 +50,9 @@ static class CreditsChartProbe
                     Check(labels.All(l=>l.Bounds.Right<=chart.ActualWidth&&l.Bounds.Left>chart.ActualWidth/2),"right ticks outside plot");
                     Check(labels.Zip(labels.Skip(1),(a,b)=>!a.Bounds.IntersectsWith(b.Bounds)).All(x=>x),"right labels overlap");
                     Check(labels.Last().Text.Text.EndsWith(cumulative?" cr":" cr/h"),"mode units wrong");
+                    var plotRight=(double)typeof(RateChart).GetProperty("PlotRight",flags)!.GetValue(chart)!;
+                    Check(labels.All(l=>l.Bounds.Left>plotRight),"credit-axis label can hide the newest interval");
+                    Check(Property<string>(Call("Header",0)!,"Right").Contains(" cr"),"mixed-use headline omits credits");
                     var shapes=Shapes(VisualTreeHelper.GetDrawing(chart)).ToArray();
                     var quotaShapes=shapes.Where(s=>s.Pen?.Brush==Theme.Brush("Violet")).Select(s=>s.Geometry.Bounds).ToArray();
                     Check(quotaShapes.Length>0,"quota stroke lost");
@@ -94,6 +97,36 @@ static class CreditsChartProbe
             Check(Property<string>(resetRows[0],"Value")==Loc.T("重置")&&Property<string>(resetRows[1],"Value")=="300 cr/h","reset crossing erased real credit observations or fabricated quota");
             chart.ClearInspect();
             Console.WriteLine("PASS: credit-funded work, quota reset paths/fills and hover remain separate.");
+            // Regression: credits start in the final five minutes of a narrow
+            // chart. Its full stroke must stay outside the right-axis labels.
+            foreach(var width in new[]{216d,258d,360d})
+            foreach(var cumulative in new[]{false,true})
+            {
+                var lateCredits=new SeriesData{Key=SeriesKey.Credits,Segments=[
+                    new(){Start=t,End=t.AddMinutes(50),Issue=SegmentIssue.Gap},
+                    new(){Start=t.AddMinutes(55),End=t.AddMinutes(60),Delta=22.57195,Group=1}]};
+                var switched=new SeriesData{Key=SeriesKey.Total,Segments=[
+                    new(){Start=t,End=t.AddMinutes(45),Delta=4},
+                    new(){Start=t.AddMinutes(45),End=t.AddMinutes(50),Issue=SegmentIssue.ProfileChange,Label="Codex promax → Codex free",Group=1},
+                    new(){Start=t.AddMinutes(50),End=t.AddHours(1),Delta=0,Group=1}]};
+                chart.View=new(){Start=t,End=t.AddHours(1),Total=Quota(),Fable=Quota(),Codex=switched,Credits=lateCredits,
+                    Gaps=[],Smooth=false,TotalVisible=false,FableVisible=false,CodexVisible=true,CodexCumulativeMode=cumulative};
+                chart.FitHeight(110);host.Width=width;host.Measure(new Size(width,600));host.Arrange(new Rect(0,0,width,600));host.UpdateLayout();
+                var header=Property<string>(Call("Header",0)!,"Right");
+                Check(header.Contains("22.6 cr*"),"new credit consumption or coverage marker missing from headline");
+                var scale=(ChartScale)typeof(RateChart).GetField("CreditScale",flags)!.GetValue(chart)!;
+                var labels=(IReadOnlyList<(double Value,FormattedText Text,Rect Bounds)>)Call("AxisLabels",0,scale,true)!;
+                var strokes=Shapes(VisualTreeHelper.GetDrawing(chart)).Where(s=>s.Pen?.Brush==Theme.Brush("Credits")).ToArray();
+                Check(strokes.Length>0&&strokes.All(s=>labels.All(l=>s.Geometry.Bounds.Right<l.Bounds.Left)),"late credit stroke obscured by axis");
+                var boxes=Shapes(VisualTreeHelper.GetDrawing(chart)).Where(s=>s.Brush==Theme.Brush("Bg")).Select(s=>s.Geometry.Bounds).ToArray();
+                Check(strokes.All(s=>boxes.All(b=>s.Geometry.GetWidenedPathGeometry(s.Pen).FillContainsWithDetail(new RectangleGeometry(b))==IntersectionDetail.Empty)),
+                    $"caption hides late credit stroke at width {width}, cumulative={cumulative}");
+                var zero=new SeriesData{Key=SeriesKey.Total,Segments=[new(){Start=t,End=t.AddHours(1),Delta=0}]};
+                chart.View=new(){Start=t,End=t.AddHours(1),Total=zero,Fable=zero,Codex=zero,Credits=lateCredits,
+                    Gaps=[],Smooth=false,TotalVisible=false,FableVisible=false,CodexVisible=true,CodexCumulativeMode=cumulative};
+                var only=Property<string>(Call("Header",0)!,"Right");
+                Check(only.Contains("22.6 cr*")&&!only.Contains("+"),"credit-only range is still headlined as subscription points");
+            }
             chart.View=new(){Start=t,End=t.AddHours(1),Total=Quota(),Fable=Quota(),Codex=Quota(),Gaps=[],Smooth=false,TotalVisible=true,FableVisible=false,CodexVisible=false,Credits=Credits(1)};
             Check(!(bool)typeof(RateChart).GetProperty("HasCreditCurve",flags)!.GetValue(chart)!,"Claude-only showed credits");
             Console.WriteLine("PASS: credits independent scale, sampled gaps, right-axis spacing, both units/readouts and provider visibility across 96 width/height/theme/language cases.");

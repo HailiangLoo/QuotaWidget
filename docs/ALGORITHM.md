@@ -27,6 +27,8 @@ Long rate views read retained lifecycle events over the same observation context
 
 ## Credits
 
+The Codex chart headline includes recorded credit use in `cr`; mixed ranges retain subscription points alongside it. A `*` marks incomplete credit coverage. Right-axis labels occupy a separate gutter, and boundary/peak captions avoid credit strokes, including the first short interval after a plan change. This changes presentation only; gaps between account/plan profiles remain unallocated.
+
 The existing official `account/rateLimits/read` query can return a decimal credit balance in the Codex bucket. It is separate from earned rate-limit resets; the widget never redeems a reset or purchases credits. [Protocol](https://learn.chatgpt.com/docs/app-server); [pricing](https://learn.chatgpt.com/docs/pricing).
 
 The pale violet dashed line uses its own right axis. Rate is the balance decrease divided by the elapsed time between adjacent valid samples (`cr/h`); cumulative mode sums complete valid intervals (`cr`). It does not use quota smoothing, local task attribution or a conversion to weekly quota. The shared time axis is unchanged. The balance row shows net use in the selected range. In compact mode, recent credit decreases, or exhausted allowance with a reported credit balance, switch the Codex summary to last-hour recorded totals. Mixed usage shows points + credits; incomplete intervals, resets and stale data mark the affected amount with `*`. Missing readings stay unavailable. The balance remains visible and the duplicated credit total is hidden. This summary and the 1h usage card share the same calculation; longer detail ranges keep their own scope.
