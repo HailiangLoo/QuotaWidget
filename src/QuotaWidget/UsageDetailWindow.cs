@@ -21,7 +21,8 @@ public sealed class UsageDetailWindow : Window
         _reload=reload;_clock=clock??(()=>DateTimeOffset.Now);Title=platform+Loc.T(" 用量 · 已固定");WindowStyle=WindowStyle.None;AllowsTransparency=true;Background=Brushes.Transparent;
         ResizeMode=ResizeMode.NoResize;SizeToContent=SizeToContent.WidthAndHeight;ShowInTaskbar=false;WindowStartupLocation=WindowStartupLocation.Manual;
         ReplaceCard(card);
-        WindowDrag.Attach(this,this,dragging=>_dragging=dragging,()=>_lastInteraction=_clock());
+        WindowDrag.Attach(this,this,dragging=>_dragging=dragging,()=>{_lastInteraction=_clock();FitCurrentMonitor();});
+        DpiChanged+=(_,_)=>Dispatcher.BeginInvoke(DispatcherPriority.Loaded,()=>{if(!_dragging)FitCurrentMonitor();});
         PreviewKeyDown+=(_,e)=>{if(e.Key==Key.Escape){Close();e.Handled=true;}};
         PreviewMouseWheel+=(_,_)=>_lastInteraction=_clock();
         PreviewMouseDown+=(_,_)=>_lastInteraction=_clock();
@@ -56,11 +57,31 @@ public sealed class UsageDetailWindow : Window
             if(_closed||!ReferenceEquals(Card,card))return;
             card.UpdateLayout();card.TableScroll.ScrollToVerticalOffset(offset);card.UpdateLayout();
         });
-        if(IsLoaded) Dispatcher.BeginInvoke(DispatcherPriority.Loaded,()=>NativePlacement.FitToWorkArea(new WindowInteropHelper(this).Handle));
+        if(IsLoaded) Dispatcher.BeginInvoke(DispatcherPriority.Loaded,FitCurrentMonitor);
     }
-    public void PlaceAt(Point physical)
+    void FitCurrentMonitor()
     {
-        SourceInitialized+=(_,_)=>NativePlacement.Move(new WindowInteropHelper(this).Handle,(int)Math.Round(physical.X),(int)Math.Round(physical.Y));
-        Loaded+=(_,_)=>NativePlacement.FitToWorkArea(new WindowInteropHelper(this).Handle);
+        if(_closed||!IsLoaded)return;
+        var handle=new WindowInteropHelper(this).Handle;
+        var area=NativePlacement.WorkArea(handle);var dpi=VisualTreeHelper.GetDpi(this);
+        Card.FitAvailable(new Size(area.Width/dpi.DpiScaleX,area.Height/dpi.DpiScaleY));
+        UpdateLayout();NativePlacement.FitToWorkArea(handle);
+    }
+    public void PlaceBeside(Rect owner,double top,Rect work,double gap)
+    {
+        // Initialize on the owner's screen before WPF computes per-monitor size.
+        SourceInitialized+=(_,_)=>NativePlacement.Move(new WindowInteropHelper(this).Handle,(int)Math.Round(owner.Left),(int)Math.Round(owner.Top));
+        void Place()
+        {
+            if(_closed)return;
+            var handle=new WindowInteropHelper(this).Handle;
+            var dpi=VisualTreeHelper.GetDpi(this);
+            Card.FitAvailable(new Size(work.Width/dpi.DpiScaleX,work.Height/dpi.DpiScaleY));
+            UpdateLayout();
+            if(NativePlacement.Bounds(handle) is not {} bounds)return;
+            var at=NativePlacement.Beside(owner,bounds.Size,work,top,gap);
+            NativePlacement.Move(handle,(int)Math.Round(at.X),(int)Math.Round(at.Y));
+        }
+        Loaded+=(_,_)=>{Place();Dispatcher.BeginInvoke(DispatcherPriority.Loaded,Place);};
     }
 }

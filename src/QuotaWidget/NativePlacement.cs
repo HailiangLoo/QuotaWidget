@@ -20,6 +20,25 @@ static class NativePlacement
     public static System.Windows.Rect? Bounds(IntPtr hwnd) => GetWindowRect(hwnd, out var r)
         ? new System.Windows.Rect(r.Left, r.Top, r.Right-r.Left, r.Bottom-r.Top) : null;
 
+    public static System.Windows.Rect WorkArea(IntPtr owner)
+    {
+        var r=Screen.FromHandle(owner).WorkingArea;
+        return new(r.Left,r.Top,r.Width,r.Height);
+    }
+
+    // Keep both hover and pinned cards on the owner's monitor. Choosing a monitor
+    // after placing the card to the right can accidentally select a second screen.
+    public static System.Windows.Point Beside(System.Windows.Rect owner,System.Windows.Size card,
+        System.Windows.Rect work,double top,double gap)
+    {
+        var right=work.Right-owner.Right-gap;var left=owner.Left-work.Left-gap;
+        var x=right>=card.Width?owner.Right+gap:
+            left>=card.Width?owner.Left-gap-card.Width:
+            right>=left?owner.Right+gap:owner.Left-gap-card.Width;
+        return new(Math.Clamp(x,work.Left,Math.Max(work.Left,work.Right-card.Width)),
+            Math.Clamp(top,work.Top,Math.Max(work.Top,work.Bottom-card.Height)));
+    }
+
     /// <summary>After expanding the small card, keep the window reachable on its current monitor.</summary>
     public static void FitToWorkArea(IntPtr hwnd)
     {

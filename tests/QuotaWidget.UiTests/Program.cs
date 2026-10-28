@@ -23,6 +23,7 @@ static class Probe
             SettingSliderProbe.Run();
             CapacityNotificationProbe.Run(app);
             if(args.Contains("--historical-rates-only")){HistoricalRateProbe.Run(app);return 0;}
+            if(args.Contains("--usage-placement-only")){UsagePlacementProbe.Run();return 0;}
             if(args.Contains("--history-profiles-only")){HistoryProfileProbe.Run(app,args.Length>1?args[1]:null);return 0;}
             if(args.Contains("--credits-only")){CreditsChartProbe.Run(args.Length>1?args[1]:null);return 0;}
             if(args.Contains("--compact-credits-only")){CompactCreditsProbe.Run(app,args.Length>1?args[1]:null);return 0;}
@@ -281,6 +282,7 @@ static class Probe
             HistoricalRateProbe.Run(app);
             UsageRefreshProbe.Run();
             UsageInteractionProbe.Run();
+            UsagePlacementProbe.Run();
             ScalingProbe.Run(app);
             Console.WriteLine("Monitoring UI: real selector transitions both/Claude/Codex; live meters/chart/tokens/chats and compact rows follow; paused-provider status suppressed; both restores; corner icons and palette roles verified.");
             Console.WriteLine("PASS: full-row geometry and hover, table/card same snapshot with platform/scope isolation, fixed window snapshot/drag handle/close, reused-window refresh scope, demo totals consistent. No native windows shown.");

@@ -4,6 +4,8 @@ using System.Linq;
 using System.Windows;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
+using System.Windows.Interop;
+using System.Windows.Media;
 using System.Windows.Threading;
 using QuotaWidget.Core;
 
@@ -11,7 +13,7 @@ namespace QuotaWidget.App;
 
 public partial class MainWindow
 {
-    readonly Popup _usagePopup=new(){AllowsTransparency=true,Placement=PlacementMode.Right,HorizontalOffset=7,StaysOpen=true,PopupAnimation=PopupAnimation.Fade};
+    readonly Popup _usagePopup=new(){AllowsTransparency=true,Placement=PlacementMode.Custom,StaysOpen=true,PopupAnimation=PopupAnimation.Fade};
     readonly DispatcherTimer _usageOpenTimer=new(){Interval=TimeSpan.FromMilliseconds(280)};
     readonly DispatcherTimer _usageCloseTimer=new(){Interval=TimeSpan.FromMilliseconds(350)};
     FrameworkElement? _usageOwner;
@@ -30,6 +32,17 @@ public partial class MainWindow
 
     void InitializeUsageHover()
     {
+        _usagePopup.CustomPopupPlacementCallback=(size,_,_) =>
+        {
+            var handle=new WindowInteropHelper(this).Handle;
+            var origin=PointToScreen(new Point());
+            var matrix=PresentationSource.FromVisual(this)!.CompositionTarget!.TransformToDevice;
+            var owner=NativePlacement.Bounds(handle)??new Rect(origin,new Size(ActualWidth*matrix.M11,ActualHeight*matrix.M22));
+            var top=_usageOwner?.PointToScreen(new Point()).Y??owner.Top;
+            var at=NativePlacement.Beside(owner,new Size(size.Width*matrix.M11,size.Height*matrix.M22),
+                NativePlacement.WorkArea(handle),top,7*matrix.M11);
+            return [new CustomPopupPlacement(new Point((at.X-origin.X)/matrix.M11,(at.Y-origin.Y)/matrix.M22),PopupPrimaryAxis.None)];
+        };
         foreach(var (host,platform) in new[]{(CompactClaudeRate,ChatPlatform.Claude),(CompactCodexRate,ChatPlatform.Codex)}) BindUsage(host,platform,true);
         BindUsage(CodexInlineUsage,ChatPlatform.Codex,true);
         BindUsage(ClaudeTokenHitArea,ChatPlatform.Claude,true);BindUsage(CodexTokenHitArea,ChatPlatform.Codex,true);
@@ -77,8 +90,9 @@ public partial class MainWindow
     void ShowUsage()
     {
         if(_usageOwner is null||_usageWindows.ContainsKey(_usagePlatform)) return;
-        _usagePopup.PlacementTarget=_usageOwner;
+        _usagePopup.PlacementTarget=this;
         var card=CreateUsageCard(_usagePlatform,_usageMinutes);
+        FitUsageCard(card);
         card.MouseEnter+=UsageCardEnter;card.MouseLeave+=UsageCardLeave;card.PreviewMouseLeftButtonDown+=UsageCardClick;
         _usagePopup.Child=card;_hoverCard=card;_usagePopup.IsOpen=true;
         RenderTokens();
@@ -103,7 +117,15 @@ public partial class MainWindow
     }
     void PinUsage(PlatformUsageCard card,FrameworkElement anchor)
     {
-        var at=IsVisible?(_usagePopup.Child==card?card.PointToScreen(new Point(0,0)):anchor.PointToScreen(new Point(anchor.ActualWidth+7,0))):(Point?)null;
+        var visible=IsVisible;
+        var handle=new WindowInteropHelper(this).Handle;
+        var owner=visible?NativePlacement.Bounds(handle):null;
+        var top=visible?anchor.PointToScreen(new Point()).Y:0;
+        // Hover and a direct click choose the same side of the entire widget.
+        if(_usagePopup.Child==card&&_usageOwner is {} host)top=host.PointToScreen(new Point()).Y;
+        var work=visible?NativePlacement.WorkArea(handle):Rect.Empty;
+        var dpi=VisualTreeHelper.GetDpi(this);
+        if(visible)FitUsageCard(card);
         var platform=card.Platform;
         card.MouseEnter-=UsageCardEnter;card.MouseLeave-=UsageCardLeave;card.PreviewMouseLeftButtonDown-=UsageCardClick;
         CloseUsage();
@@ -114,8 +136,14 @@ public partial class MainWindow
         var window=new UsageDetailWindow(platform,card,range=>CreateUsageCard(platform,range)){Topmost=Topmost};
         _usageWindows[platform]=window;window.Closed+=(_,_)=>_usageWindows.Remove(platform);
         // A hidden or unloading owner must not bring a detail window onto the desktop.
-        if(at is null) return;
-        window.Owner=this;window.PlaceAt(at.Value);window.Show();window.Activate();
+        if(owner is null) return;
+        window.Owner=this;window.PlaceBeside(owner.Value,top,work,7*dpi.DpiScaleX);window.Show();window.Activate();
+    }
+    void FitUsageCard(PlatformUsageCard card)
+    {
+        var area=NativePlacement.WorkArea(new WindowInteropHelper(this).Handle);
+        var dpi=VisualTreeHelper.GetDpi(this);
+        card.FitAvailable(new Size(area.Width/dpi.DpiScaleX,area.Height/dpi.DpiScaleY));
     }
     TokenSummary? HoverTokenTotal(ChatPlatform platform,int minutes)
         =>_hoverCard is { } card&&card.Platform==platform&&card.Minutes==minutes?card.Data.Total:null;

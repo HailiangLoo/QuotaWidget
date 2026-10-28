@@ -43,6 +43,20 @@ public sealed class PlatformUsageCard : Border
         return false;
     }
     static Style ResourceStyle(string key)=>(Style)Application.Current.FindResource(key);
+    // Measure at native text size, shorten only the table, then scale down only
+    // when even the fixed-width card/chrome cannot fit this monitor.
+    public void FitAvailable(Size available)
+    {
+        LayoutTransform=Transform.Identity;TableScroll.MaxHeight=640;
+        Measure(new Size(double.PositiveInfinity,double.PositiveInfinity));
+        var scale=Math.Min(1,Math.Max(1,available.Width)/DesiredSize.Width);
+        var chrome=DesiredSize.Height-TableScroll.DesiredSize.Height;
+        TableScroll.MaxHeight=Math.Max(0,available.Height/scale-chrome);
+        Measure(new Size(double.PositiveInfinity,double.PositiveInfinity));
+        scale=Math.Min(scale,Math.Max(1,available.Height)/Math.Max(1,DesiredSize.Height));
+        if(scale<1)LayoutTransform=new ScaleTransform(scale,scale);
+        Measure(new Size(double.PositiveInfinity,double.PositiveInfinity));
+    }
     static TextBlock Text(string value,double size=11,string color="Ink")=>new(){Text=value,FontSize=size,Foreground=Theme.Brush(color),VerticalAlignment=VerticalAlignment.Center,TextTrimming=TextTrimming.CharacterEllipsis};
     static Grid Columns()
     {

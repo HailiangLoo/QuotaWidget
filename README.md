@@ -43,6 +43,8 @@ Each provider has its own movable detail window. Choose **1h / 5h / 12h / 24h / 
 
 Visible pinned windows automatically refresh at the configured polling interval (5 minutes by default), preserving their range and scroll position. This only reads existing local records; it does not trigger quota requests or model calls. Hidden or closed windows do not refresh, and dragging or recent interaction briefly defers an update. **Refresh** remains available for an immediate update.
 
+Usage previews and pinned details open beside the widget on its current monitor, switching to the left when the right side is full. They stay within the work area above the taskbar; long tables scroll inside the card, and small displays scale the card down when necessary.
+
 The **Est. pts** column apportions observed weekly quota using locally calibrated model/input/cache/output weights. It appears only after held-out validation and allocation-stability checks; insufficient or conflicting data shows a dash. This assumes the quota consumption is represented in local logs. It is an estimate, not a provider bill. All names, projects and numbers shown here are synthetic.
 
 ### Settings
