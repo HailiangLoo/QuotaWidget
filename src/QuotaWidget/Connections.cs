@@ -26,9 +26,9 @@ public partial class App
         var latest=(platform==ChatPlatform.Claude?_model:_codex).LastEnvelope;
         if(latest is not null&&Statuses.HasSnapshot(latest.Status)&&_dependencyCheckedAt.TryGetValue(platform,out var checkedAt)&&latest.AttemptedAt>checkedAt)
             _dependencies[platform]=true;
-        if(_verifyAfter.TryGetValue(platform,out var after)&&latest?.AttemptedAt<after)latest=null;
         return Connections.Describe(platform,_model.Settings,latest,
-            _opts.Demo?true:_dependencies.TryGetValue(platform,out var ready)?ready:null,DateTimeOffset.Now,_connectionChecks.GetValueOrDefault(platform));
+            _opts.Demo?true:_dependencies.TryGetValue(platform,out var ready)?ready:null,DateTimeOffset.Now,_connectionChecks.GetValueOrDefault(platform),
+            _verifyAfter.TryGetValue(platform,out var after)?after:null);
     }
     public void CompleteSetup()
     {
@@ -89,7 +89,7 @@ public partial class App
             if(platform==ChatPlatform.Claude)
             {
                 var choice=ClaudeCli.Resolve(_model.Settings.ClaudeExePath);
-                if(choice.Usable){_verifyAfter[platform]=DateTimeOffset.Now;LaunchLogin();}
+                if(choice.Usable)LaunchLogin();
                 else _window.Flash(Loc.T("未找到兼容的官方程序，暂时无法登录。"));
             }
             else if(OfficialAppLaunch.CodexTarget() is { } target)
@@ -101,6 +101,28 @@ public partial class App
             else _window.Flash(Loc.T("未找到可打开的 Codex / ChatGPT 应用，请手动打开官方程序登录。"));
         }
         catch { _window.Flash(Loc.T("未能打开官方程序，请手动打开并登录。")); }
+    }
+
+    async Task ClaudeLoginCompleted(DateTimeOffset requested,int exitCode)
+    {
+        if(_exiting||!_verifyAfter.TryGetValue(ChatPlatform.Claude,out var pending)||pending!=requested)return;
+        if(exitCode!=0){_verifyAfter.Remove(ChatPlatform.Claude);Render();return;}
+        var completed=DateTimeOffset.Now;
+        _verifyAfter[ChatPlatform.Claude]=completed;
+        if(_collector is null||!_model.Settings.Collects(ChatPlatform.Claude))return;
+        try
+        {
+            await CheckConnection(ChatPlatform.Claude);
+            if(_model.LastEnvelope?.AttemptedAt>=completed)return;
+            // A login must not bypass a network/server wait or the one-minute manual spacing.
+            // Reuse the normal check at its first permitted time; a timer result can satisfy it too.
+            var delay=_collector.ManualCheckNotBefore-DateTimeOffset.Now;
+            await Task.Delay(delay>TimeSpan.Zero?delay:TimeSpan.FromSeconds(1),_cts.Token);
+            if(!_exiting&&_verifyAfter.GetValueOrDefault(ChatPlatform.Claude)==completed&&
+                (_model.LastEnvelope is null||_model.LastEnvelope.AttemptedAt<completed)&&_model.Settings.Collects(ChatPlatform.Claude))
+                await CheckConnection(ChatPlatform.Claude);
+        }
+        catch(OperationCanceledException) { }
     }
 }
 

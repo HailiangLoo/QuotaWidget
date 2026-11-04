@@ -59,6 +59,14 @@ static class ConnectionProbe
                 C<ComboBox>("MonitoringCombo").SelectedIndex=choice;
                 Check(cards.All(c=>c.State.Text=="已连接"&&c.Toggle.Content.ToString()=="断开"),"display selection masked a verified connection");
             }
+            var verification=(Dictionary<ChatPlatform,DateTimeOffset>)typeof(App).GetField("_verifyAfter",BindingFlags.Instance|BindingFlags.NonPublic)!.GetValue(app)!;
+            verification[ChatPlatform.Claude]=stamp.AddSeconds(1);
+            Check(app.Connection(ChatPlatform.Claude).Text=="等待验证","old success verified a new login");
+            typeof(WidgetModel).GetProperty("LastEnvelope")!.SetValue(model,new LatestEnvelope(1,"fixture","fixture","test",stamp,Statuses.Error,300,null,"not_fresh",null));
+            window.RenderConnections();
+            Check(cards[0].State.Text=="等待重试"&&cards[0].Detail.Text.Contains(stamp.AddMinutes(5).ToLocalTime().ToString("HH:mm:ss")),"real app masked the retry deadline after login");
+            verification.Remove(ChatPlatform.Claude);
+            typeof(WidgetModel).GetProperty("LastEnvelope")!.SetValue(model,new LatestEnvelope(1,"fixture","fixture","test",stamp,Statuses.Partial,300,null,null,new("fixture",stamp,new(null,UsageParser.Limit(12,stamp.AddDays(7)),null))));
             Check(model.EventList.Count+codex.EventList.Count==displayCount,"verified connections gained fake display-switch gaps");
             C<ComboBox>("LanguageCombo").SelectedIndex=2;
             Check(cards.All(c=>c.State.Text=="Connected"&&c.Login.Content.ToString()=="Sign in"),"English cards changed connection semantics or retained install labels");

@@ -50,6 +50,8 @@ public sealed class ClaudeUsageCollector : IDisposable
 
     public string? LastStatus => _lastStatus;
     public DateTimeOffset NotBefore => _notBefore;
+    /// <summary>First time a manual verification may run, including spacing and persisted backoff.</summary>
+    public DateTimeOffset ManualCheckNotBefore => InBackoff(_clock()) ? _notBefore : _lastAttempt + MinManualSpacing;
 
     string ConfigDir => _settings().ResolveClaudeConfigDir(_paths);
     TimeSpan Poll => TimeSpan.FromSeconds(Math.Max(60, _settings().PollIntervalSeconds));

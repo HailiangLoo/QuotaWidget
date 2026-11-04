@@ -6,7 +6,7 @@ public sealed record ConnectionStatus(string Text,string Detail,string Color);
 public static class Connections
 {
     public static ConnectionStatus Describe(ChatPlatform platform,WidgetSettings settings,LatestEnvelope? latest,
-        bool? dependencyReady,DateTimeOffset now,bool checking=false)
+        bool? dependencyReady,DateTimeOffset now,bool checking=false,DateTimeOffset? verifyAfter=null)
     {
         ConnectionStatus State(string text,string detail,string color="Muted") => new(Loc.T(text),Loc.T(detail),color);
         if(!settings.SetupCompleted)return State("等待设置",dependencyReady==false?"未找到兼容的官方程序，暂时无法登录。":"选择要连接的平台，完成官方登录后开始。");
@@ -15,10 +15,20 @@ public static class Connections
         if(checking)return State("正在检查","正在检查本机程序与额度状态。");
         if(dependencyReady==false||latest?.ErrorCode is "cli_missing" or "cli_missing_or_untrusted")
             return State("未找到官方程序","未找到兼容的官方程序，暂时无法登录。","Orange");
+        var pending=verifyAfter is {} after&&(latest is null||latest.AttemptedAt<after);
+        if(pending&&(latest is null||Statuses.HasSnapshot(latest.Status)||latest.Status==Statuses.AuthRequired))
+            return State("等待验证","等待官方登录后的额度验证。");
         if(latest?.Status==Statuses.AuthRequired)return State("需要登录",platform==ChatPlatform.Claude?
             "使用挂件专用的 Claude 登录。":"在官方 Codex / ChatGPT 应用中登录 ChatGPT 账号。","Orange");
         if(latest is null)return State("等待验证","已启用监听，等待首次成功读取额度。");
-        if(!Statuses.HasSnapshot(latest.Status))return State("暂时不可用","检查登录或网络，采集器会自动重试。","Orange");
+        if(!Statuses.HasSnapshot(latest.Status))
+        {
+            var retry=latest.AttemptedAt.AddSeconds(Math.Max(latest.EffectivePollIntervalSeconds,latest.RetryAfterSeconds??0)).ToLocalTime();
+            if(retry>now)return State("等待重试",latest.ErrorCode=="not_fresh"?
+                Loc.F($"上次未取得新数据；{retry:HH:mm:ss} 自动重试。"):
+                Loc.F($"上次采集失败；{retry:HH:mm:ss} 自动重试。"),"Orange");
+            return State("暂时不可用","检查登录或网络，采集器会自动重试。","Orange");
+        }
         if(latest.Snapshot is not {} snapshot||now-snapshot.ObservedAt>TimeSpan.FromSeconds(Math.Max(60,latest.EffectivePollIntervalSeconds)*RateEngine.GapFactor+60))
             return State("数据陈旧","保留上次读数，等待新的额度数据。","Orange");
         return new(Loc.T("已连接"),Loc.F($"上次更新 {snapshot.ObservedAt.ToLocalTime():HH:mm}"),"Green");

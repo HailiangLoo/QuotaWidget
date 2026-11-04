@@ -277,7 +277,8 @@ public static class ClaudeCli
     /// instead of starting anything when a check fails.
     /// </summary>
     public static string? LaunchAuthConsole(DataPaths paths, CliChoice choice, string configDir, bool logout,
-        Func<string, bool>? ensurePrivate = null, Func<ProcessStartInfo, Process?>? start = null)
+        Func<string, bool>? ensurePrivate = null, Func<ProcessStartInfo, Process?>? start = null,
+        Action<int>? completed = null)
     {
         if (AuthPreflight(choice, configDir, ensurePrivate) is { } error) return error;
         using var executable = start is null ? Authenticode.OpenVerified(choice.Path!) : null;
@@ -287,8 +288,18 @@ public static class ClaudeCli
         psi.ArgumentList.Add("auth"); psi.ArgumentList.Add(logout ? "logout" : "login");
         if (!logout) psi.ArgumentList.Add("--claudeai");
         PrepareEnvironment(psi, configDir);
-        (start ?? Process.Start)(psi);
+        var process = (start ?? Process.Start)(psi);
+        if (process is not null) _ = FinishAuthAsync(process, completed);
         return null;
+    }
+
+    static async Task FinishAuthAsync(Process process, Action<int>? completed)
+    {
+        var code = -1;
+        try { await process.WaitForExitAsync().ConfigureAwait(false); code = process.ExitCode; }
+        catch { }
+        finally { process.Dispose(); }
+        try { completed?.Invoke(code); } catch { /* an exiting UI cannot undo a completed login */ }
     }
 
     public static string? AuthPreflight(CliChoice choice, string configDir, Func<string, bool>? ensurePrivate = null)

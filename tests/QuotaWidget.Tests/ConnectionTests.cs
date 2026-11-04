@@ -76,5 +76,18 @@ static class ConnectionTests
             Check(Connections.Describe(platform,s,env,true,now.AddHours(2)).Text==Loc.T("数据陈旧"),"old data claimed connected");
             s.CodexConnected=false;Check(Connections.Describe(platform,s,env,true,now).Text==Loc.T("已断开"),"old success overrode disconnect");return Task.CompletedTask;
         });
+        Test("sign-in verification preserves failures and exposes the actual retry deadline",dir=>
+        {
+            var s=new WidgetSettings();var platform=ChatPlatform.Claude;
+            var old=new LatestEnvelope(1,ClaudeUsageCollector.SourceId,"fixture","Max (5x)",now.AddMinutes(-2),Statuses.Error,300,null,"not_fresh",null);
+            var state=Connections.Describe(platform,s,old,true,now,verifyAfter:now.AddSeconds(-5));
+            Check(state.Text==Loc.T("等待重试")&&state.Detail.Contains(old.AttemptedAt.AddMinutes(5).ToLocalTime().ToString("HH:mm:ss")),"sign-in hid the backoff as first-use verification");
+            Check(Connections.Describe(platform,s,old,true,now.AddMinutes(4)).Text==Loc.T("暂时不可用"),"expired retry claimed to be waiting");
+            old=old with{Status=Statuses.Partial,Snapshot=new("fixture",old.AttemptedAt,new(null,UsageParser.Limit(20,now.AddDays(7)),null))};
+            Check(Connections.Describe(platform,s,old,true,now,verifyAfter:now.AddSeconds(-5)).Text==Loc.T("等待验证"),"pre-login reading verified a new sign-in");
+            old=old with{AttemptedAt=now,Snapshot=old.Snapshot with{ObservedAt=now}};
+            Check(Connections.Describe(platform,s,old,true,now,verifyAfter:now.AddSeconds(-5)).Text==Loc.T("已连接"),"fresh reading failed to verify sign-in");
+            return Task.CompletedTask;
+        });
     }
 }

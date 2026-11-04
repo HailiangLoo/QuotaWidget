@@ -557,6 +557,29 @@ TestAsync("collector: fresh CLI answer → snapshot observed at the CLI's fetch 
     Eq("not_fresh", again.ErrorCode);
 });
 
+TestAsync("collector: post-login verification exposes spacing and retains persisted retry floors",async()=>
+{
+    foreach(var error in new[]{"not_fresh","unavailable","timeout"})
+    {
+        var (paths,s,_)=CollectorEnv(true);var now=T0.AddHours(4);
+        var saved=new LatestEnvelope(1,ClaudeUsageCollector.SourceId,"p","Max",now.AddMinutes(-2),Statuses.Error,600,900,error,null);
+        AtomicFile.WriteAllText(paths.Latest,SnapshotJson.WriteEnvelope(saved));
+        var src=new FakeSource(_=>new UsageFetch(UsageFetchKind.Unavailable));
+        using var c=new ClaudeUsageCollector(paths,()=>s,src,()=>now);
+        Eq(saved.AttemptedAt.AddSeconds(900),c.ManualCheckNotBefore);
+        True(await c.CollectOnceAsync(default) is null&&src.Calls==0,"login check bypassed a persisted wait");
+    }
+    {
+        var (paths,s,_)=CollectorEnv(true);var now=T0.AddHours(4);
+        var src=new FakeSource(_=>new UsageFetch(UsageFetchKind.Ok,Body(UsageBody),"max",now));
+        using var c=new ClaudeUsageCollector(paths,()=>s,src,()=>now);
+        await c.CollectOnceAsync(default);var first=now;now=now.AddSeconds(30);
+        Eq(first.AddSeconds(60),c.ManualCheckNotBefore);
+        True(await c.CollectOnceAsync(default) is null&&src.Calls==1,"post-login check ignored spacing");
+        now=first.AddSeconds(60);True(await c.CollectOnceAsync(default) is not null&&src.Calls==2,"safe manual check waited a whole polling period");
+    }
+});
+
 TestAsync("collector: verified local CLI repair recovers without bypassing network or explicit waits", async () =>
 {
     foreach (var (code,status,floor,shouldRecover) in new[] {
@@ -797,6 +820,24 @@ Test("V2-2: one login path — script delegates to the app; failed checks start 
 });
 
 // ---------------- the real CLI, without any account ----------------
+
+TestAsync("login: completion notification follows the actual process exit, including cancellation",async()=>
+{
+    foreach(var code in new[]{0,1})
+    {
+        var paths=new DataPaths(TempDir());var cfg=Path.Combine(paths.Root,"auth");
+        var completion=new TaskCompletionSource<int>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var choice=new CliChoice("fixture.exe","fixture",null,"fixture");
+        System.Diagnostics.Process? Start(System.Diagnostics.ProcessStartInfo ignored)
+        {
+            var psi=new System.Diagnostics.ProcessStartInfo(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System),"cmd.exe")){UseShellExecute=false,CreateNoWindow=true};
+            psi.ArgumentList.Add("/c");psi.ArgumentList.Add("exit "+code);
+            return System.Diagnostics.Process.Start(psi);
+        }
+        True(ClaudeCli.LaunchAuthConsole(paths,choice,cfg,false,_=>true,Start,n=>completion.TrySetResult(n)) is null,"test process failed to launch");
+        Eq(code,await completion.Task.WaitAsync(TimeSpan.FromSeconds(10)),"login completion lost the exit status");
+    }
+});
 
 TestAsync("cli: control response parsing", () =>
 {

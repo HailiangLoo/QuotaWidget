@@ -85,6 +85,8 @@ Official installation and sign-in guides: [Codex / ChatGPT](https://learn.chatgp
 
 **Claude:** requires a supported official Claude Code CLI, or the CLI bundled with the Claude Windows app. Use **Settings > Claude Code > Sign in** to complete the widget's separate sign-in. If no compatible CLI is found, update the official app or set `claudeExePath` in `settings.json`.
 
+Signing in from the widget automatically verifies usage afterward. If collection is backing off, its retry time is shown and verification waits until then. After a plan upgrade, signing in to your regular Claude Code configuration does not refresh the widget's separate sign-in.
+
 To preview the widget without an account, choose **Preview demo** in Settings. Demo data is stored separately from real data. Licenses for the app and its bundled runtime are also available in Settings.
 
 Requires Windows 10/11, x64. Release binaries are currently unsigned.

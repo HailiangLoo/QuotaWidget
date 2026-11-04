@@ -731,7 +731,11 @@ public partial class App : Application
                 Loc.T("额度"), MessageBoxButton.OKCancel, MessageBoxImage.Question) != MessageBoxResult.OK)
             return "cancelled";
         var choice = ClaudeCli.Resolve(settings.ClaudeExePath);
-        var error = ClaudeCli.LaunchAuthConsole(_paths, choice, settings.ResolveClaudeConfigDir(_paths), logout);
+        var requested=DateTimeOffset.Now;
+        var watchLogin=!logout&&_opts.Auth is null&&_collector is not null;
+        var error = ClaudeCli.LaunchAuthConsole(_paths, choice, settings.ResolveClaudeConfigDir(_paths), logout,
+            completed:watchLogin?code=>Dispatcher.BeginInvoke(()=>{if(!_exiting)_ = ClaudeLoginCompleted(requested,code);}):null);
+        if(error is null&&watchLogin){_verifyAfter[ChatPlatform.Claude]=requested;_window.RenderConnections();}
         if (error is not null)
         {
             var hint = choice.Problem switch
