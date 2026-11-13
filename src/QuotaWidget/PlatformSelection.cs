@@ -15,6 +15,9 @@ public partial class MainWindow
         ClaudeLoginButton.IsEnabled=ClaudeLogoutButton.IsEnabled=_app.CollectorAvailable&&claude;
         Visibility Show(bool value)=>value?Visibility.Visible:Visibility.Collapsed;
         var codexOnly=codex&&!claude;
+        // Absence is a capability only after a successful reading. A transient
+        // collection failure must retain the last known account layout.
+        var claudeFive=claude&&(_model.Records.LastOrDefault() is not {} latest||latest.Snapshot.Limits.FiveHour is not null);
         var limits=_codex.Records.LastOrDefault()?.Snapshot.Limits;
         var five=codex&&limits?.FiveHour is not null;
         var week=codex&&(!five||limits?.AllWeek is not null);
@@ -62,10 +65,12 @@ public partial class MainWindow
         RateLayout(codexOnly&&s.CompactMode,CompactCodexPrimaryRate,CompactCodexRateHeading,CompactCodexRateValue,CompactCodexRateUnit,CompactCodexRateArrow,"Codex","Violet");
         CodexInlineRateValue.FontSize=16;
         foreach(var meter in new[]{FiveMeter,WeekMeter,FableMeter}) meter.Visibility=Show(claude);
+        FiveMeter.Visibility=Show(claudeFive);
+        WeekMeter.ShowPlatformIcon=!claudeFive;
         CodexFiveMeter.Visibility=Show(five);CodexMeter.Visibility=Show(week);
         // Give each provider a row when five quotas would squeeze the compact or
         // narrow full view. Accounts without 5h retain their existing geometry.
-        var stacked=(s.CompactMode||s.Width<280)&&claude&&five;
+        var stacked=(s.CompactMode||s.Width<280)&&claude&&five&&(claudeFive?3:2)+(week?2:1)>4;
         var columns=stacked?6:4+(five?1:0)+(codexRateInline?1:0);
         if(MeterGrid.ColumnDefinitions.Count!=columns)
         {MeterGrid.ColumnDefinitions.Clear();for(var i=0;i<columns;i++)MeterGrid.ColumnDefinitions.Add(new());}
@@ -84,9 +89,9 @@ public partial class MainWindow
         {
             for(var i=0;i<3;i++)Grid.SetColumn(meters[i],i);
             Grid.SetColumn(CodexFiveMeter,3);Grid.SetColumn(CodexMeter,five?4:3);
-            for(var i=0;i<columns;i++)MeterGrid.ColumnDefinitions[i].Width=new((i<3?claude:i==3&&five?five:week)?1:0,GridUnitType.Star);
+            for(var i=0;i<columns;i++)MeterGrid.ColumnDefinitions[i].Width=new((i<3?claude&&(i>0||claudeFive):i==3&&five?five:week)?1:0,GridUnitType.Star);
             if(claudeInline)
-                for(var i=0;i<4;i++)MeterGrid.ColumnDefinitions[i].Width=new(i<3?1:.85,GridUnitType.Star);
+                for(var i=0;i<4;i++)MeterGrid.ColumnDefinitions[i].Width=new(i==0&&!claudeFive?0:i<3?1:.85,GridUnitType.Star);
             if(codexRateInline)MeterGrid.ColumnDefinitions[5].Width=new(.85,GridUnitType.Star);
         }
         Grid.SetColumn(MeterDivider,3);

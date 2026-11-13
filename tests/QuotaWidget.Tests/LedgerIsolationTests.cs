@@ -23,7 +23,7 @@ static class LedgerIsolationTests
                 var view = new ChartView { Start = start, End = t.AddMinutes(20), Smooth = smooth, Total = total, Fable = fable, Gaps = [], FableToClaudeFactor = .5 };
                 Near(1, view.TotalTrend.Delta); Near(1, view.FableTrend.Delta);
                 Near(view.TotalAt(t.AddMinutes(7))!.Value, smooth ? ActiveRateEstimator.Build(total, view.End).ValueAt(t.AddMinutes(7))!.Value : 0);
-                _ = view.TotalCumulative; _ = view.FableCumulative; _ = view.DisplayFableTrend;
+                _ = view.TotalCumulative; _ = view.FableCumulative; _ = view.FableTrend;
             }
             Check(before == JsonSerializer.Serialize(new[] { total, fable }), "presentation mutated original observations");
         });

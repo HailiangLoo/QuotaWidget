@@ -124,28 +124,23 @@ static class FableDisplayTests
             Check(visible.Count==2&&visible[0][^1].Time==t.AddMinutes(5)&&visible[1][0].Time==t.AddMinutes(15),"clipping connected across hidden curve");
             Near(3,visible[0][^1].Rate);Near(5,visible[1][0].Rate);Check(points.Length==3&&points[1].Rate==4,"source curve mutated");
         });
-        Test("component conflict cuts follow actual intersections and never invent peaks or lifecycle ends",()=>
+        Test("independent active clocks can cross without hiding recorded Fable usage",()=>
         {
-            var total=new RateTrend();total.Runs.Add(new([new(t,2),new(t.AddMinutes(10),2)],1d/3,0));
-            var fable=new RateTrend();fable.Runs.Add(new([new(t,4),new(t.AddMinutes(10),0)],1d/3,0));
-            var conflicts=FableDisplay.RateConflicts(total,fable,[]);
-            Check(conflicts.Count==1&&conflicts[0].Start==t&&Math.Abs((conflicts[0].End-t.AddMinutes(5)).TotalSeconds)<.001,"conflict boundary rounded to an arbitrary grid");
-            var display=FableDisplay.Omit(fable,conflicts);
-            Check(display.ValueAt(t.AddMinutes(2)) is null&&display.ValueAt(t.AddMinutes(7))>0,"valid component evidence lost or contradictory interval retained");
-            Check(!display.Runs[0].HardStart&&!display.CanLabelPeak(display.Runs[0].Points[0].Time),"filter made a fake task start or peak");
-            Near(1d/3,fable.Delta);
-        });
-        Test("incompatible component rates stay unknown without clamping or rewriting either ledger",()=>
-        {
-            var total=Series(.1);var fable=Series(.2);
-            var view=new ChartView{Start=t,End=t.AddMinutes(300),Total=total,Fable=fable,Gaps=[],Smooth=true,FableToClaudeFactor=.5};
-            Check(view.FableRateConflictAt(t.AddMinutes(60))&&view.FableAt(t.AddMinutes(60)) is null,"component rate exceeded its total as if both were measured");
-            Near(6,RateEngine.SumRange(view.Total,t,t.AddMinutes(300)).Delta);Near(12,RateEngine.SumRange(view.Fable,t,t.AddMinutes(300)).Delta);
-            Near(12,Area(view.FableTrend));Near(0,Area(view.DisplayFableTrend));
-            view.FableOnlySpans=[new(t.AddMinutes(30),t.AddMinutes(90))];
-            Check(!view.FableRateConflictAt(t.AddMinutes(60)),"new exclusive evidence retained an old mixed-model conflict");
-            Near(view.FableAt(t.AddMinutes(60))!.Value,view.TotalAt(t.AddMinutes(60))!.Value);
-            Check(view.FableRateConflictAt(t.AddMinutes(120)),"exclusive fragment changed neighbouring mixed evidence");
+            var total=Series(0);var fable=Series(0);
+            total.Segments.RemoveRange(12,48);fable.Segments.RemoveRange(12,48);
+            foreach(var series in new[]{total,fable})series.Segments.Add(new(){Start=t.AddMinutes(60),End=t.AddMinutes(65),Delta=0});
+            foreach(var i in new[]{0,6})total.Segments[i]=new(){Start=total.Segments[i].Start,End=total.Segments[i].End,Delta=1};
+            foreach(var i in new[]{2,3})fable.Segments[i]=new(){Start=fable.Segments[i].Start,End=fable.Segments[i].End,Delta=.5};
+            WorkSpan[] all=[new(t,t.AddMinutes(60),true,true,"opus")];
+            WorkSpan[] part=[new(t.AddMinutes(10),t.AddMinutes(20),true,true,"claude-fable-5-2")];
+            var view=new ChartView{Start=t,End=t.AddMinutes(65),Total=total,Fable=fable,Gaps=[],Smooth=true,FableToClaudeFactor=.5,Activity=new(all,part,[])};
+            Check(view.FableTrend.Runs.SelectMany(r=>r.Points).Any(p=>view.TotalAt(p.Time) is {} v&&p.Rate>v),"fixture must reproduce the independently smoothed crossing");
+            foreach(var p in view.FableTrend.Runs.SelectMany(r=>r.Points).Where(p=>p.Time>part[0].Start&&p.Time<part[0].End))
+                Near(p.Rate,view.FableAt(p.Time)!.Value);
+            Near(2,RateEngine.SumRange(total,view.Start,view.End).Delta);Near(1,RateEngine.SumRange(fable,view.Start,view.End).Delta);
+            Near(1,Area(view.FableTrend));Near(2,Area(view.TotalTrend));
+            view.FableOnlySpans=[new(t.AddMinutes(10),t.AddMinutes(20))];
+            Near(view.FableAt(t.AddMinutes(15))!.Value,view.TotalAt(t.AddMinutes(15))!.Value);
         });
         Test("native totals stay distinct while either display mode can share the Fable curve",()=>
         {
@@ -153,7 +148,7 @@ static class FableDisplayTests
             ChartView View(bool cumulative=false,bool visible=true)=>new(){Start=t,End=t.AddMinutes(300),Total=total,Fable=fable,Smooth=true,Gaps=[],FableToClaudeFactor=.5,FableOnlySpans=spans,Cumulative=cumulative,FableVisible=visible,FableCumulative=CumulativeSeries.Build(fable,t,t.AddMinutes(300))};
             var v=View();Check(v.MergesFable&&v.FableOnlyAt(t.AddMinutes(30)),"display classification absent");
             Near(6,RateEngine.SumRange(v.Total,v.Start,v.End).Delta);Near(5.5,RateEngine.SumRange(v.Fable,v.Start,v.End).Delta);
-            Near(5.5,Area(v.DisplayFableTrend));Near(6,Area(v.TotalTrend));
+            Near(5.5,Area(v.FableTrend));Near(6,Area(v.TotalTrend));
             Near(v.FableAt(t.AddMinutes(30))!.Value,v.TotalAt(t.AddMinutes(30))!.Value);
             Check(View(true).MergesFable&&!View(visible:false).MergesFable,"cumulative did not merge, or explicitly hidden Fable was substituted");
         });
@@ -207,6 +202,21 @@ static class FableDisplayTests
                 Check(rows.Count==1&&rows[0].Start==t&&rows[0].End==t.AddMinutes(10)&&FableDisplay.IsFable(rows[0].Model),"ongoing request or provider isolation wrong");
                 store.Put(new("Claude","f","chat","claude-fable-5-1",t.AddMinutes(11),20,0,3));
                 Check(store.ModelActivity(t,t.AddMinutes(15),"Claude").Single().Model is null,"conflicted request treated as confirmed Fable");
+            }
+            finally{foreach(var file in new[]{path,path+"-wal",path+"-shm"})if(File.Exists(file))File.Delete(file);}
+        });
+        Test("busy model history retains evidence past twenty thousand requests",()=>
+        {
+            var path=Path.Combine(Path.GetTempPath(),"qw-busy-model-"+Guid.NewGuid().ToString("N")+".sqlite");
+            try
+            {
+                using var store=new TokenStore(path);store.Begin();
+                for(var i=0;i<20002;i++)store.Put(new("Claude","r"+i,"chat",i==20001?"claude-opus-5-5":"claude-fable-5-2",t.AddSeconds(i),10,0,1));
+                store.Put(new("Claude","r100","chat","claude-fable-5-2",t.AddSeconds(101),20,0,1));
+                store.Commit();
+                var rows=store.ModelActivity(t,t.AddHours(6),"Claude");
+                Check(rows.Count==20002&&rows[^1].Model=="claude-opus-5-5","large history dropped contrary or complete model evidence");
+                Check(rows[100].Model is null,"large history erased conflicting metadata");
             }
             finally{foreach(var file in new[]{path,path+"-wal",path+"-shm"})if(File.Exists(file))File.Delete(file);}
         });

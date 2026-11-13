@@ -77,6 +77,28 @@ static class MonitoringRefreshProbe
             Check(C<Grid>("CodexCompactSummary").Visibility==Visibility.Visible&&C<QuotaRing>("CodexFiveMeter").Visibility==Visibility.Collapsed,"week-only account retained a fabricated 5h window");
             Windows(true,false);
             Check(C<QuotaRing>("CodexMeter").Visibility==Visibility.Collapsed&&C<QuotaRing>("CodexFiveMeter").Visibility==Visibility.Visible,"5h-only account shown as weekly");
+            void ClaudeWindows(bool five)
+            {
+                var snapshot=new QuotaSnapshot(Guid.NewGuid().ToString(),now,new(five?UsageParser.Limit(5,now.AddHours(3)):null,UsageParser.Limit(39,now.AddDays(6)),UsageParser.Limit(16,now.AddDays(6))));
+                model.Records.Add(new("claude-code-usage","ultra","Max (20x)",now,Statuses.Partial,300,snapshot));window.Render();
+            }
+            Windows(true);
+            foreach(var compact in new[]{true,false})
+            foreach(var mode in new[]{0,1,2})
+            {
+                model.Settings.CompactMode=compact;C<ComboBox>("MonitoringCombo").SelectedIndex=mode;
+                foreach(var five in new[]{false,true,false})
+                {
+                    ClaudeWindows(five);
+                    var shown=mode!=2;
+                    Check((C<QuotaRing>("FiveMeter").Visibility==Visibility.Visible)==(shown&&five),"Claude 5h capability did not follow latest reading");
+                    Check(C<Grid>("MeterGrid").ColumnDefinitions[0].Width.Value==(shown&&five?1:0)||C<Grid>("MeterGrid").RowDefinitions.Count==2,"absent Claude 5h left an empty column");
+                    if(shown)Check(C<QuotaRing>("WeekMeter").ShowPlatformIcon==!five,"Claude icon did not move to the first visible meter");
+                    if(!five)Check(C<Grid>("MeterGrid").RowDefinitions.Count==0,"four visible meters retained an unnecessary second row");
+                }
+            }
+            model.RecordEvent(new(now,EventTypes.CollectFail,Statuses.Error,"timeout"));window.Render();
+            Check(C<QuotaRing>("FiveMeter").Visibility==Visibility.Collapsed,"collection failure restored a nonexistent 5h limit");
             Set("_tokens",null);window.Close();
             Console.WriteLine("PASS: actual WPF selector rapidly cycles Claude/both/Codex; activity cache follows mode immediately; backlog preserves reset trend; rate/cumulative clicks do not change it; optional 5h/week-only/5h-only expanded and compact layouts follow live capability.");
         }

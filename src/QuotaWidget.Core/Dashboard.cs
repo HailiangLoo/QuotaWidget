@@ -53,7 +53,7 @@ public static class Dashboard
         details.Add(Loc.T("Codex 按自己的周额度计，不能与 Claude 相加。"));
         details.Add(Loc.T("Credits 使用右轴原单位；速率是相邻余额采样的平均净减少，累计只计完整有效区间。余额增加、缺失或停采处断开；过期、退款或同时充值可能影响净额，不代表逐任务账单。"));
         details.Add(Loc.T("未匹配本机任务的增长仍计入累计；悬停相应采样区间可查看点数，不推成速率，也不摊进空闲时间。"));
-        details.Add(Loc.T("仅 Fable 时共用一个速率读数；混用时若分项估计超过 Claude 总速率，该段显示分项样本未对齐，不改写原始累计。"));
+        details.Add(Loc.T("仅 Fable 时共用一个速率读数；混用时两条趋势独立估算，局部可能交叉，不代表分项超出总额度；累计仍取原始读数。"));
         details.Add(Loc.T("Claude/Fable 共用动态刻度；Codex 按自己的峰值独立缩放。上下图的高度/面积不能直接比较，需读各自刻度与累计。"));
         foreach (var (name, series) in totals)
         {

@@ -57,7 +57,7 @@ Polling, smoothing and idle-gap settings use sliders with labelled stops. Click 
 
 ## Features
 
-- Claude: five-hour, total weekly, and Fable weekly quota.
+- Claude: total weekly and Fable weekly quota, plus five-hour quota when the account provides it. Verified Ultra accounts without a five-hour limit show no empty gauge.
 - Codex: weekly quota, plus a five-hour gauge when the account's interface provides it.
 - **Credits:** remaining balance and recorded net use. A pale violet dashed line uses the Codex chart's right axis: `cr/h` in rate mode, `cr` in cumulative mode. No conversion to subscription quota. Recording begins with this version; `*` marks incomplete coverage or a stale balance. See [limitations](docs/ALGORITHM.md#credits).
 - Independent rate or cumulative views for each provider, with 1h, 5h, 12h, 24h, 3d, and all-history ranges.

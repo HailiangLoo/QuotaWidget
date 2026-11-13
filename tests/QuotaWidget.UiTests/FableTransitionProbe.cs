@@ -77,7 +77,7 @@ static class FableTransitionProbe
         typeof(ChartView).GetField("_totalTrend",flags)!.SetValue(view,total);
         typeof(ChartView).GetField("_fableTrend",flags)!.SetValue(view,fable);
         typeof(ChartView).GetField("_codexTrend",flags)!.SetValue(view,fable);
-        Check(view.FableRateConflictAt(t.AddMinutes(29.5))&&!view.FableRateConflictAt(t.AddMinutes(30.5)),"fixture must clip a mixed-model fragment but retain its exclusive tail");
+        Check(view.FableAt(t.AddMinutes(29.5))>view.TotalAt(t.AddMinutes(29.5)),"independent mixed-model estimate was hidden at its crossing");
         foreach(var width in new[]{140d,300d,600d})
         {
             var chart=new RateChart{Width=width,View=view};chart.Measure(new Size(width,500));chart.Arrange(new Rect(0,0,width,chart.DesiredSize.Height));chart.UpdateLayout();
@@ -88,7 +88,7 @@ static class FableTransitionProbe
                 var paths=(List<IReadOnlyList<TrendPoint>>)typeof(RateChart).GetMethod("Points",BindingFlags.Static|BindingFlags.NonPublic)!.Invoke(null,[lane,view])!;
                 Check(paths.SelectMany(p=>p.Zip(p.Skip(1))).All(p=>p.First.Time!=p.Second.Time||p.First.Rate==p.Second.Rate),name+" painted area closure as a rate spike");
                 Check(PeakLabels.Find(paths).Count==0,name+" labelled a lifecycle edge as a peak");
-                if(name=="Fable")Check(paths.Any(p=>p[0].Time==t.AddMinutes(30)&&p[^1].Time==t.AddMinutes(31)),"clipping discarded the supported short tail");
+                if(name=="Fable")Check(paths.Any(p=>p[0].Time==t.AddMinutes(29)&&p[^1].Time==t.AddMinutes(31)),"crossing discarded part of the supported short turn");
                 if(name=="Claude")Check(paths[0][0].Time==t.AddMinutes(5),"exclusive Fable retained a redundant Claude stroke");
             }
             IEnumerable<GeometryDrawing> Shapes(Drawing d)=>d is GeometryDrawing shape?[shape]:d is DrawingGroup group?group.Children.SelectMany(Shapes):[];

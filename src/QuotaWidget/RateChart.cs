@@ -107,11 +107,11 @@ public sealed class RateChart : FrameworkElement
                         lane.IdleLinks = ChartPath.IdleLinks(trend, source,
                             name == "Codex" ? v.Episodes.Codex : name == "Fable" ? v.Episodes.Fable : v.Episodes.Claude,
                             v.IdleLinkMinutes, name == "Codex" ? [] : v.ClaudeModelChanges,
-                            name == "Claude" && v.MergesFable ? v.FableOnlySpans : name == "Fable" ? v.FableRateConflicts : []);
+                            name == "Claude" && v.MergesFable ? v.FableOnlySpans : []);
                     _lanes.Add(lane);
                 }
                 if (v.TotalVisible) Add("Claude", "Claude", v.Total, v.TotalTrend, v.TotalCumulative, 0);
-                if (v.FableDrawable) Add("Fable", "Fable", v.Fable, v.DisplayFableTrend, v.FableCumulative, 0);
+                if (v.FableDrawable) Add("Fable", "Fable", v.Fable, v.FableTrend, v.FableCumulative, 0);
                 if (v.CodexVisible && v.Codex is { } codex) Add("Codex", "Violet", codex, v.CodexTrend!, v.CodexCumulative, _lanes.Count > 0 ? 1 : 0);
                 if (v.CodexVisible && v.Credits is { } credits)
                 {
@@ -590,8 +590,7 @@ public sealed class RateChart : FrameworkElement
             points = lane.Cumulative.Segments.GroupBy(s => s.Group).Select(g => (IReadOnlyList<TrendPoint>)g.SelectMany(s => new[] { new TrendPoint(s.Start, s.From), new TrendPoint(s.End, s.To) }).ToArray()).ToList();
         // A lifecycle edge ends a run; it is not a measured plunge/rise to zero.
         // Geometry closes the area separately. Keep those closing sides out of the
-        // stroke and peak detector, especially after a component conflict clips a
-        // run down to a few seconds (which otherwise becomes a full-height spike).
+        // stroke and peak detector, even for a turn lasting only a few seconds.
         else if (v.Smooth) points = lane.Trend.Runs.Select(r => r.Points).ToList();
         else points = lane.Source.Segments.Where(s => s.Valid && s.Start >= v.Start && s.End <= v.End).GroupBy(s => s.Group)
             .Select(g => (IReadOnlyList<TrendPoint>)g.SelectMany(s => new[] { new TrendPoint(s.Start, s.Rate), new TrendPoint(s.End, s.Rate) }).ToArray()).ToList();
@@ -599,7 +598,7 @@ public sealed class RateChart : FrameworkElement
         return ChartPath.PositiveRuns(ChartPath.Clip(points,v.Start,v.End));
     }
 
-    double? InspectValue(Lane lane, ChartView view, DateTimeOffset time) => lane.Name=="Fable"&&view.FableRateConflictAt(time)?null:!view.ClaudeCumulativeMode&&lane.Name=="Claude"&&view.FableOnlyAt(time) ? view.FableAt(time) : view.IsCumulative(lane.Name=="Codex") ? lane.Cumulative.ValueAt(time) : view.Smooth ? lane.Trend.ValueAt(time)
+    double? InspectValue(Lane lane, ChartView view, DateTimeOffset time) => !view.ClaudeCumulativeMode&&lane.Name=="Claude"&&view.FableOnlyAt(time) ? view.FableAt(time) : view.IsCumulative(lane.Name=="Codex") ? lane.Cumulative.ValueAt(time) : view.Smooth ? lane.Trend.ValueAt(time)
         : lane.Source.SegmentAt(time) is { Valid: true } s && s.Start >= view.Start && s.End <= view.End ? s.Rate : null;
 
     sealed record InspectRow(string Name, string Value, Brush Color);
@@ -621,7 +620,7 @@ public sealed class RateChart : FrameworkElement
             var gap = (lane.Name=="Codex" ? view.CodexGaps : view.ClaudeGaps).LastOrDefault(g=>time>=g.Start && time<g.End);
             var name=lane.Name=="Fable"&&view.FableToClaudeFactor is null?Loc.T("Fable 自身"):lane.Name;
             if(lane.Name=="Codex"&&observed?.ProfileLabel is {} profile)name=profile;
-            var missing = lane.Name=="Fable"&&view.FableRateConflictAt(time)?"分项样本未对齐":observed?.Label ?? (gap?.Label=="断开" ? "未更新" : gap?.Label) ?? (observed is {Valid:true}&&view.Smooth&&!cumulative?"状态未确认":"未记录");
+            var missing = observed?.Label ?? (gap?.Label=="断开" ? "未更新" : gap?.Label) ?? (observed is {Valid:true}&&view.Smooth&&!cumulative?"状态未确认":"未记录");
             if (missing == "已暂停") missing = "监听切换";
             var unmatched=!cumulative&&view.Smooth?lane.Trend.UnlocatedAt(time):null;
             var idleLink=lane.IdleLinks.Any(link=>time>link[0].Time&&time<link[^1].Time);

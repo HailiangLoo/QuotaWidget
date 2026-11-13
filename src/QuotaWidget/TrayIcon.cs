@@ -38,7 +38,8 @@ public sealed class TrayIcon : IDisposable
         string Old(WidgetView v)=>v.TrayText.Contains(Loc.T("旧数据"),StringComparison.Ordinal)?Loc.T("（旧）"):"";
         var text=Loc.T("周剩余 · ")+string.Join(" · ",new[]{claudeEnabled?$"Claude {P(claudeRemaining)}{Old(view)}":null,codexEnabled?$"Codex {P(codexRemaining)}{Old(codex)}":null}.Where(s=>s is not null));
         if(!claudeEnabled&&!codexEnabled)text=Loc.T("已停止挂件监听，保留登录和历史。");
-        if(claudeEnabled) text+=Loc.F($"\n5h 剩余 {P(Remaining(view.Five))} · Fable 剩余 {P(Remaining(view.Fable))}");
+        if(claudeEnabled) text+=view.Five.Missing?Loc.F($"\nFable 剩余 {P(Remaining(view.Fable))}")
+            :Loc.F($"\n5h 剩余 {P(Remaining(view.Five))} · Fable 剩余 {P(Remaining(view.Fable))}");
         if(codexEnabled&&!codex.Five.Missing)text+=Loc.F($"\nCodex 5h 剩余 {P(Remaining(codex.Five))}");
         _icon.Text = text.Length > 127 ? text[..127] : text;
         SetIcon(claudeEnabled,codexEnabled);

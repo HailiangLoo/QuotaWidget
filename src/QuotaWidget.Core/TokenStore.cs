@@ -17,6 +17,9 @@ public sealed record TokenSummary(long Input, long Cached, long Output, long Wri
 /// <summary>Numeric-only durable index. Windows' bundled SQLite; no service, network or NuGet runtime.</summary>
 public sealed class TokenStore : IDisposable
 {
+    // Model identity and lifecycle evidence must cover the same archive horizon.
+    // These reads contain metadata only; token rows used for calibration stay bounded separately.
+    const int ActivityReadLimit=1_000_000;
     readonly MiniSqlite _db;
     readonly bool _hasParents;
     readonly bool _hasWorkEvents;
@@ -123,8 +126,8 @@ public sealed class TokenStore : IDisposable
     public IReadOnlyList<ModelActivity> ModelActivity(DateTimeOffset start,DateTimeOffset end,string platform)
     {
         if(_scope is { } scope&&start<scope)start=scope;
-        var rows=_db.Query("SELECT t,last_t,model,conflict FROM requests WHERE platform=? AND COALESCE(last_t,t)>=? AND t<=? ORDER BY t LIMIT 20001",platform,start.ToUnixTimeMilliseconds(),end.ToUnixTimeMilliseconds());
-        if(rows.Count>20000)return []; // too much history to classify cheaply: retain both curves
+        var rows=_db.Query("SELECT t,last_t,model,conflict FROM requests WHERE platform=? AND COALESCE(last_t,t)>=? AND t<=? ORDER BY t LIMIT ?",platform,start.ToUnixTimeMilliseconds(),end.ToUnixTimeMilliseconds(),ActivityReadLimit+1);
+        if(rows.Count>ActivityReadLimit)throw new InvalidDataException("Model activity history exceeds the requested read limit.");
         return rows.Select(r=>new ModelActivity(DateTimeOffset.FromUnixTimeMilliseconds((long)r[0]!),DateTimeOffset.FromUnixTimeMilliseconds(Math.Max((long)r[0]!,r[1] is long last?last:(long)r[0]!)),(long)r[3]! == 0?r[2] as string:null)).ToArray();
     }
     public IReadOnlyList<QuotaToken>? QuotaTokens(DateTimeOffset start,DateTimeOffset end,string platform)
@@ -149,7 +152,7 @@ public sealed class TokenStore : IDisposable
     {
         // Reconstruct turns before filtering: the first quota sample may fall
         // inside a turn that started earlier. Cutting events there loses that work.
-        return WorkActivity.Build(WorkActivityEvents(DateTimeOffset.UnixEpoch,end,platform,1_000_000),end)
+        return WorkActivity.Build(WorkActivityEvents(DateTimeOffset.UnixEpoch,end,platform,ActivityReadLimit),end)
             .Where(s=>s.End>=start-WorkActivity.HandoffWindow).ToArray();
     }
 
