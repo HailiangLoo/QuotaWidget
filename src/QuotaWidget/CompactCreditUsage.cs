@@ -21,7 +21,7 @@ public partial class MainWindow
         var credits = view.Credits is { } data ? RateEngine.SumRange(data, start, now) : new RangeSum(0, 0);
         var limits = _codex.Records.LastOrDefault()?.Snapshot.Limits;
         var exhausted = limits?.AllWeek?.UsedPercent >= 100 || limits?.FiveHour?.UsedPercent >= 100;
-        if (credits.Delta <= 0 && !(exhausted && view.CreditsBalance is not null)) return null;
+        if (credits.Delta <= 0) return null;
         var quota = RateEngine.SumRange(view.Total, start, now);
         var fresh = _model.Settings.Listens(ChatPlatform.Codex) && _codex.LastEnvelope is { } latest && Statuses.HasSnapshot(latest.Status) &&
             now - latest.AttemptedAt < TimeSpan.FromSeconds(Math.Max(60, latest.EffectivePollIntervalSeconds) * RateEngine.GapFactor);

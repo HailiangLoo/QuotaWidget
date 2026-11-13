@@ -285,8 +285,20 @@ public partial class MainWindow : Window
 
     void RenderCredits(ChartView view,DateTimeOffset start,DateTimeOffset end,int range,DateTimeOffset now)
     {
-        CreditsUsedText.Visibility = Visibility.Visible;
-        Grid.SetColumnSpan(CreditsBalanceText, 1);
+        // Reuse the balance row inside Codex's existing compact group. Full mode
+        // keeps its range-wide balance/consumption row above the charts.
+        var compact=_model.Settings.CompactMode;
+        Panel parent=compact?CodexCompactSummary.Visibility==Visibility.Visible?CodexInlineUsage:CompactCodexRate:MainPanel;
+        if(CreditsLine.Parent!=parent)
+        {
+            ((Panel)CreditsLine.Parent).Children.Remove(CreditsLine);
+            parent.Children.Insert(compact?0:MainPanel.Children.IndexOf(MeterGrid)+1,CreditsLine);
+        }
+        CreditsLine.Margin=compact?new Thickness(0,0,0,2):new Thickness(4,0,4,3);
+        CreditsLine.HorizontalAlignment=compact?(!_model.Settings.Monitors(ChatPlatform.Claude)?HorizontalAlignment.Center:HorizontalAlignment.Right):HorizontalAlignment.Stretch;
+        CreditsBalanceText.FontSize=compact?9:10;
+        CreditsUsedText.Visibility=compact?Visibility.Collapsed:Visibility.Visible;
+        Grid.SetColumnSpan(CreditsBalanceText,compact?2:1);
         var sum = view.Credits is { } data ? RateEngine.SumRange(data,start,end) : new RangeSum(0,0);
         var balance = view.CreditsBalance;
         var visible = _model.Settings.Monitors(ChatPlatform.Codex) && (balance is not null || sum.CoverageMinutes>0);
@@ -295,7 +307,7 @@ public partial class MainWindow : Window
         var fresh = _model.Settings.Listens(ChatPlatform.Codex) && _codex.LastEnvelope is { } latest && Statuses.HasSnapshot(latest.Status) &&
             now-latest.AttemptedAt < TimeSpan.FromSeconds(Math.Max(60,latest.EffectivePollIntervalSeconds)*RateEngine.GapFactor);
         var remaining = balance is { Unlimited:true } ? "∞" : balance?.Balance?.ToString("N2",CultureInfo.InvariantCulture) ?? "—";
-        CreditsBalanceText.Text = "Credits " + remaining + (fresh ? "" : "*");
+        CreditsBalanceText.Text = (compact?remaining+" cr":"Credits " + remaining) + (fresh ? "" : "*");
         var used = sum.CoverageMinutes>0 ? "−"+sum.Delta.ToString("0.##",CultureInfo.InvariantCulture) : "—";
         var partial = sum.CoverageMinutes>0 && sum.CoverageMinutes < (end-start).TotalMinutes - Math.Max(60,_model.Settings.PollIntervalSeconds)*RateEngine.GapFactor/60;
         CreditsUsedText.Text = ChartRanges.Label(range)+" · "+used+" cr"+(partial?"*":"");
@@ -305,7 +317,7 @@ public partial class MainWindow : Window
             (partial?Loc.T("* 记录不全，只累计已观测区间。")+"\n":"")+
             (!fresh?Loc.T("* 余额是上次读数，尚未更新。")+"\n":"")+
             Loc.T("右轴 cr/h 为采样区间均速，cr 为累计净减少。不折算周额度；充值、缺失与停采处断开，过期及同时充值可能影响净额。");
-        System.Windows.Automation.AutomationProperties.SetName(CreditsLine,CreditsBalanceText.Text+" · "+CreditsUsedText.Text);
+        System.Windows.Automation.AutomationProperties.SetName(CreditsLine,CreditsBalanceText.Text+(compact?"":" · "+CreditsUsedText.Text));
     }
 
     void RenderCompactRate(FrameworkElement host,TextBlock text,TextBlock points,string platform,SeriesData series,WidgetModel model,DateTimeOffset now)

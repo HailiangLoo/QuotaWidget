@@ -2,6 +2,7 @@ using System.IO;
 using System.Reflection;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Media;
 using QuotaWidget.App;
 using QuotaWidget.Core;
 
@@ -11,6 +12,7 @@ static class CompactCreditsProbe
     {
         var root = Path.Combine(Path.GetTempPath(), "qw-compact-credits-" + Guid.NewGuid().ToString("N"));
         void Check(bool ok, string why) { if (!ok) throw new Exception("Compact credits: " + why); }
+        IEnumerable<GeometryDrawing> Shapes(Drawing? drawing)=>drawing is GeometryDrawing shape?[shape]:drawing is DrawingGroup group?group.Children.SelectMany(Shapes):[];
         try
         {
             foreach (var scenario in new[] { "quota", "credits", "mixed", "missing", "unlimited", "topup", "stale", "short" })
@@ -54,18 +56,23 @@ static class CompactCreditsProbe
                     window.Render();
                     var content=(FrameworkElement)window.Content;content.Measure(new Size(window.Width,double.PositiveInfinity));content.Arrange(new Rect(0,0,window.Width,content.DesiredSize.Height));content.UpdateLayout();
                     if(mode=="claude"){Check(C<Grid>("CreditsLine").Visibility==Visibility.Collapsed,"Claude-only showed credits");continue;}
+                    var meter=C<QuotaRing>(mode=="codex"&&!five?"CodexInlineMeter":five?"CodexFiveMeter":"CodexMeter");
+                    Check(meter.ShowPlatformIcon,"Codex compact group lost its provider icon");
+                    Check(Shapes(VisualTreeHelper.GetDrawing(meter)).Any(s=>s.Geometry is EllipseGeometry&&s.Pen is not null),"compact quota lost its circle");
                     var text=C<TextBlock>("CompactCodexRateValue").Text;
-                    if(scenario=="quota")Check(text=="5.0"&&C<TextBlock>("CreditsUsedText").Visibility==Visibility.Visible,"quota-only changed semantics or retained credits layout");
+                    Check(C<TextBlock>("CreditsUsedText").Visibility==Visibility.Collapsed,"compact retained a separate credit consumption row");
+                    Check(C<Grid>("CreditsLine").Parent==(mode=="codex"&&!five?C<StackPanel>("CodexInlineUsage"):C<StackPanel>("CompactCodexRate")),"balance was not grouped with Codex");
+                    if(scenario=="quota")Check(text=="5.0"&&!text.Contains("cr"),"unused credits changed subscription rate");
+                    else if(scenario is "missing" or "unlimited" or "stale")
+                        Check(!text.Contains("cr"),"unobserved credit spending was shown as recent use");
                     else
                     {
                         Check(C<TextBlock>("CompactCodexRateUnit").Visibility==Visibility.Collapsed&&C<TextBlock>("CreditsUsedText").Visibility==Visibility.Collapsed,"amounts labelled /h or duplicated");
                         Check(C<TextBlock>("CompactCodexRateHeading").Text.Contains(Loc.T("近1h")),"missing visible time range");
                         if(scenario=="credits")Check(text=="325 cr",$"credit-only total wrong: {text}; {language}/{mode}/5h={five}");
                         if(scenario=="mixed")Check(text=="5"+Loc.T("点")+"* + 325 cr","mixed/reset accounting wrong: "+text);
-                        if(scenario=="missing"||scenario=="unlimited")Check(text=="— cr*","unknown credits fabricated: "+text);
                         if(scenario=="topup")Check(text=="325 cr*","topup offset or coverage hidden: "+text);
                         if(scenario=="short")Check(text=="0"+Loc.T("点")+"* + 325 cr*","short coverage hidden by slow polling: "+text);
-                        if(scenario=="stale")Check(text.Contains("—")&&text.Contains("*"),"stale usage became fresh zero");
                         Check(C<StackPanel>("CompactCodexRate").ActualHeight<=C<Grid>("CompactRates").ActualHeight||mode=="codex","summary clipped vertically");
                         if(mode=="codex"&&!five)Check(C<TextBlock>("CodexInlineRateValue").Text==text,"single-provider summary differs");
                     }

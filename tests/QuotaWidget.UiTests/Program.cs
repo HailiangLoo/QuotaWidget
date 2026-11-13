@@ -46,6 +46,8 @@ static class Probe
             T Control<T>(string name)=>(T)window.FindName(name);
             void Check(bool ok,string why){if(!ok) throw new Exception(why);}
             void Click(string name)=>Control<ButtonBase>(name).RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
+            Check(model.Settings.ChatListCollapsed&&Control<ScrollViewer>("CompactChatViewport").Visibility==Visibility.Collapsed,"chat list must start collapsed");
+            Control<ToggleButton>("CompactChatListToggle").IsChecked=false;Click("CompactChatListToggle");
             string Title(UIElement row)=>( ((StackPanel)((ToolTip)((FrameworkElement)row).ToolTip).Content).Children[0] as TextBlock)!.Text;
             var rows=Control<StackPanel>("CompactChatRows");
             Check(rows.Children.Count==4,"compact active list truncated");

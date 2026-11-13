@@ -142,9 +142,9 @@
 
         <!-- Main -->
         <StackPanel x:Name="MainPanel" Margin="9,0,9,8">
-          <Grid x:Name="CodexCompactSummary" Visibility="Collapsed" Margin="4,3,4,2" Height="30">
+          <Grid x:Name="CodexCompactSummary" Visibility="Collapsed" Margin="4,3,4,2">
             <Grid.ColumnDefinitions><ColumnDefinition Width="112"/><ColumnDefinition/></Grid.ColumnDefinitions>
-            <local:QuotaRing x:Name="CodexInlineMeter" Label="week" Accent="Violet" Platform="Codex" Compact="True" SingleProvider="True" />
+            <local:QuotaRing x:Name="CodexInlineMeter" Label="week" Accent="Violet" Platform="Codex" Compact="True" SingleProvider="True" ShowPlatformIcon="True" />
             <StackPanel x:Name="CodexInlineUsage" Grid.Column="1" Background="Transparent" VerticalAlignment="Center">
               <Viewbox Stretch="Uniform" StretchDirection="DownOnly" HorizontalAlignment="Center">
                 <StackPanel Orientation="Vertical">

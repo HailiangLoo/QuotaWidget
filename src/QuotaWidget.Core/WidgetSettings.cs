@@ -47,7 +47,7 @@ public sealed class WidgetSettings
     public bool FableVisible { get; set; } = true;
     public bool CodexVisible { get; set; } = true;
     public bool CompactMode { get; set; }
-    public bool ChatListCollapsed { get; set; }
+    public bool ChatListCollapsed { get; set; } = true;
     public bool ClaudeChartCollapsed { get; set; }
     public bool CodexChartCollapsed { get; set; }
 

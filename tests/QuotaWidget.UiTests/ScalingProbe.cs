@@ -22,7 +22,7 @@ static class ScalingProbe
             var paths=new DataPaths(Path.Combine(root,"claude","demo"));
             var other=new DataPaths(Path.Combine(root,"codex","demo"));
             DemoData.Generate(paths,now,"codex-plus"); DemoData.Generate(other,now,"codex-plus",codex:true);
-            var model=new WidgetModel(paths,true);model.Initialize();
+            var model=new WidgetModel(paths,true);model.Initialize();model.Settings.ChatListCollapsed=false;
             var codex=new WidgetModel(other,true){ReadOnly=true};codex.Initialize();
             var opts=AppOptions.Parse(["--demo","--snapshot","unused"]);
             void Set(string name,object? value)=>typeof(App).GetField(name,BindingFlags.NonPublic|BindingFlags.Instance)!.SetValue(app,value);
@@ -129,9 +129,9 @@ static class ScalingProbe
             var outer=C<Grid>("Outer");var body=C<StackPanel>("BodyContent");
             var bottom=body.TransformToAncestor(outer).Transform(new Point(0,body.ActualHeight)).Y;
             Check(outer.ActualHeight-bottom<2,"compact leaves space below its content");
-            Rows(80);outer.MaxHeight=230;Layout(false);
-            Check(outer.ActualHeight<=231&&C<ScrollViewer>("BodyViewport").ScrollableHeight>0,"capped compact view cannot scroll");
-            Rows(2);Check(outer.ActualHeight<230,"compact stayed at screen cap after rows disappeared");
+            var cap=(two+five)/2;Rows(80);outer.MaxHeight=cap;Layout(false);
+            Check(outer.ActualHeight<=cap+1&&C<ScrollViewer>("BodyViewport").ScrollableHeight>0,"capped compact view cannot scroll");
+            Rows(2);Check(outer.ActualHeight<cap,"compact stayed at screen cap after rows disappeared");
             Click("CompactButton");Layout();Near(420,C<Grid>("Outer").Height,"compact auto-fit changed full-mode height");
             Set("_opts",opts);
             Console.WriteLine("Compact content fit: 20/5 share a five-row cap, 2→0→2 shrink/grow without full render; legacy height ignored; long lists scroll and shrink again; full height retained.");

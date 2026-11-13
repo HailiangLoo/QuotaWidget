@@ -17,7 +17,7 @@ static class LocalizationProbe
         {
             var now=DateTimeOffset.Now;var paths=new DataPaths(Path.Combine(root,"demo"));
             DemoData.Generate(paths,now,"codex-plus");
-            var model=new WidgetModel(paths,true);model.Initialize();model.Settings.Language="zh-CN";
+            var model=new WidgetModel(paths,true);model.Initialize();model.Settings.Language="zh-CN";model.Settings.ChatListCollapsed=false;
             var codexPaths=new DataPaths(Path.Combine(root,"codex","demo"));DemoData.Generate(codexPaths,now,"codex-plus",codex:true);
             var codex=new WidgetModel(codexPaths,true){ReadOnly=true};codex.Initialize();
             var opts=AppOptions.Parse(["--demo","--snapshot","unused"]);

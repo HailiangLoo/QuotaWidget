@@ -26,7 +26,7 @@ public sealed class QuotaRing : FrameworkElement
         get => _compact;
         set { _compact = value; UpdateHeight(); }
     }
-    void UpdateHeight() { Height=SingleProvider?(Compact?30:66):(Compact?37:104);InvalidateVisual(); }
+    void UpdateHeight() { Height=Compact?76:SingleProvider?66:104;InvalidateVisual(); }
 
     MeterView? _meter;
     public QuotaRing() { Height = 104; }
@@ -40,11 +40,10 @@ public sealed class QuotaRing : FrameworkElement
     protected override void OnRender(DrawingContext dc)
     {
         if (_meter is not { } m || ActualWidth <= 0) return;
-        if(SingleProvider) { DrawSingle(dc,m); return; }
-        if(Compact) { DrawCompact(dc,m); return; }
-        var size = Math.Min(53, ActualWidth - 8);
+        if(SingleProvider&&!Compact) { DrawSingle(dc,m); return; }
+        var size = Math.Min(Compact?40:53, ActualWidth - 8);
         var radius = size / 2 - 2;
-        var center = new Point(ActualWidth / 2,45);
+        var center = new Point(ActualWidth / 2,Compact?34:45);
         var accent = Theme.Brush(Accent);
         dc.DrawRectangle(Brushes.Transparent, null, new Rect(0, 0, ActualWidth, Height));
         void Text(string s, double y, double font, Brush brush, FontWeight weight)
@@ -53,7 +52,7 @@ public sealed class QuotaRing : FrameworkElement
                 new Typeface(new FontFamily("Segoe UI, Microsoft YaHei UI"), FontStyles.Normal, weight, FontStretches.Normal), font, brush, VisualTreeHelper.GetDpi(this).PixelsPerDip);
             dc.DrawText(ft, new Point((ActualWidth - ft.Width) / 2, y));
         }
-        Text(Label, 0, 10, Theme.Brush("Muted"), FontWeights.Normal);
+        Text(Label, 0, Compact?9:10, Theme.Brush("Muted"), FontWeights.Normal);
         if (ShowPlatformIcon)
         {
             dc.DrawImage(ProviderIcon.Get(Platform), new Rect(Math.Max(0,center.X-size/2-5), 11, 14, 14));
@@ -76,7 +75,7 @@ public sealed class QuotaRing : FrameworkElement
             }
         }
         var value = m.Value.TrimEnd('%');
-        var fontSize = value.Length > 3 ? 17 : size < 47 ? 20 : 23;
+        var fontSize = Compact?(value.Length>3?14:17):value.Length > 3 ? 17 : size < 47 ? 20 : 23;
         Text(value, center.Y - fontSize * 0.72, fontSize, m.Missing ? Theme.Brush("Muted") : Theme.QuotaUsageBrush(m.UsedPercent), FontWeights.SemiBold);
         var left = m.ResetsAt - DateTimeOffset.Now;
         var reset = left is null ? "—" : left <= TimeSpan.Zero ? Loc.T("待重置") : left.Value.TotalDays >= 1 ? $"{(int)left.Value.TotalDays}d {left.Value.Hours}h" : left.Value.TotalHours >= 1 ? $"{(int)left.Value.TotalHours}h {left.Value.Minutes}m" : $"{Math.Max(0, (int)left.Value.TotalMinutes)}m";
@@ -93,14 +92,6 @@ public sealed class QuotaRing : FrameworkElement
         var value=SingleText(m.Value.TrimEnd('%'),Compact?20:25,m.Missing?Theme.Brush("Muted"):Theme.QuotaUsageBrush(m.UsedPercent),FontWeights.SemiBold);
         var left=m.ResetsAt-DateTimeOffset.Now;
         var reset=left is null?"—":left<=TimeSpan.Zero?Loc.T("待重置"):left.Value.TotalDays>=1?$"{(int)left.Value.TotalDays}d {left.Value.Hours}h":left.Value.TotalHours>=1?$"{(int)left.Value.TotalHours}h {left.Value.Minutes}m":$"{Math.Max(0,(int)left.Value.TotalMinutes)}m";
-        if(Compact)
-        {
-            dc.DrawImage(icon,new Rect(0,7,16,16));
-            dc.DrawText(value,new Point(21,(Height-value.Height)/2));
-            var clock=ResetText(reset,12);
-            dc.DrawText(clock,new Point(21+value.Width+7,(Height-clock.Height)/2+1));
-            return;
-        }
         var center=new Point(32,32);const double radius=26;
         dc.DrawEllipse(null,new Pen(Theme.Brush("Track"),3),center,radius,radius);
         if(!m.Missing&&m.Fill>0)
@@ -138,35 +129,13 @@ public sealed class QuotaRing : FrameworkElement
         return result;
     }
 
-    void DrawCompact(DrawingContext dc,MeterView meter)
-    {
-        dc.DrawRectangle(Brushes.Transparent,null,new Rect(0,0,ActualWidth,Height));
-        FormattedText Format(string text,double size,Brush color,FontWeight weight) => new(text,CultureInfo.CurrentUICulture,FlowDirection.LeftToRight,
-            new Typeface(new FontFamily("Segoe UI, Microsoft YaHei UI"),FontStyles.Normal,weight,FontStretches.Normal),size,color,VisualTreeHelper.GetDpi(this).PixelsPerDip);
-        var label=Format(Label=="week"?"wk":Label,9,Theme.Brush("Muted"),FontWeights.Normal);
-        var text=meter.Value.TrimEnd('%');
-        var font=text.Length>=3?17d:19d;
-        FormattedText Value() => Format(text,font,meter.Missing?Theme.Brush("Muted"):Theme.QuotaUsageBrush(meter.UsedPercent),FontWeights.SemiBold);
-        var value=Value(); var iconSpace=ShowPlatformIcon?17:0;
-        while(iconSpace+label.Width+3+value.Width>ActualWidth-4&&font>13) {font-=.5;value=Value();}
-        var x=(ActualWidth-iconSpace-label.Width-3-value.Width)/2;
-        if(ShowPlatformIcon)
-        {
-            dc.DrawImage(ProviderIcon.Get(Platform),new Rect(x,5,14,14));x+=17;
-        }
-        dc.DrawText(label,new Point(x,8)); dc.DrawText(value,new Point(x+label.Width+3,0));
-        var left=meter.ResetsAt-DateTimeOffset.Now;
-        var reset=left is null?"—":left<=TimeSpan.Zero?Loc.T("待重置"):left.Value.TotalDays>=1?$"{(int)left.Value.TotalDays}d {left.Value.Hours}h":left.Value.TotalHours>=1?$"{(int)left.Value.TotalHours}h {left.Value.Minutes}m":$"{Math.Max(0,(int)left.Value.TotalMinutes)}m";
-        DrawReset(dc,reset);
-    }
-
     void DrawReset(DrawingContext dc, string text)
     {
         if (!char.IsDigit(text[0]))
         {
             var hint = new FormattedText(text, CultureInfo.CurrentUICulture, FlowDirection.LeftToRight,
                 new Typeface("Segoe UI, Microsoft YaHei UI"), 11, Theme.Brush("Muted"), VisualTreeHelper.GetDpi(this).PixelsPerDip);
-            dc.DrawText(hint, new Point((ActualWidth - hint.Width) / 2, Compact ? 22 : 80));
+            dc.DrawText(hint, new Point((ActualWidth - hint.Width) / 2, Compact ? 57 : 80));
             return;
         }
         FormattedText Format(double numberSize)
@@ -197,6 +166,6 @@ public sealed class QuotaRing : FrameworkElement
         var size = Compact ? 12.0 : 18.0;
         var ft = Format(size);
         while (ft.Width > ActualWidth - 5 && size > 10) ft = Format(size -= 0.5);
-        dc.DrawText(ft, new Point((ActualWidth - ft.Width) / 2, Compact ? 22 : 77));
+        dc.DrawText(ft, new Point((ActualWidth - ft.Width) / 2, Compact ? 57 : 77));
     }
 }

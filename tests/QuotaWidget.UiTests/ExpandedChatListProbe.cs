@@ -24,7 +24,7 @@ static class ExpandedChatListProbe
             var model=new WidgetModel(paths,true){ReadOnly=true};model.Initialize();
             var xp=new DataPaths(Path.Combine(root,"codex/demo"));DemoData.Generate(xp,now,"showcase",codex:true);
             var codex=new WidgetModel(xp,true){ReadOnly=true};codex.Initialize();
-            model.Settings.CompactMode=false;model.Settings.Width=290;model.Settings.Height=700;
+            model.Settings.ChatListCollapsed=false;model.Settings.CompactMode=false;model.Settings.Width=290;model.Settings.Height=700;
             Set("_opts",opts);Set("_model",model);Set("_codex",codex);Set("_paths",paths);Set("_tokens",null);Set("_snapshotTokens",null);
             Set("_chatHistory",new ChatSessionHistory(root));Set("_currentChatSession",null);Set("_chatLifecycle",ChatLifecycleSnapshot.Empty);
             ChatCacheEntry Entry(string id,double age,int ttl=30,bool running=false)=>new(ChatPlatform.Codex,id,id,now.AddMinutes(-age),ttl,"fixture",running);
