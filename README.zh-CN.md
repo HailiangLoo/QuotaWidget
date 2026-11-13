@@ -2,9 +2,7 @@
 
 [English](README.md) · **简体中文**
 
-A small Windows desktop widget for Claude and Codex quota, usage trends, and local chat activity.
-
-一个常驻桌面的 Windows 小挂件：看剩余额度、重置倒计时和消耗趋势，不用来回打开用量页面。
+把 Claude / Codex 的额度、Credits 和消耗趋势放到 Windows 桌面，按 chat 和模型查看本机用量。
 
 **[下载 Windows 版](https://github.com/HailiangLoo/QuotaWidget/releases/latest)** · [隐私说明](docs/PRIVACY.zh-CN.md) · [开发与测试](CONTRIBUTING.zh-CN.md)
 
